@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { clamp } from '../core/math/noise.js';
+import { PLAYER_SPAWN } from '../world/constants.js';
 
 /**
  * Combat orchestration: death handling, ship-vs-ship ramming, respawn.
@@ -48,9 +49,9 @@ export class CombatSystem {
     // Salvage tax: losing the ship costs a share of carried resources.
     player.resources = Math.floor(player.resources * 0.7);
 
-    // Respawn at the universe spawn anchor (absolute origin), expressed in
-    // the current render space.
-    player.position.copy(game.origin.offset).negate();
+    // Respawn at the universe spawn anchor, expressed in current render
+    // space (absolute = render + origin offset).
+    player.position.copy(PLAYER_SPAWN).sub(game.origin.offset);
     player.quaternion.identity();
     player.respawn();
     game.events.emit('player:respawned');

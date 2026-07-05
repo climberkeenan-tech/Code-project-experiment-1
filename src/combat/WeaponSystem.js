@@ -296,6 +296,18 @@ export class WeaponSystem {
       if (distSq < obstacle.radius * obstacle.radius) return true;
     }
 
+    // Bolts chip asteroids: spark burst, chance of shaking salvage loose.
+    for (const field of game.asteroidFields) {
+      const rock = field.sphereHit(bolt.mesh.position, 1.2);
+      if (rock) {
+        if (game.explosions) game.explosions.spawn(bolt.mesh.position, 0.28);
+        if (bolt.fromPlayer && game.pickups && Math.random() < 0.14) {
+          game.pickups.spawnBurst(bolt.mesh.position, 1);
+        }
+        return true;
+      }
+    }
+
     return false;
   }
 

@@ -52,6 +52,14 @@ export class Game {
      * @type {Array<{position: import('three').Vector3, radius: number}>}
      */
     this.obstacles = [];
+    /**
+     * Asteroid fields (collision + mining queries).
+     * @type {import('../environment/AsteroidField.js').AsteroidField[]}
+     */
+    this.asteroidFields = [];
+    /** FX singletons wired by the bootstrap. */
+    this.explosions = null;
+    this.pickups = null;
     /** Atmospheric-entry heat 0..1, drives HUD glow (set by universe). */
     this.entryHeat = 0;
 
