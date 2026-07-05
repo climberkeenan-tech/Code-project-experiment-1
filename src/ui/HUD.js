@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 /**
  * Heads-up display.
  *
@@ -33,6 +35,7 @@ export class HUD {
         <div class="place" data-el="place">Deep Space</div>
         <div class="sub" data-el="placeSub"></div>
         <div class="resources">&#9671; <span data-el="resources">0</span></div>
+        <div class="contacts" data-el="contacts"></div>
       </div>
 
       <div class="hud-flight">
@@ -81,6 +84,7 @@ export class HUD {
     this._bannerTimer = 0;
     this._vignette = 0;
     this._entryGlow = 0;
+    this._radial = new THREE.Vector3();
 
     this.debugEnabled = new URLSearchParams(location.search).has('debug');
     if (!this.debugEnabled) this.refs.debug.style.display = 'none';
@@ -163,12 +167,25 @@ export class HUD {
       this._setText('alt', '');
     }
 
-    // Shield-down alert.
-    if (player.alive && player.shield <= 0 && player.hull01 < 0.6) {
-      this.setAlert(player.hull01 < 0.3 ? 'Hull Critical' : 'Shields Down');
-    } else {
-      this.setAlert('');
+    // Nearby hostile count.
+    let contacts = 0;
+    if (this.game.enemies) {
+      for (const enemy of this.game.enemies.enemies) {
+        if (enemy.position.distanceTo(player.position) < 3500) contacts++;
+      }
     }
+    this._setText('contacts', contacts > 0 ? `▲ ${contacts} hostile${contacts > 1 ? 's' : ''}` : '');
+
+    // Alerts, most urgent first: terrain, hull, shields.
+    let alert = '';
+    if (near && near.planet && player.alive && near.altitude < 380) {
+      this._radial.copy(player.position).sub(near.planet.group.position).normalize();
+      if (player.velocity.dot(this._radial) < -70) alert = 'Terrain — Pull Up';
+    }
+    if (!alert && player.alive && player.shield <= 0 && player.hull01 < 0.6) {
+      alert = player.hull01 < 0.3 ? 'Hull Critical' : 'Shields Down';
+    }
+    this.setAlert(alert);
 
     // Banner lifetime.
     if (this._bannerTimer > 0) {

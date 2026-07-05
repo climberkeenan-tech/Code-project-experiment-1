@@ -33,7 +33,8 @@ const browser = await chromium.launch({
   ],
 });
 
-const page = await browser.newPage({ viewport: { width: 900, height: 500 } });
+const [vw, vh] = (process.env.VIEWPORT ?? '900x500').split('x').map(Number);
+const page = await browser.newPage({ viewport: { width: vw, height: vh } });
 
 const logs = [];
 page.on('console', (msg) => logs.push(`[${msg.type()}] ${msg.text()}`));

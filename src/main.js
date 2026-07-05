@@ -20,7 +20,9 @@ import { generateUniverse } from './world/UniverseGenerator.js';
 import { POISystem } from './exploration/POISystem.js';
 import { SaveGame } from './core/SaveGame.js';
 import { ShipSounds } from './audio/ShipSounds.js';
+import { Music } from './audio/Music.js';
 import { HUD } from './ui/HUD.js';
+import { Radar } from './ui/Radar.js';
 import { TouchControls } from './ui/TouchControls.js';
 import { Screens } from './ui/Screens.js';
 
@@ -99,10 +101,21 @@ game.addSystem('dust', new SpaceDust(game));
 
 // --- Audio + UI ---
 game.addSystem('ship-sounds', new ShipSounds(game));
-game.addSystem('hud', new HUD(game));
+game.addSystem('music', new Music(game));
+const hud = new HUD(game);
+game.addSystem('hud', hud);
+game.addSystem('radar', new Radar(game, hud.refs.radar));
 
 new TouchControls(game);
 new Screens(game);
+
+// Suspend audio while the tab is hidden (rendering stops automatically).
+document.addEventListener('visibilitychange', () => {
+  const ctx = game.audio.ctx;
+  if (!ctx) return;
+  if (document.hidden) ctx.suspend();
+  else ctx.resume();
+});
 
 // Restore progression (resources, upgrades, discoveries).
 const save = new SaveGame(game);
