@@ -13,6 +13,7 @@
  *   strafeX  +1 = thrust right
  *   strafeY  +1 = thrust up
  *   boost    afterburner engaged
+ *   brake    flight-assist braking (bleeds velocity quickly)
  *   fire     trigger held
  */
 export class Input {
@@ -25,6 +26,7 @@ export class Input {
       strafeX: 0,
       strafeY: 0,
       boost: false,
+      brake: false,
       fire: false,
     };
 
@@ -181,6 +183,7 @@ export class Input {
 
     // --- Buttons ---
     s.boost = v.boost || k.has('ShiftLeft') || k.has('ShiftRight');
+    s.brake = k.has('KeyX');
     s.fire = v.fire || k.has('Space') || (this.mouse.buttons & 1) !== 0;
   }
 }
