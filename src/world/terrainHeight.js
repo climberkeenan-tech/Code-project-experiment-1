@@ -55,8 +55,10 @@ export function createTerrainSampler(descriptor) {
     let h = lerp(-oceanDepth, 0, Math.min(1, land * 1.6));
 
     if (land > 0.02) {
-      // --- Rolling hills ---
-      const hills = hillNoise.fbm(x * t.hillFreq, y * t.hillFreq, z * t.hillFreq, 4);
+      // --- Hills: rolling fBm, or folded billow noise for dune seas ---
+      const hills = t.hillStyle === 'dunes'
+        ? hillNoise.billow(x * t.hillFreq, y * t.hillFreq, z * t.hillFreq, 3) * 0.9 - 0.2
+        : hillNoise.fbm(x * t.hillFreq, y * t.hillFreq, z * t.hillFreq, 4);
       h += hills * t.hillAmp * relief * land;
 
       // --- Mountain ranges (ridged, masked into belts) ---

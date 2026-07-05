@@ -13,11 +13,9 @@ import { Sun } from './environment/Sun.js';
 import { Starfield } from './environment/Starfield.js';
 import { Nebulas } from './environment/Nebulas.js';
 import { SpaceDust } from './environment/SpaceDust.js';
-import { AsteroidField } from './environment/AsteroidField.js';
 import { createSpaceEnvironment } from './environment/SpaceEnvMap.js';
 import { Universe } from './world/Universe.js';
-import { Planet } from './world/Planet.js';
-import { createTerranDescriptor } from './world/PlanetDescriptor.js';
+import { generateUniverse } from './world/UniverseGenerator.js';
 import { ShipSounds } from './audio/ShipSounds.js';
 import { HUD } from './ui/HUD.js';
 import { TouchControls } from './ui/TouchControls.js';
@@ -51,14 +49,10 @@ player.quaternion.setFromUnitVectors(
 game.player = player;
 game.addSystem('player', player);
 
-// --- Universe (planets, gravity, planetary flight coupling) ---
+// --- Universe (planets, asteroid fields, gravity, planetary flight) ---
 const universe = new Universe(game);
 game.universe = universe;
-universe.addPlanet(new Planet(
-  game,
-  createTerranDescriptor(),
-  new THREE.Vector3(11200, 1600, 37500), // ahead of the spawn heading
-));
+generateUniverse(game, universe);
 game.addSystem('universe', universe);
 
 const enemies = new EnemyManager(game);
@@ -89,17 +83,6 @@ game.addSystem('pickups', pickups);
 const sun = new Sun(game);
 game.sun = sun;
 game.addSystem('sun', sun);
-
-// A dense mining cluster in the inner system, shootable and hazardous.
-const belt = new AsteroidField(game, {
-  center: PLAYER_SPAWN.clone().add(new THREE.Vector3(3400, 300, -2600)),
-  radius: 1500,
-  count: 320,
-  seed: 'inner-belt',
-  shape: 'cluster',
-});
-game.asteroidFields.push(belt);
-game.addSystem('asteroid-belt', belt);
 
 // --- Camera, then camera-relative dressing ---
 const chaseCamera = new ChaseCamera(game);

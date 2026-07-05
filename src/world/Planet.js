@@ -67,10 +67,11 @@ export class Planet {
 
     // --- Ocean ---
     this.ocean = null;
+    this.oceanLow = null;
     if (descriptor.hasOcean) {
       const oceanMaterial = new THREE.MeshStandardMaterial({
         color: descriptor.oceanColor,
-        roughness: 0.12,
+        roughness: descriptor.oceanRoughness ?? 0.12,
         metalness: 0.0,
         transparent: true,
         opacity: 0.94,
@@ -79,12 +80,18 @@ export class Planet {
       if (descriptor.hasAtmosphere) {
         applyAtmosphericHaze(oceanMaterial, this.hazeUniforms);
       }
+      // Two LODs: dense sphere for surface flight, light one for orbit+.
       this.ocean = new THREE.Mesh(
         new THREE.SphereGeometry(this.radius + 0.5, 160, 110),
         oceanMaterial,
       );
       this.ocean.receiveShadow = true;
-      this.group.add(this.ocean);
+      this.ocean.visible = false;
+      this.oceanLow = new THREE.Mesh(
+        new THREE.SphereGeometry(this.radius + 0.5, 48, 32),
+        oceanMaterial,
+      );
+      this.group.add(this.ocean, this.oceanLow);
     }
 
     // --- Atmosphere + clouds ---
@@ -167,6 +174,15 @@ export class Planet {
     this.terrain.update(this._local);
 
     if (this.clouds) this.clouds.update(dt, elapsed);
+
+    // Ocean LOD swap around 1.6 radii out.
+    if (this.ocean) {
+      const nearOcean = this._local.lengthSq() < (this.radius * 1.6) ** 2;
+      if (this.ocean.visible !== nearOcean) {
+        this.ocean.visible = nearOcean;
+        this.oceanLow.visible = !nearOcean;
+      }
+    }
 
     // Aerial-perspective density from camera altitude: thick at the deck,
     // gone in orbit, with a faint floor so the day side reads hazy from
