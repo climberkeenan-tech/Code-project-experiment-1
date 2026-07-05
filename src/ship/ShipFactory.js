@@ -158,9 +158,21 @@ function addCanopy(group, glassMat, { z, width, height, length }) {
 }
 
 /**
- * Standard material set for a ship, tinted per faction/class.
+ * Standard material set for a ship, tinted per faction/class. Cached so
+ * every ship of a class shares one material set — enemies spawn and
+ * despawn constantly, and per-ship materials would leak GPU programs.
  */
+const materialCache = new Map();
+
 function createMaterials({ hullColor, accentColor, glowColor }) {
+  const key = `${hullColor}:${accentColor}:${glowColor.getHexString()}`;
+  if (materialCache.has(key)) return materialCache.get(key);
+  const materials = buildMaterials({ hullColor, accentColor, glowColor });
+  materialCache.set(key, materials);
+  return materials;
+}
+
+function buildMaterials({ hullColor, accentColor, glowColor }) {
   return {
     hull: new THREE.MeshStandardMaterial({
       color: hullColor,

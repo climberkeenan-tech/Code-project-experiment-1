@@ -107,9 +107,13 @@ export class Planet {
     }
 
     // Register as a nav obstacle (AI avoidance + projectile occlusion).
+    // The `planet` back-reference lets the weapon system fall through to a
+    // precise terrain-altitude test instead of killing bolts at the padded
+    // sphere — otherwise low-altitude combat would be impossible.
     game.obstacles.push({
       position: this.group.position,
-      radius: this.radius + descriptor.relief,
+      radius: this.radius + descriptor.relief * 2,
+      planet: this,
     });
 
     game.origin.onShift((delta) => {

@@ -38,7 +38,6 @@ export class Nebulas {
         transparent: true,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
-        depthTest: false,
         opacity: rng.range(0.16, 0.3),
       }));
       const [x, y, z] = rng.unitVector();
@@ -55,7 +54,6 @@ export class Nebulas {
         transparent: true,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
-        depthTest: false,
         opacity: rng.range(0.5, 0.8),
       }));
       const [x, y, z] = rng.unitVector();
@@ -66,6 +64,10 @@ export class Nebulas {
     }
 
     this.group.renderOrder = -99; // just after the starfield
+
+    // Camera-followers update before the origin rebase runs; shift with
+    // the world so there's never a one-frame offset of the whole sky.
+    game.origin.onShift((delta) => this.group.position.sub(delta));
   }
 
   update() {

@@ -37,7 +37,14 @@ export class Screens {
     `;
     this.root.appendChild(el);
 
+    let launched = false;
+    const onKey = (e) => {
+      if (e.code === 'Enter' || e.code === 'Space') launch();
+    };
     const launch = () => {
+      if (launched) return;
+      launched = true;
+      window.removeEventListener('keydown', onKey);
       this.game.audio.unlock();
       this.game.paused = false;
       this.game.events.emit('game:started');
@@ -45,12 +52,7 @@ export class Screens {
       setTimeout(() => el.remove(), 700);
     };
     el.addEventListener('pointerdown', launch, { once: true });
-    window.addEventListener('keydown', function onKey(e) {
-      if (e.code === 'Enter' || e.code === 'Space') {
-        window.removeEventListener('keydown', onKey);
-        launch();
-      }
-    });
+    window.addEventListener('keydown', onKey);
   }
 
   _buildDeathScreen() {

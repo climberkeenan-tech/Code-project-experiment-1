@@ -337,6 +337,14 @@ export class EnemyShip extends ShipBase {
     );
   }
 
+  /**
+   * Release per-instance GPU resources. Geometry and class materials are
+   * shared caches and stay alive; only the shield bubble is per-ship.
+   */
+  dispose() {
+    this.shieldFx.dispose();
+  }
+
   _applyThrust(speedFactor, dt) {
     const stats = this.stats;
     this.getForward(this._fwd);

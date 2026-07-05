@@ -70,6 +70,7 @@ export class EnemyManager {
     if (index === -1) return;
     this.enemies.splice(index, 1);
     this.game.engine.scene.remove(enemy.object3D);
+    enemy.dispose();
   }
 
   /** Count of enemies within a radius of a point (used by the director). */

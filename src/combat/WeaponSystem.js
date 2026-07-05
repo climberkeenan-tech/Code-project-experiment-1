@@ -290,15 +290,26 @@ export class WeaponSystem {
       }
     }
 
-    // Bolts die against large bodies (planets, stations).
+    // Bolts die against large bodies. Planets get a precise terrain test
+    // once inside the padded sphere (bolts must survive low-altitude
+    // dogfights over mountains); plain spheres handle everything else.
     for (const obstacle of game.obstacles) {
       const distSq = bolt.mesh.position.distanceToSquared(obstacle.position);
-      if (distSq < obstacle.radius * obstacle.radius) return true;
+      if (distSq >= obstacle.radius * obstacle.radius) continue;
+      if (!obstacle.planet) return true;
+      if (obstacle.planet.getAltitude(bolt.mesh.position) <= 0) return true;
     }
 
     // Bolts chip asteroids: spark burst, chance of shaking salvage loose.
+    // Sampled at three points along this frame's travel so fast bolts
+    // can't tunnel through small rocks.
     for (const field of game.asteroidFields) {
-      const rock = field.sphereHit(bolt.mesh.position, 1.2);
+      let rock = field.sphereHit(bolt.mesh.position, 1.2);
+      if (!rock) {
+        this._closest.lerpVectors(bolt.prevPos, bolt.mesh.position, 0.5);
+        rock = field.sphereHit(this._closest, 1.2)
+          ?? field.sphereHit(bolt.prevPos, 1.2);
+      }
       if (rock) {
         if (game.explosions) game.explosions.spawn(bolt.mesh.position, 0.28);
         if (bolt.fromPlayer && game.pickups && Math.random() < 0.14) {

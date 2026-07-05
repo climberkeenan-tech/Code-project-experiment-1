@@ -72,7 +72,9 @@ export class CombatSystem {
       else this._ramCooldowns.set(enemy, remaining);
     }
 
-    for (const enemy of game.enemies.enemies) {
+    // Copy: a lethal ram emits 'ship:destroyed', whose handler splices the
+    // live array we'd otherwise be iterating.
+    for (const enemy of [...game.enemies.enemies]) {
       if (!enemy.alive || this._ramCooldowns.has(enemy)) continue;
 
       const minDist = player.radius + enemy.radius;

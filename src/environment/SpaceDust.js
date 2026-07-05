@@ -40,6 +40,13 @@ export class SpaceDust {
 
     this._lastCam = new THREE.Vector3();
     this._initialized = false;
+
+    // Shift with the world on rebase so the dust cloud (and its delta
+    // tracking) never sees a phantom 8km camera jump.
+    game.origin.onShift((delta) => {
+      this.points.position.sub(delta);
+      this._lastCam.sub(delta);
+    });
   }
 
   update() {

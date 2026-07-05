@@ -138,6 +138,10 @@ export class Starfield {
     this.points.frustumCulled = false; // always surrounds the camera
     this.points.renderOrder = -100; // draw first, behind everything
     game.engine.scene.add(this.points);
+
+    // Stay glued to the camera through floating-origin rebases (the camera
+    // shifts after this system's update has already run for the frame).
+    game.origin.onShift((delta) => this.points.position.sub(delta));
   }
 
   update(dt, elapsed) {

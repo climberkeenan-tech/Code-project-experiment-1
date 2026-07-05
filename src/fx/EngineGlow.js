@@ -10,6 +10,49 @@ import { getGlowTexture, getPlumeTexture } from './textures.js';
  * Everything is additive-blended and depth-read-only, so exhausts layer
  * correctly with the world without sorting artifacts.
  */
+/** Shared plume quad: unit plane pivoted at the nozzle, extending +Z. */
+let sharedPlumeGeom = null;
+
+function getPlumeGeometry() {
+  if (!sharedPlumeGeom) {
+    sharedPlumeGeom = new THREE.PlaneGeometry(1, 1);
+    sharedPlumeGeom.rotateX(-Math.PI / 2); // lie along Z
+    sharedPlumeGeom.translate(0, 0, 0.5); // pivot at nozzle
+  }
+  return sharedPlumeGeom;
+}
+
+/** Material cache by glow color — ships of a class share exhaust materials. */
+const materialCache = new Map();
+
+function getExhaustMaterials(color) {
+  const key = color.getHexString();
+  if (materialCache.has(key)) return materialCache.get(key);
+
+  // The exhaust disc meshes carry the full HDR color; sprites and plumes
+  // use a toned-down copy so bloom doesn't swallow the ship's silhouette.
+  const softColor = color.clone().multiplyScalar(0.22);
+  const materials = {
+    sprite: new THREE.SpriteMaterial({
+      map: getGlowTexture(128, 2.4),
+      color: softColor,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      transparent: true,
+    }),
+    plume: new THREE.MeshBasicMaterial({
+      map: getPlumeTexture(128),
+      color: softColor,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      transparent: true,
+      side: THREE.DoubleSide,
+    }),
+  };
+  materialCache.set(key, materials);
+  return materials;
+}
+
 export class EngineGlow {
   /**
    * @param {THREE.Group} shipGroup group to attach to (ship space)
@@ -19,32 +62,8 @@ export class EngineGlow {
   constructor(shipGroup, anchors, color) {
     this.units = [];
 
-    // The exhaust disc meshes carry the full HDR color; sprites and plumes
-    // use a toned-down copy so bloom doesn't swallow the ship's silhouette.
-    const softColor = color.clone().multiplyScalar(0.22);
-
-    const spriteMat = new THREE.SpriteMaterial({
-      map: getGlowTexture(128, 2.4),
-      color: softColor,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      transparent: true,
-    });
-
-    const plumeMat = new THREE.MeshBasicMaterial({
-      map: getPlumeTexture(128),
-      color: softColor,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      transparent: true,
-      side: THREE.DoubleSide,
-    });
-
-    // Plume geometry: unit plane, origin at the nozzle edge, extending +Z
-    // (rearward). Scaled per-frame along Z for length.
-    const plumeGeom = new THREE.PlaneGeometry(1, 1);
-    plumeGeom.rotateX(-Math.PI / 2); // lie along Z
-    plumeGeom.translate(0, 0, 0.5); // pivot at nozzle
+    const { sprite: spriteMat, plume: plumeMat } = getExhaustMaterials(color);
+    const plumeGeom = getPlumeGeometry();
 
     for (const anchor of anchors) {
       const unit = new THREE.Group();

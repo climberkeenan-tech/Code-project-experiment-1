@@ -66,6 +66,8 @@ class TerrainNode {
     this.children = null;
     this.queued = false;
     this.lastWantedFrame = -1;
+    /** Set when this node is pruned from the tree; blocks queued builds. */
+    this.dead = false;
   }
 
   get meshReady() {
@@ -88,6 +90,9 @@ class TerrainNode {
     for (const child of this.children) {
       child.releaseChildren();
       child.releaseMesh();
+      // The node object is discarded (a future split creates fresh nodes);
+      // flag it so a stale build-queue entry can't resurrect an orphan.
+      child.dead = true;
     }
     this.children = null;
   }
@@ -223,8 +228,8 @@ export class QuadtreeSphere {
       if (built > 0 && performance.now() - start > this.buildBudgetMs) break;
       const node = this.queue.shift();
       node.queued = false;
-      // Stale request (camera moved on): drop it.
-      if (node.lastWantedFrame < this.frame - 1) continue;
+      // Stale request (camera moved on) or pruned node: drop it.
+      if (node.dead || node.lastWantedFrame < this.frame - 1) continue;
       this._buildPatch(node);
       built++;
     }

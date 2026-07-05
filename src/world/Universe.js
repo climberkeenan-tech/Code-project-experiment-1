@@ -178,12 +178,15 @@ export class Universe {
   _updateEnemies(dt) {
     const enemies = this.game.enemies;
     if (!enemies) return;
-    for (const enemy of enemies.enemies) {
+    // Copy: a lethal ground impact removes the enemy mid-iteration.
+    for (const enemy of [...enemies.enemies]) {
       if (!enemy.alive) continue;
       for (const planet of this.planets) {
-        // Cheap reject before any noise sampling.
+        // Cheap reject before any noise sampling. Terrain layers can stack
+        // past `relief` (it scales the layers rather than capping them),
+        // so the reject band is 2× relief to clear the tallest summits.
         const spherical = planet.getAltitudeSpherical(enemy.position);
-        if (spherical > planet.descriptor.relief + 60) continue;
+        if (spherical > planet.descriptor.relief * 2 + 60) continue;
         const altitude = planet.getAltitude(enemy.position);
         if (altitude < enemy.radius) {
           this._resolveGroundHit(enemy, planet, altitude, false);

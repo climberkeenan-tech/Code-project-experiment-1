@@ -38,7 +38,9 @@ export class POISystem {
     game.origin.onShift((delta) => {
       for (const site of this.sites) {
         site.position.sub(delta);
-        if (site.orbit) site.orbit.center = null; // re-resolved from planet next frame
+        // Built meshes are repositioned every update, but that already ran
+        // this frame — shift them too or they lag the world by one frame.
+        if (site.built && site.inScene) site.built.group.position.sub(delta);
       }
     });
   }
@@ -59,6 +61,7 @@ export class POISystem {
         discovered: false,
         signalSent: false,
         built: null,
+        inScene: false,
       });
     };
 
@@ -144,13 +147,20 @@ export class POISystem {
 
       const distSq = site.position.distanceToSquared(player.position);
 
-      // Lazy mesh lifecycle.
+      // Lazy mesh lifecycle: built once on first approach, then just
+      // toggled in/out of the scene — geometry is never recreated, so
+      // repeated visits cost nothing and leak nothing.
       if (distSq < BUILD_RANGE * BUILD_RANGE) {
-        if (!site.built) this._buildSite(site);
+        if (!site.built) site.built = POI_BUILDERS[site.kind]();
+        if (!site.inScene) {
+          site.inScene = true;
+          this.game.engine.scene.add(site.built.group);
+        }
         site.built.group.position.copy(site.position);
         site.built.animate(dt, elapsed);
-      } else if (site.built) {
-        this._disposeSite(site);
+      } else if (site.inScene) {
+        site.inScene = false;
+        this.game.engine.scene.remove(site.built.group);
       }
 
       // Signal ping.
@@ -167,21 +177,10 @@ export class POISystem {
       }
 
       // Gentle collision with big structures.
-      if (site.built && (site.kind === 'station' || site.kind === 'wreck')) {
+      if (site.inScene && (site.kind === 'station' || site.kind === 'wreck')) {
         this._collide(site, player);
       }
     }
-  }
-
-  _buildSite(site) {
-    site.built = POI_BUILDERS[site.kind]();
-    site.built.group.position.copy(site.position);
-    this.game.engine.scene.add(site.built.group);
-  }
-
-  _disposeSite(site) {
-    this.game.engine.scene.remove(site.built.group);
-    site.built = null;
   }
 
   _discover(site) {
@@ -224,10 +223,13 @@ export class POISystem {
       const impact = -into;
       if (impact > 20) {
         const damage = clamp((impact - 20) * 0.4, 4, 30);
-        player.applyDamage(damage);
+        const result = player.applyDamage(damage);
         this.game.events.emit('player:hit', { damage });
         this.game.events.emit('camera:shake', 0.4);
         this.game.audio.playNoise({ duration: 0.4, gain: 0.4, filterFreq: 800, filterEnd: 100 });
+        if (result.destroyed) {
+          this.game.events.emit('ship:destroyed', { ship: player, byPlayer: false });
+        }
       }
     }
   }
