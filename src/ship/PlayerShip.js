@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ShipBase } from './ShipBase.js';
 import { createPlayerShip } from './ShipFactory.js';
 import { EngineGlow } from '../fx/EngineGlow.js';
+import { ShieldEffect } from '../fx/ShieldEffect.js';
 import { damp, clamp, lerp } from '../core/math/noise.js';
 
 /**
@@ -70,6 +71,7 @@ export class PlayerShip extends ShipBase {
     this.upgrades = { engine: 1, shield: 1, weapon: 1 };
 
     this.glow = new EngineGlow(this.visual, this.engines, this.glowColor);
+    this.shieldFx = new ShieldEffect(this.object3D, this.radius * 1.4);
 
     this._throttleSmooth = 0;
     this._boostBlend = 0;
@@ -87,6 +89,7 @@ export class PlayerShip extends ShipBase {
 
   /** @param {number} dt @param {number} elapsed */
   update(dt, elapsed) {
+    this.shieldFx.update(dt);
     if (!this.alive) return;
     const input = this.game.input.state;
 

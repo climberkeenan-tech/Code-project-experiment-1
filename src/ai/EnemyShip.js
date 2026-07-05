@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ShipBase } from '../ship/ShipBase.js';
 import { createEnemyShip } from '../ship/ShipFactory.js';
 import { EngineGlow } from '../fx/EngineGlow.js';
+import { ShieldEffect } from '../fx/ShieldEffect.js';
 import { Rng } from '../core/math/rng.js';
 import { damp, clamp, lerp } from '../core/math/noise.js';
 
@@ -89,6 +90,9 @@ export class EnemyShip extends ShipBase {
     this.triggerHeld = false;
 
     this.glow = new EngineGlow(this.visual, this.engines, this.glowColor);
+    this.shieldFx = new ShieldEffect(
+      this.object3D, this.radius * 1.35, new THREE.Color(1.6, 0.8, 0.4),
+    );
     this._throttle = 0;
 
     // Scratch vectors (per-instance so ships can't corrupt each other).
@@ -146,6 +150,7 @@ export class EnemyShip extends ShipBase {
   }
 
   update(dt, elapsed) {
+    this.shieldFx.update(dt);
     if (!this.alive) return;
     this.stateTime += dt;
     this.fireCooldown -= dt;

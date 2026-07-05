@@ -3,6 +3,10 @@ import './ui/hud.css';
 import { Game } from './core/Game.js';
 import { PlayerShip } from './ship/PlayerShip.js';
 import { EnemyManager } from './ai/EnemyManager.js';
+import { WeaponSystem } from './combat/WeaponSystem.js';
+import { CombatSystem } from './combat/CombatSystem.js';
+import { Pickups } from './combat/Pickups.js';
+import { Explosions } from './fx/Explosions.js';
 import { ChaseCamera } from './camera/ChaseCamera.js';
 import { Starfield } from './environment/Starfield.js';
 import { createSpaceEnvironment } from './environment/SpaceEnvMap.js';
@@ -51,6 +55,14 @@ game.addSystem('enemies', enemies);
 // TEMP (Phase 3 verification): a patrol squad near spawn. The encounter
 // director replaces this with organic placement in Phase 9.
 enemies.spawnSquad(new THREE.Vector3(0, 0, -400), ['fighter', 'scout'], 150, 500);
+
+const weapons = new WeaponSystem(game);
+game.weapons = weapons;
+game.addSystem('weapons', weapons);
+
+game.addSystem('combat', new CombatSystem(game));
+game.addSystem('explosions', new Explosions(game));
+game.addSystem('pickups', new Pickups(game));
 
 const chaseCamera = new ChaseCamera(game);
 game.addSystem('camera', chaseCamera);
