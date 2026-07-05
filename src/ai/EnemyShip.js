@@ -89,6 +89,9 @@ export class EnemyShip extends ShipBase {
     /** Weapon system (Phase 4) reads this to spawn bolts. */
     this.triggerHeld = false;
 
+    /** Encounter-director region this ship belongs to (null = scripted). */
+    this.region = null;
+
     this.glow = new EngineGlow(this.visual, this.engines, this.glowColor);
     this.shieldFx = new ShieldEffect(
       this.object3D, this.radius * 1.35, new THREE.Color(1.6, 0.8, 0.4),

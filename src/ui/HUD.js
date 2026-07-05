@@ -91,6 +91,9 @@ export class HUD {
     game.events.on('poi:signal', () => {
       this.showBanner('Unknown Signal Detected', 'investigate nearby coordinates', 3.5);
     });
+    game.events.on('combat:contact', ({ count }) => {
+      this.showBanner('Hostile Contacts', `${count} signatures approaching`, 3);
+    });
   }
 
   _setText(key, value) {

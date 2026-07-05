@@ -4,6 +4,7 @@ import { Game } from './core/Game.js';
 import { PLAYER_SPAWN, SUN_POSITION } from './world/constants.js';
 import { PlayerShip } from './ship/PlayerShip.js';
 import { EnemyManager } from './ai/EnemyManager.js';
+import { EncounterDirector } from './ai/EncounterDirector.js';
 import { WeaponSystem } from './combat/WeaponSystem.js';
 import { CombatSystem } from './combat/CombatSystem.js';
 import { Pickups } from './combat/Pickups.js';
@@ -62,15 +63,12 @@ const poi = new POISystem(game);
 game.poi = poi;
 game.addSystem('poi', poi);
 
+// --- Population: encounters emerge from territory, not spawn timers ---
+game.addSystem('director', new EncounterDirector(game));
+
 const enemies = new EnemyManager(game);
 game.enemies = enemies;
 game.addSystem('enemies', enemies);
-
-// TEMP (until Phase 9's encounter director): a patrol squad near spawn.
-enemies.spawnSquad(
-  PLAYER_SPAWN.clone().add(new THREE.Vector3(0, 0, -700)),
-  ['fighter', 'scout'], 200, 600,
-);
 
 const weapons = new WeaponSystem(game);
 game.weapons = weapons;
