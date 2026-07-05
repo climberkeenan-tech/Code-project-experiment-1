@@ -15,6 +15,7 @@
  *   {type:'eval', js}                — run JS in page context
  *   {type:'shot', path}              — intermediate screenshot
  */
+import { readFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
 const url = process.argv[2] ?? 'http://localhost:5173';
@@ -56,6 +57,9 @@ for (const action of actions) {
       break;
     case 'eval':
       await page.evaluate(action.js);
+      break;
+    case 'evalFile':
+      await page.evaluate(readFileSync(action.path, 'utf8'));
       break;
     case 'shot':
       await page.screenshot({ path: action.path });
