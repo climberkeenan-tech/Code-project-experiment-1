@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import './ui/hud.css';
 import { Game } from './core/Game.js';
 import { PlayerShip } from './ship/PlayerShip.js';
+import { EnemyManager } from './ai/EnemyManager.js';
 import { ChaseCamera } from './camera/ChaseCamera.js';
 import { Starfield } from './environment/Starfield.js';
 import { createSpaceEnvironment } from './environment/SpaceEnvMap.js';
@@ -43,6 +44,14 @@ const player = new PlayerShip(game);
 game.player = player;
 game.addSystem('player', player);
 
+const enemies = new EnemyManager(game);
+game.enemies = enemies;
+game.addSystem('enemies', enemies);
+
+// TEMP (Phase 3 verification): a patrol squad near spawn. The encounter
+// director replaces this with organic placement in Phase 9.
+enemies.spawnSquad(new THREE.Vector3(0, 0, -400), ['fighter', 'scout'], 150, 500);
+
 const chaseCamera = new ChaseCamera(game);
 game.addSystem('camera', chaseCamera);
 
@@ -57,3 +66,6 @@ new TouchControls(game);
 new Screens(game);
 
 game.start();
+
+// Expose for the smoke-test harness and console debugging.
+window.__game = game;

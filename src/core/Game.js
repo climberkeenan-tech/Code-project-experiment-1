@@ -41,6 +41,19 @@ export class Game {
     this.player = null;
     /** Set by the universe system in Phase 6+. */
     this.universe = null;
+    /** Set by the enemy manager; consumed by combat and radar. */
+    this.enemies = null;
+    /** Set by the weapon system; consumed by AI and HUD. */
+    this.weapons = null;
+    /**
+     * Large sphere colliders for AI avoidance and projectile occlusion:
+     * objects with `{ position: Vector3, radius: number }`. Planets and
+     * stations register here.
+     * @type {Array<{position: import('three').Vector3, radius: number}>}
+     */
+    this.obstacles = [];
+    /** Atmospheric-entry heat 0..1, drives HUD glow (set by universe). */
+    this.entryHeat = 0;
 
     /** True while the start screen / death screen is up. */
     this.paused = true;

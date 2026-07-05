@@ -21,7 +21,7 @@ export class EngineGlow {
 
     // The exhaust disc meshes carry the full HDR color; sprites and plumes
     // use a toned-down copy so bloom doesn't swallow the ship's silhouette.
-    const softColor = color.clone().multiplyScalar(0.4);
+    const softColor = color.clone().multiplyScalar(0.22);
 
     const spriteMat = new THREE.SpriteMaterial({
       map: getGlowTexture(128, 2.4),
@@ -75,7 +75,7 @@ export class EngineGlow {
     for (const { unit, sprite, planeA, planeB, phase } of this.units) {
       const flicker = 1 + Math.sin(time * 31 + phase) * 0.06 + Math.sin(time * 57 + phase * 2) * 0.04;
       const p = power * flicker;
-      sprite.scale.setScalar(0.9 + p * 1.1);
+      sprite.scale.setScalar(0.75 + p * 0.95);
       const length = 0.4 + p * 4.2 + boost01 * 3.0;
       const width = 0.35 + p * 0.5;
       planeA.scale.set(width, 1, length);
