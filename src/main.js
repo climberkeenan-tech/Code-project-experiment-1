@@ -16,6 +16,8 @@ import { SpaceDust } from './environment/SpaceDust.js';
 import { createSpaceEnvironment } from './environment/SpaceEnvMap.js';
 import { Universe } from './world/Universe.js';
 import { generateUniverse } from './world/UniverseGenerator.js';
+import { POISystem } from './exploration/POISystem.js';
+import { SaveGame } from './core/SaveGame.js';
 import { ShipSounds } from './audio/ShipSounds.js';
 import { HUD } from './ui/HUD.js';
 import { TouchControls } from './ui/TouchControls.js';
@@ -54,6 +56,11 @@ const universe = new Universe(game);
 game.universe = universe;
 generateUniverse(game, universe);
 game.addSystem('universe', universe);
+
+// --- Exploration: discoverable sites + persistence ---
+const poi = new POISystem(game);
+game.poi = poi;
+game.addSystem('poi', poi);
 
 const enemies = new EnemyManager(game);
 game.enemies = enemies;
@@ -98,6 +105,10 @@ game.addSystem('hud', new HUD(game));
 
 new TouchControls(game);
 new Screens(game);
+
+// Restore progression (resources, upgrades, discoveries).
+const save = new SaveGame(game);
+save.load();
 
 game.start();
 

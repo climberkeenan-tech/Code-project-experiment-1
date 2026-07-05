@@ -88,6 +88,9 @@ export class HUD {
     game.events.on('player:hit', () => { this._vignette = Math.min(1, this._vignette + 0.55); });
     game.events.on('combat:hit-confirmed', (info) => this._popHitmarker(info?.killed));
     game.events.on('poi:discovered', (poi) => this.showBanner(poi.title, poi.subtitle));
+    game.events.on('poi:signal', () => {
+      this.showBanner('Unknown Signal Detected', 'investigate nearby coordinates', 3.5);
+    });
   }
 
   _setText(key, value) {
