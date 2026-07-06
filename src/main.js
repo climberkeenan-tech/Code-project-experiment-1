@@ -24,6 +24,7 @@ import { ShipSounds } from './audio/ShipSounds.js';
 import { Music } from './audio/Music.js';
 import { HUD } from './ui/HUD.js';
 import { Radar } from './ui/Radar.js';
+import { Shop } from './ui/Shop.js';
 import { TouchControls } from './ui/TouchControls.js';
 import { Screens } from './ui/Screens.js';
 
@@ -109,6 +110,7 @@ game.addSystem('music', new Music(game));
 const hud = new HUD(game);
 game.addSystem('hud', hud);
 game.addSystem('radar', new Radar(game, hud.refs.radar));
+game.addSystem('shop', new Shop(game));
 
 new TouchControls(game);
 new Screens(game);
@@ -121,9 +123,11 @@ document.addEventListener('visibilitychange', () => {
   else ctx.resume();
 });
 
-// Restore progression (resources, upgrades, discoveries).
+// Restore progression (resources, credits, inventory, upgrades, discoveries).
 const save = new SaveGame(game);
 save.load();
+// Bake restored upgrade multipliers into stat caps (shield capacity/regen).
+player.applyUpgrades();
 
 game.start();
 

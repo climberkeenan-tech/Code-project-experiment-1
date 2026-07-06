@@ -186,6 +186,21 @@ export class PlayerShip extends ShipBase {
     this.glow.update(this._throttleSmooth, this._boostBlend, elapsed);
   }
 
+  /**
+   * Re-derive stat caps from the current upgrade multipliers. Engine/weapon
+   * multipliers are read live each frame, but shield capacity/regen must be
+   * baked into the defense model here. Call after load and after any purchase.
+   */
+  applyUpgrades() {
+    const shieldMult = this.upgrades.shield;
+    const prevMax = this.shieldMax;
+    this.shieldMax = Math.round(100 * shieldMult);
+    this.shieldRegenRate = 10 * shieldMult;
+    // Top up proportionally so an upgrade never leaves the bar over-full.
+    if (this.shieldMax > prevMax) this.shield += this.shieldMax - prevMax;
+    this.shield = Math.min(this.shield, this.shieldMax);
+  }
+
   /** Fraction accessors for the HUD. */
   get hull01() { return this.hull / this.hullMax; }
   get shield01() { return this.shield / this.shieldMax; }

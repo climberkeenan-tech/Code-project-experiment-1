@@ -51,6 +51,9 @@ export class Input {
     /** Edge-triggered "interact / mine / board / disembark" press. */
     this.interactQueued = false;
 
+    /** Edge-triggered "hail the outpost / open trade" press. */
+    this.tradeQueued = false;
+
     /** Keys currently held, by KeyboardEvent.code. */
     this.keys = new Set();
 
@@ -111,6 +114,8 @@ export class Input {
     // Context action (interact / mine / board / disembark) — edge-triggered,
     // ignore auto-repeat so a held key fires once.
     if (e.code === 'KeyE' && !e.repeat) this.interactQueued = true;
+    // Hail the outpost exchange (open the shop).
+    if (e.code === 'KeyT' && !e.repeat) this.tradeQueued = true;
   }
 
   _onKeyUp(e) {
@@ -155,6 +160,13 @@ export class Input {
   consumeInteract() {
     const v = this.interactQueued;
     this.interactQueued = false;
+    return v;
+  }
+
+  /** Consume the edge-triggered trade/hail press (true once per press). */
+  consumeTrade() {
+    const v = this.tradeQueued;
+    this.tradeQueued = false;
     return v;
   }
 
