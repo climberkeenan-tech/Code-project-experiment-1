@@ -492,6 +492,7 @@ export function createEnemyShip(type) {
         group, engines, hardpoints,
         radius: (b.length * mm.scale) / 2.6,
         glowColor: new THREE.Color(5.4, 0.6, 0.5),
+        modeled: true,
       };
     }
   }
@@ -508,6 +509,9 @@ export function createEnemyShip(type) {
     child.castShadow = true;
     child.receiveShadow = true;
   }
+  // A procedural stand-in for a model still streaming in: the live ship
+  // upgrades its hull via refreshVisual() the moment the model lands.
+  rig.modeled = !mm;
   return rig;
 }
 

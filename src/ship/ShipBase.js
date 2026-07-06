@@ -27,6 +27,8 @@ export class ShipBase {
     this.engines = rig.engines;
     this.hardpoints = rig.hardpoints;
     this.glowColor = rig.glowColor;
+    /** False = procedural stand-in for a model that hasn't streamed in yet. */
+    this.rigModeled = rig.modeled !== false;
 
     // --- Defense model (tuned per ship class) ---
     this.hullMax = 100;

@@ -4,7 +4,7 @@ import { Game } from './core/Game.js';
 import { PLAYER_SPAWN, SUN_POSITION } from './world/constants.js';
 import { PlayerShip } from './ship/PlayerShip.js';
 import { PLAYER_SHIP_BY_ID } from './ship/ShipFactory.js';
-import { loadModelShips } from './ship/ModelShips.js';
+import { loadModelShips, onModelLoaded } from './ship/ModelShips.js';
 import { EnemyManager } from './ai/EnemyManager.js';
 import { EncounterDirector } from './ai/EncounterDirector.js';
 import { ApexHunter } from './ai/ApexHunter.js';
@@ -169,10 +169,14 @@ save.load();
 // Bake restored upgrade multipliers into stat caps (shield capacity/regen).
 player.applyUpgrades();
 
-// Hand-modeled ships load async; hot-swap the hull if we're flying one.
-loadModelShips().then((protos) => {
+// Hand-modeled ships stream in async (86MB of FBX — slow connections take a
+// while). Upgrade hulls model-by-model AS each one lands: the player's ship
+// hot-swaps, and every live enemy trades its stand-in for the real thing.
+loadModelShips();
+onModelLoaded((id) => {
   const variant = PLAYER_SHIP_BY_ID[player.ships.active];
-  if (variant?.model && protos[variant.model]) player.refreshShip();
+  if (variant?.model === id) player.refreshShip();
+  enemies.refreshModels();
 });
 
 game.start();

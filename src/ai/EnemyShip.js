@@ -21,32 +21,32 @@ export const ENEMY_TYPES = {
   scout: {
     displayName: 'Scout', level: 10, credits: 20, weapon: 'bolt', accuracy: 0.6,
     hull: 28, shield: 12, accel: 90, maxSpeed: 150, turnRate: 1.9,
-    fireRange: 300, fireInterval: 1.2, damage: 4, detectRange: 1200,
+    fireRange: 300, fireInterval: 1.2, damage: 9, detectRange: 1200,
     evadeSkill: 0.4, attackRunTime: 4, resources: 2,
   },
   fighter: {
     displayName: 'Fighter', level: 20, credits: 50, weapon: 'bolt', accuracy: 0.7,
     hull: 50, shield: 25, accel: 80, maxSpeed: 140, turnRate: 1.4,
-    fireRange: 360, fireInterval: 0.9, damage: 7, detectRange: 950,
+    fireRange: 360, fireInterval: 0.9, damage: 15, detectRange: 950,
     evadeSkill: 0.28, attackRunTime: 6, resources: 4,
   },
   heavy: {
     displayName: 'Heavy Assault', level: 40, credits: 160, weapon: 'bolt', accuracy: 0.8,
     hull: 150, shield: 70, accel: 60, maxSpeed: 105, turnRate: 0.8,
-    fireRange: 460, fireInterval: 1.6, damage: 14, detectRange: 850,
+    fireRange: 460, fireInterval: 1.6, damage: 28, detectRange: 850,
     evadeSkill: 0.12, attackRunTime: 9, resources: 10,
   },
   cruiser: {
     displayName: 'Missile Cruiser', level: 60, credits: 420, weapon: 'missile', accuracy: 0.85,
     hull: 240, shield: 130, accel: 45, maxSpeed: 90, turnRate: 0.6,
-    fireRange: 1100, fireInterval: 3.2, damage: 30, detectRange: 1400,
+    fireRange: 1100, fireInterval: 3.2, damage: 48, detectRange: 1400,
     evadeSkill: 0.08, attackRunTime: 14, resources: 16,
     kiteRange: 620, // prefers to hold this distance and lob missiles
   },
   destroyer: {
     displayName: 'Planet Destroyer', level: 100, credits: 10000, weapon: 'missile', accuracy: 0.9,
     hull: 2200, shield: 1000, accel: 22, maxSpeed: 55, turnRate: 0.22,
-    fireRange: 1500, fireInterval: 2.4, damage: 55, detectRange: 2400,
+    fireRange: 1500, fireInterval: 2.4, damage: 70, detectRange: 2400,
     evadeSkill: 0.02, attackRunTime: 40, resources: 60,
     kiteRange: 900,
   },
@@ -57,7 +57,7 @@ export const ENEMY_TYPES = {
     displayName: 'Battlecruiser', level: 75, credits: 1500, weapon: 'bolt', accuracy: 0.8,
     turret: true,
     hull: 900, shield: 400, accel: 30, maxSpeed: 70, turnRate: 0.3,
-    fireRange: 700, fireInterval: 0.55, damage: 10, detectRange: 1600,
+    fireRange: 700, fireInterval: 0.55, damage: 18, detectRange: 1600,
     evadeSkill: 0.02, attackRunTime: 30, resources: 30,
     kiteRange: 420,
   },
@@ -70,7 +70,7 @@ export const ENEMY_TYPES = {
     displayName: 'Ravager Dreadnought', level: 120, credits: 25000, weapon: 'missile',
     accuracy: 0.92, turret: true, deploys: 'fighter', apex: true,
     hull: 6000, shield: 2500, accel: 20, maxSpeed: 58, turnRate: 0.2,
-    fireRange: 1600, fireInterval: 2.0, damage: 60, detectRange: 1e9,
+    fireRange: 1600, fireInterval: 2.0, damage: 85, detectRange: 1e9,
     evadeSkill: 0, attackRunTime: 9999, resources: 120,
     kiteRange: 900,
   },
@@ -79,7 +79,7 @@ export const ENEMY_TYPES = {
     displayName: 'Dreadcarrier', level: 90, credits: 4000, weapon: 'missile', accuracy: 0.85,
     turret: true, deploys: 'fighter',
     hull: 1500, shield: 700, accel: 24, maxSpeed: 60, turnRate: 0.24,
-    fireRange: 1300, fireInterval: 3.5, damage: 40, detectRange: 2000,
+    fireRange: 1300, fireInterval: 3.5, damage: 55, detectRange: 2000,
     evadeSkill: 0.01, attackRunTime: 40, resources: 45,
     kiteRange: 800,
   },
@@ -161,6 +161,30 @@ export class EnemyShip extends ShipBase {
     this._quatInv = new THREE.Quaternion();
     this._avoid = new THREE.Vector3();
     this._fwd = new THREE.Vector3();
+  }
+
+  /**
+   * Swap the procedural stand-in hull for the real red-tinted model once it
+   * finishes streaming in (slow connections spawn enemies before the FBX
+   * downloads land). No-op when the ship already wears its model.
+   */
+  refreshVisual() {
+    if (this.rigModeled || !this.alive) return;
+    const rig = createEnemyShip(this.type);
+    if (rig.modeled === false) return; // model still not ready
+    this.object3D.remove(this.visual);
+    this.shieldFx.dispose();
+    this.visual = rig.group;
+    this.object3D.add(this.visual);
+    this.radius = rig.radius;
+    this.engines = rig.engines;
+    this.hardpoints = rig.hardpoints;
+    this.glowColor = rig.glowColor;
+    this.rigModeled = true;
+    this.glow = new EngineGlow(this.visual, this.engines, this.glowColor);
+    this.shieldFx = new ShieldEffect(
+      this.object3D, this.radius * 1.35, new THREE.Color(1.6, 0.8, 0.4),
+    );
   }
 
   _pickPatrolWaypoint() {

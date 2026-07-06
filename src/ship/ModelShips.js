@@ -53,6 +53,17 @@ const MODELS = {
 const protos = {};
 const enemyProtos = {};
 let loadPromise = null;
+const loadListeners = [];
+
+/**
+ * Subscribe to per-model arrival (fires as EACH model finishes, not when
+ * all do — on a slow connection the fleet upgrades hull by hull). Models
+ * already loaded are replayed immediately.
+ */
+export function onModelLoaded(cb) {
+  loadListeners.push(cb);
+  for (const id of Object.keys(protos)) cb(id);
+}
 
 /** The normalized prototype for a model id, or null while loading/failed. */
 export function getModelProto(id) {
@@ -101,6 +112,7 @@ export function loadModelShips() {
         (obj) => {
           try {
             protos[id] = normalize(obj, spec);
+            for (const cb of loadListeners) cb(id);
           } catch (err) {
             console.warn(`[models] ${id} normalize failed:`, err);
           }
