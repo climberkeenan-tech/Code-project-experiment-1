@@ -73,12 +73,25 @@ Driven by structured playtest feedback; all verified via the harness:
 9. **Civilizations** (`src/world/Settlements.js`): seeded settlements on three
    atmosphere worlds — lit procedural buildings + beacon, discovery banner.
 
-**Still TODO from the bible**: callable outpost **carrier with a walk-in
-first-person interior** (shop is hailed via T as the interim); fish/ocean life;
-fleet command / autonomous escorts; research; diplomacy; multi-system galaxy;
-deeper player-ship visual polish. New controls: **L** auto-land, **J**
-hyperdrive, **B** cycle destination, **C** anti-missile; touch has LAND/WARP/
-NAV/DEFEND buttons.
+## ⭐⭐⭐ Capital ships + carrier fleet (third pass)
+- **Player capitals**: SF-85 Warlord battleship (4 turret stations) and SF-110
+  Vanguard carrier (hangar 4, twin flight decks). Camera leash scales with hull.
+- **Fleet command** (`src/fleet/`): on a carrier, **G** launches your stored
+  ships as AI escorts (wedge formation → break to dogfight, fromPlayer fire,
+  draw enemy fire); G recalls (fly home, dock, repaired). Destroyed escort =
+  permanently lost from the collection. Auto-recall on atmosphere/death/foot.
+- **Gunner turret stations**: each hired gunner mans one station, independent
+  cooldowns, different targets.
+- **Enemy red capitals**: Lv75 Battlecruiser (turret fire, no alignment
+  needed) + Lv90 Dreadcarrier (deploys fighters mid-battle); capital patrol
+  territories (tiers 6/7); rewards 1.5k/4k cr under the 10k Destroyer.
+
+**Still TODO from the bible**: walk-in first-person carrier interior (the shop
+is hailed via T; the owned carrier is flyable but not walkable inside);
+fish/ocean life; research; diplomacy; multi-system galaxy; deeper player-ship
+visual polish. Controls: **L** auto-land, **J** hyperdrive, **B** cycle
+destination, **C** anti-missile, **G** fleet launch/recall; touch has
+LAND/WARP/NAV/DEFEND/FLEET buttons.
 
 ---
 
