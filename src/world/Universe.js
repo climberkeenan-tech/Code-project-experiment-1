@@ -30,6 +30,10 @@ export class Universe {
       altitude: Infinity,
       inAtmosphere: false,
       density: 0,
+      /** True when the ship is resting on a surface, slow enough to disembark. */
+      grounded: false,
+      /** The planet the ship is grounded on (for on-foot spawning). */
+      groundedPlanet: null,
     };
 
     this._gravity = new THREE.Vector3();
@@ -138,6 +142,19 @@ export class Universe {
     if (altitude < player.radius && player.alive) {
       this._resolveGroundHit(player, planet, altitude, true);
     }
+
+    // --- Landed check: resting on a surface, slow enough to step out ---
+    // (No atmosphere requirement: airless worlds are walkable too.)
+    const grounded = context.planet !== null
+      && !player.statMult?.noLanding // the flagship never touches down
+      && altitude < player.radius + 8
+      && player.speed < 32
+      && player.alive;
+    if (grounded !== context.grounded) {
+      context.grounded = grounded;
+      context.groundedPlanet = grounded ? planet : null;
+      game.events.emit(grounded ? 'player:can-disembark' : 'player:cannot-disembark', planet);
+    }
   }
 
   _resolveGroundHit(ship, planet, altitude, isPlayer) {
@@ -154,6 +171,9 @@ export class Universe {
       // Reflect the inward component with a little restitution; the
       // tangential component survives → ships skim and slide.
       ship.velocity.addScaledVector(this._normal, -into * 1.3);
+
+      // Autopilot touchdowns are always damage-free (playtest fix).
+      if (isPlayer && ship.autolanding) return;
 
       const impact = -into;
       if (impact > 26) {

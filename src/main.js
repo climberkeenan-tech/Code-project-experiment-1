@@ -3,10 +3,16 @@ import './ui/hud.css';
 import { Game } from './core/Game.js';
 import { PLAYER_SPAWN, SUN_POSITION } from './world/constants.js';
 import { PlayerShip } from './ship/PlayerShip.js';
+import { PLAYER_SHIP_BY_ID } from './ship/ShipFactory.js';
+import { loadModelShips } from './ship/ModelShips.js';
 import { EnemyManager } from './ai/EnemyManager.js';
 import { EncounterDirector } from './ai/EncounterDirector.js';
+import { ApexHunter } from './ai/ApexHunter.js';
+import { Reinforcements } from './ai/Reinforcements.js';
 import { WeaponSystem } from './combat/WeaponSystem.js';
 import { CombatSystem } from './combat/CombatSystem.js';
+import { CrewManager } from './crew/CrewManager.js';
+import { FleetSystem } from './fleet/FleetSystem.js';
 import { Pickups } from './combat/Pickups.js';
 import { Explosions } from './fx/Explosions.js';
 import { ChaseCamera } from './camera/ChaseCamera.js';
@@ -17,12 +23,19 @@ import { SpaceDust } from './environment/SpaceDust.js';
 import { createSpaceEnvironment } from './environment/SpaceEnvMap.js';
 import { Universe } from './world/Universe.js';
 import { generateUniverse } from './world/UniverseGenerator.js';
+import { OnFootController } from './onfoot/OnFootController.js';
+import { WarpSystem } from './warp/WarpSystem.js';
+import { LandingSystem } from './ship/LandingSystem.js';
+import { ApproachScatter } from './world/ApproachScatter.js';
+import { Settlements } from './world/Settlements.js';
 import { POISystem } from './exploration/POISystem.js';
 import { SaveGame } from './core/SaveGame.js';
 import { ShipSounds } from './audio/ShipSounds.js';
 import { Music } from './audio/Music.js';
 import { HUD } from './ui/HUD.js';
 import { Radar } from './ui/Radar.js';
+import { TargetOverlay } from './ui/TargetOverlay.js';
+import { Shop } from './ui/Shop.js';
 import { TouchControls } from './ui/TouchControls.js';
 import { Screens } from './ui/Screens.js';
 
@@ -60,6 +73,21 @@ game.universe = universe;
 generateUniverse(game, universe);
 game.addSystem('universe', universe);
 
+// --- On-foot: disembark, walk a planet surface in first person, mine ---
+game.addSystem('onfoot', new OnFootController(game));
+
+// --- Warp: directional hyperdrive (steer it; drops at planets ahead) ---
+game.addSystem('warp', new WarpSystem(game));
+
+// --- Auto-landing: L guides the ship down to a soft touchdown ---
+game.addSystem('landing', new LandingSystem(game));
+
+// --- Low-altitude vegetation: forests appear under the ship in flight ---
+game.addSystem('approach', new ApproachScatter(game));
+
+// --- Civilizations: settlements on three chosen worlds ---
+game.addSystem('settlements', new Settlements(game));
+
 // --- Exploration: discoverable sites + persistence ---
 const poi = new POISystem(game);
 game.poi = poi;
@@ -72,11 +100,27 @@ const enemies = new EnemyManager(game);
 game.enemies = enemies;
 game.addSystem('enemies', enemies);
 
+// --- The apex predator: one avoidable, always-visible roaming dreadnought ---
+const apex = new ApexHunter(game);
+game.apexSystem = apex;
+game.addSystem('apex', apex);
+
+// --- Escalation: every kill calls in two replacements; warp out to escape ---
+const reinforcements = new Reinforcements(game);
+game.reinforcements = reinforcements;
+game.addSystem('reinforcements', reinforcements);
+
 const weapons = new WeaponSystem(game);
 game.weapons = weapons;
 game.addSystem('weapons', weapons);
 
 game.addSystem('combat', new CombatSystem(game));
+
+// --- Crew: engineer repairs, gunners man the turrets ---
+game.addSystem('crew', new CrewManager(game));
+
+// --- Fleet: carrier-launched AI escorts from your stored ships ---
+game.addSystem('fleet', new FleetSystem(game));
 
 const explosions = new Explosions(game);
 game.explosions = explosions;
@@ -105,6 +149,8 @@ game.addSystem('music', new Music(game));
 const hud = new HUD(game);
 game.addSystem('hud', hud);
 game.addSystem('radar', new Radar(game, hud.refs.radar));
+game.addSystem('targets', new TargetOverlay(game));
+game.addSystem('shop', new Shop(game));
 
 new TouchControls(game);
 new Screens(game);
@@ -117,9 +163,17 @@ document.addEventListener('visibilitychange', () => {
   else ctx.resume();
 });
 
-// Restore progression (resources, upgrades, discoveries).
+// Restore progression (resources, credits, inventory, upgrades, discoveries).
 const save = new SaveGame(game);
 save.load();
+// Bake restored upgrade multipliers into stat caps (shield capacity/regen).
+player.applyUpgrades();
+
+// Hand-modeled ships load async; hot-swap the hull if we're flying one.
+loadModelShips().then((protos) => {
+  const variant = PLAYER_SHIP_BY_ID[player.ships.active];
+  if (variant?.model && protos[variant.model]) player.refreshShip();
+});
 
 game.start();
 

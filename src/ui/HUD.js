@@ -34,7 +34,10 @@ export class HUD {
       <div class="hud-location">
         <div class="place" data-el="place">Deep Space</div>
         <div class="sub" data-el="placeSub"></div>
+        <div class="credits">&#9672; <span data-el="credits">0</span> cr</div>
         <div class="resources">&#9671; <span data-el="resources">0</span></div>
+        <div class="cargo" data-el="cargo"></div>
+        <div class="fleet" data-el="fleet"></div>
         <div class="contacts" data-el="contacts"></div>
       </div>
 
@@ -64,6 +67,9 @@ export class HUD {
         <div class="subtitle" data-el="bannerSub"></div>
       </div>
       <div class="hud-alert" data-el="alert"></div>
+      <div class="hud-prompt" data-el="prompt"></div>
+      <div class="hud-warp" data-el="warp"></div>
+      <div class="hud-landhint" data-el="landHint"></div>
 
       <canvas class="hud-radar" data-el="radar" width="236" height="236"></canvas>
 
@@ -97,6 +103,43 @@ export class HUD {
     });
     game.events.on('combat:contact', ({ count }) => {
       this.showBanner('Hostile Contacts', `${count} signatures approaching`, 3);
+    });
+    game.events.on('combat:reward', ({ credits, name }) => {
+      if (credits > 0) this.showBanner(`+${credits} cr`, `${name} destroyed`, 1.6);
+    });
+    this._missileWarn = false;
+    game.events.on('missile:incoming', () => {
+      this._missileWarn = true;
+      game.audio?.playTone?.({ type: 'square', freq: 880, freqEnd: 880, duration: 0.12, gain: 0.16 });
+    });
+    game.events.on('missile:cleared', () => { this._missileWarn = false; });
+    game.events.on('missile:destroyed', () => {
+      this.showBanner('Missile Intercepted', '', 1.2);
+    });
+    game.events.on('fleet:launched', (n) => this.showBanner('Fleet Launched', `${n} ships deployed — G recalls`, 2.5));
+    game.events.on('fleet:recalled', () => this.showBanner('Fleet Docked', 'wing stored and repaired', 1.8));
+    game.events.on('fleet:ship-lost', (id) => this.showBanner('Wingman Down', `${id} destroyed — removed from your fleet`, 3));
+    game.events.on('fleet:denied', () => this.showBanner('No Hangar', 'a carrier-class ship is required to launch a fleet', 2.4));
+    game.events.on('fleet:empty', () => this.showBanner('Hangar Empty', 'buy more ships to fill the hangar', 2.4));
+    game.events.on('onfoot:prompt', (text) => this.setPrompt(text));
+    game.events.on('landing:hint', (text) => {
+      this.refs.landHint.textContent = text;
+      this.refs.landHint.classList.toggle('visible', text.length > 0);
+    });
+    game.events.on('player:autolanded', (planet) => {
+      this.showBanner('Touchdown', `${planet.descriptor.name} — press E to disembark`, 2.5);
+    });
+    game.events.on('warp:dropped', ({ reason, planet }) => {
+      if (reason === 'arrival' && planet) {
+        this.showBanner('Hyperdrive Drop', `Arriving at ${planet.descriptor.name}`, 2);
+      }
+    });
+    game.events.on('onfoot:entered', (planet) => {
+      this.showBanner('Disembarked', `Exploring ${planet.descriptor.name} on foot`, 2.5);
+    });
+    game.events.on('onfoot:left', () => {
+      this.setPrompt('');
+      this.showBanner('Aboard', 'Systems nominal', 1.8);
     });
   }
 
@@ -139,6 +182,14 @@ export class HUD {
     this.refs.alert.classList.toggle('active', text.length > 0);
   }
 
+  /** Show/hide the contextual interaction prompt (empty string hides). */
+  setPrompt(text) {
+    if (this._last.promptText === text) return;
+    this._last.promptText = text;
+    this.refs.prompt.textContent = text;
+    this.refs.prompt.classList.toggle('visible', text.length > 0);
+  }
+
   update(dt) {
     const player = this.game.player;
     if (!player) return;
@@ -147,6 +198,13 @@ export class HUD {
     this._setText('hullText', String(Math.ceil(player.hull)));
     this._setText('shieldText', String(Math.ceil(player.shield)));
     this._setText('resources', String(player.resources));
+    this._setText('credits', String(player.credits));
+    // Cargo (mined rocks) — only shown while there's something to carry.
+    const onfoot = this.game.mode === 'onfoot';
+    const cargo = this.game.onfoot ? this.game.onfoot.carrying : 0;
+    this._setText('cargo', cargo > 0 ? `▰ ${cargo} ore` : '');
+    const wing = this.game.fleet?.escorts.length ?? 0;
+    this._setText('fleet', wing > 0 ? `⬡ wing ${wing}` : '');
     this._setBar('hullBar', player.hull01);
     this._setBar('shieldBar', player.shield01);
     this._setBar('boostBar', player.boost01);
@@ -157,7 +215,11 @@ export class HUD {
     // Location + altitude are supplied by the universe system when present.
     const uni = this.game.universe;
     const near = uni?.playerContext;
-    if (near && near.planet) {
+    if (onfoot && this.game.onfoot?.planet) {
+      this._setText('place', this.game.onfoot.planet.descriptor.name);
+      this._setText('placeSub', 'On Foot');
+      this._setText('alt', '');
+    } else if (near && near.planet) {
       this._setText('place', near.planet.descriptor.name);
       this._setText('placeSub', near.inAtmosphere ? 'Atmosphere' : 'Orbital Space');
       this._setText('alt', `ALT ${formatDistance(near.altitude)}`);
@@ -176,9 +238,13 @@ export class HUD {
     }
     this._setText('contacts', contacts > 0 ? `▲ ${contacts} hostile${contacts > 1 ? 's' : ''}` : '');
 
-    // Alerts, most urgent first: terrain, hull, shields.
+    // Alerts, most urgent first: missiles, terrain, hull, shields.
     let alert = '';
-    if (near && near.planet && player.alive && near.altitude < 380) {
+    const incoming = this.game.weapons?.incoming?.length || 0;
+    if (this._missileWarn && incoming > 0 && player.alive) {
+      alert = incoming > 1 ? `⚠ ${incoming} Missiles — press C` : '⚠ Missile Incoming — press C';
+    }
+    if (!alert && near && near.planet && player.alive && near.altitude < 380) {
       this._radial.copy(player.position).sub(near.planet.group.position).normalize();
       if (player.velocity.dot(this._radial) < -70) alert = 'Terrain — Pull Up';
     }
@@ -186,6 +252,22 @@ export class HUD {
       alert = player.hull01 < 0.3 ? 'Hull Critical' : 'Shields Down';
     }
     this.setAlert(alert);
+
+    // Hyperdrive readout (flight only).
+    const warp = this.game.warp;
+    if (!onfoot && warp && warp.target) {
+      const name = warp.target.descriptor.name;
+      if (warp.state === 'charging') {
+        this._setText('warp', `⟢ HYPERDRIVE CHARGING ${Math.round(warp.charge01 * 100)}%`);
+      } else if (warp.engaged) {
+        this._setText('warp', `⟢ HYPERDRIVE ${(player.speed / 1000).toFixed(1)} km/s — steer with the nose · [J] drop`);
+      } else {
+        const d = Math.max(0, warp.targetDistance);
+        this._setText('warp', `◎ ${name} · ${formatDistance(d)} · [J] hyperdrive · [B] next planet`);
+      }
+    } else {
+      this._setText('warp', '');
+    }
 
     // Banner lifetime.
     if (this._bannerTimer > 0) {

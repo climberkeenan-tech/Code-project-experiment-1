@@ -22,6 +22,9 @@ const PLANET_COLORS = {
   rocky: '#9a938c',
 };
 
+/** Radar blip radius by enemy class — bigger threats read bigger. */
+const ENEMY_BLIP = { scout: 2.4, fighter: 2.8, heavy: 3.6, cruiser: 4.6, destroyer: 6.5, warship: 5.4, redcarrier: 6.2 };
+
 export class Radar {
   /**
    * @param {import('../core/Game.js').Game} game
@@ -105,11 +108,36 @@ export class Radar {
       this._blip(ctx, half, `rgba(134, 231, 255, ${alpha.toFixed(2)})`, 2.6, true);
     }
 
-    // --- Enemies ---
+    // --- Enemies (blip scales with class threat) ---
     for (const enemy of game.enemies?.enemies ?? []) {
+      if (enemy.stats?.apex) continue; // drawn as a rim arc below, like a planet
       this._toLocal(enemy.position, player);
-      const size2 = enemy.type === 'heavy' ? 3.6 : 2.6;
+      const size2 = ENEMY_BLIP[enemy.type] ?? 2.6;
       this._blip(ctx, half, 'rgba(255, 93, 108, 0.95)', size2, false);
+    }
+
+    // --- The apex hunter: a planet-like deep-red rim arc, visible at ANY
+    // distance. No arrows, no bracket — just a presence on the nav system
+    // that slowly grows as it closes in. Avoidable by design.
+    for (const enemy of game.enemies?.enemies ?? []) {
+      if (!enemy.stats?.apex) continue;
+      this._toLocal(enemy.position, player);
+      const distance = Math.hypot(this._local.x, this._local.y, this._local.z);
+      const angle = Math.atan2(this._local.x, -this._local.z);
+      const throb = 0.75 + Math.sin(elapsed * 2.2) * 0.25;
+      ctx.strokeStyle = `rgba(255, 47, 63, ${throb.toFixed(2)})`;
+      ctx.lineWidth = 5;
+      const arcHalf = Math.min(0.6, Math.atan2(2600, Math.max(distance, 1)) * 1.4 + 0.09);
+      ctx.beginPath();
+      ctx.arc(half, half, half - 3,
+        angle - Math.PI / 2 - arcHalf, angle - Math.PI / 2 + arcHalf);
+      ctx.stroke();
+    }
+
+    // --- Friendly escorts (green) ---
+    for (const esc of game.fleet?.escorts ?? []) {
+      this._toLocal(esc.position, player);
+      this._blip(ctx, half, 'rgba(143, 225, 176, 0.95)', 2.6, false);
     }
 
     // Center: the ship.

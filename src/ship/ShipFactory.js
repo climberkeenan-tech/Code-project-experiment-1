@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { Rng } from '../core/math/rng.js';
+import { getModelProto, getEnemyModelProto } from './ModelShips.js';
 
 /**
  * Procedural ship meshes.
@@ -198,17 +200,87 @@ function buildMaterials({ hullColor, accentColor, glowColor }) {
 }
 
 /**
- * The player's ship: a sleek twin-engine interceptor.
+ * Player ship catalog — the bible's ship-progression ladder (levels 10→100).
+ * Owned ships form a collection; the active one is lost on destruction while
+ * stored ones survive. Stat multipliers scale hull/shield/engine off the
+ * baseline; `crew` is the roster capacity; visuals escalate via scale, an
+ * extra engine pair, twin fins, and a per-tier livery.
+ */
+export const PLAYER_SHIPS = [
+  // Design 1 of 4: the hand-modeled "Nebula Sentinel" (player-supplied
+  // Meshy asset, /models/starter.fbx — procedural fallback until loaded).
+  { id: 'starter', name: 'SF-10 Sentinel', level: 10, cost: 0,
+    hull: 1, shield: 1, engine: 1, crew: 2, model: 'starter',
+    scale: 1, hullColor: 0xb9c6d6, accentColor: 0x24303f, glow: [0.9, 2.6, 5.2] },
+  // The second ship: a hand-modeled gunship (player-supplied Meshy asset,
+  // loaded async from /models/gunship.fbx — procedural fallback until ready).
+  { id: 'explorer', name: 'SF-20 Nebula Gunship', level: 20, cost: 200,
+    hull: 1.25, shield: 1.2, engine: 1.08, crew: 3, model: 'gunship',
+    scale: 1.08, hullColor: 0xc9d4c8, accentColor: 0x2e4034, glow: [0.8, 3.2, 3.4] },
+  // Design 2 covers the 20–40 band: the Kestrel is an up-armored gunship.
+  { id: 'interceptor', name: 'SF-30 Kestrel', level: 30, cost: 500,
+    hull: 1.5, shield: 1.45, engine: 1.18, crew: 3, model: 'gunship', modelScale: 1.18,
+    scale: 1.14, hullColor: 0xd6c9b9, accentColor: 0x4a3524, glow: [3.6, 2.2, 0.7] },
+  { id: 'frigate', name: 'SF-50 Aegis', level: 50, cost: 1300,
+    hull: 2.2, shield: 2.1, engine: 1.28, crew: 4, twinFin: true,
+    scale: 1.26, hullColor: 0xaebfd4, accentColor: 0x22344d, glow: [1.2, 2.2, 5.4] },
+  { id: 'battlecruiser', name: 'SF-70 Bastion', level: 70, cost: 4000,
+    hull: 3.4, shield: 3.1, engine: 1.38, crew: 5, twinFin: true, quadEngines: true,
+    scale: 1.42, hullColor: 0x9aa8bd, accentColor: 0x40274d, glow: [3.2, 1.2, 5.2] },
+  { id: 'sovereign', name: 'SF-100 Sovereign', level: 100, cost: 13000,
+    hull: 5.2, shield: 4.6, engine: 1.5, crew: 7, twinFin: true, quadEngines: true,
+    scale: 1.62, hullColor: 0xd8dde6, accentColor: 0x9a7b2e, glow: [4.6, 3.4, 1.0] },
+  // --- Capitals: slow, strategic, crewed. The battleship is a pure gun
+  // platform (gunner-operated turrets, no hangar); the carrier is the fleet
+  // flagship — it stores your other ships and launches them as AI escorts.
+  { id: 'battleship', name: 'SF-85 Warlord', level: 85, cost: 8000,
+    hull: 7, shield: 5.5, engine: 1.05, crew: 6, turrets: 4, capital: 'battleship',
+    scale: 1, hullColor: 0x8d97a8, accentColor: 0x33475f, glow: [1.0, 2.0, 5.0] },
+  // The flagship: a hand-modeled star-destroyer-class carrier. VASTLY larger
+  // than everything else (it stores whole ships in its side hangars) — and
+  // far too large to land: switch to a smaller ship for planetfall.
+  { id: 'carrier', name: 'SF-110 Vanguard', level: 110, cost: 25000,
+    hull: 11, shield: 8, engine: 0.85, crew: 8, turrets: 2, hangar: 4, capital: 'carrier',
+    model: 'flagship', noLanding: true,
+    scale: 1, hullColor: 0xaab4c6, accentColor: 0x2a5246, glow: [0.8, 3.0, 4.6] },
+];
+
+export const PLAYER_SHIP_BY_ID = Object.fromEntries(PLAYER_SHIPS.map((s) => [s.id, s]));
+
+/**
+ * The player's ship, built from a catalog variant (default: the starter).
+ * @param {string} [variantId]
  * @returns {ShipRig}
  */
-export function createPlayerShip() {
-  const group = new THREE.Group();
-  const glowColor = new THREE.Color(0.9, 2.6, 5.2); // hot blue, HDR
+export function createPlayerShip(variantId = 'starter') {
+  const v = PLAYER_SHIP_BY_ID[variantId] ?? PLAYER_SHIPS[0];
+  const glowColor = new THREE.Color(...v.glow);
   const mats = createMaterials({
-    hullColor: 0xb9c6d6,
-    accentColor: 0x24303f,
+    hullColor: v.hullColor,
+    accentColor: v.accentColor,
     glowColor,
   });
+
+  // Hand-modeled hulls (clone the loaded prototype; procedural fallback
+  // below keeps working until the async load lands).
+  if (v.model) {
+    const rig = buildModelRig(v.model, glowColor, v.modelScale ?? 1);
+    if (rig) return rig;
+  }
+
+  // Capitals get dedicated silhouettes instead of the scaled fighter recipe.
+  if (v.capital) {
+    const rig = v.capital === 'carrier'
+      ? buildPlayerCarrier(mats, glowColor)
+      : buildPlayerBattleship(mats, glowColor);
+    for (const child of rig.group.children) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+    return rig;
+  }
+
+  const group = new THREE.Group();
 
   addFuselage(group, mats.hull, {
     length: 4.6, rearRadius: 0.62, noseRadius: 0.3, flatten: 0.6, noseLength: 1.7,
@@ -218,93 +290,401 @@ export function createPlayerShip() {
     span: 2.9, rootChordZ0: -0.5, rootChordZ1: 1.7, tipChordZ0: 1.15, tipChordZ1: 1.85,
     thickness: 0.09, y: -0.1,
   });
-  addFin(group, mats.accent, { height: 0.95, rootLength: 1.15, rake: 0.55, z: 2.25 });
+  if (v.twinFin) {
+    addFin(group, mats.accent, { height: 0.95, rootLength: 1.15, rake: 0.55, z: 2.25, x: 0.5 });
+    addFin(group, mats.accent, { height: 0.95, rootLength: 1.15, rake: 0.55, z: 2.25, x: -0.57 });
+  } else {
+    addFin(group, mats.accent, { height: 0.95, rootLength: 1.15, rake: 0.55, z: 2.25 });
+  }
   const engines = addNacelles(group, mats.hull, mats.glow, {
     x: 0.78, y: -0.02, z: 1.55, radius: 0.34, length: 1.7,
   });
+  if (v.quadEngines) {
+    engines.push(...addNacelles(group, mats.hull, mats.glow, {
+      x: 1.35, y: 0.05, z: 1.65, radius: 0.26, length: 1.4,
+    }));
+  }
   const hardpoints = addCannons(group, mats.accent, { x: 2.75, y: -0.06, z: 1.0, length: 1.3 });
+
+  const k = v.scale;
+  if (k !== 1) {
+    group.scale.setScalar(k);
+    for (const hp of hardpoints) hp.multiplyScalar(k);
+  }
 
   for (const child of group.children) {
     child.castShadow = true;
     child.receiveShadow = true;
   }
 
-  return { group, engines, hardpoints, radius: 3.2, glowColor };
+  return { group, engines, hardpoints, radius: 3.2 * k, glowColor };
+}
+
+/** A boxy weapon/sensor pod, mirrored on both sides. Returns its anchors. */
+function addPods(group, material, { x, y, z, w, h, l }) {
+  const anchors = [];
+  const geom = cached(`pod:${w}:${h}:${l}`, () => new THREE.BoxGeometry(w, h, l));
+  for (const side of [-1, 1]) {
+    const pod = new THREE.Mesh(geom, material);
+    pod.position.set(side * x, y, z);
+    group.add(pod);
+    anchors.push(new THREE.Vector3(side * x, y, z - l / 2 - 0.1));
+  }
+  return anchors;
 }
 
 /**
+ * Rig built from a loaded model prototype. Geometry and textures are shared
+ * across clones (player hull + escort copies). Returns null while the model
+ * is still loading so the procedural recipe stays in charge.
+ * @returns {ShipRig|null}
+ */
+function buildModelRig(modelId, glowColor, scale = 1) {
+  const proto = getModelProto(modelId);
+  if (!proto) return null;
+  const group = proto.clone(true);
+  if (scale !== 1) group.scale.multiplyScalar(scale);
+  const b = proto.userData.shipBounds;
+  const W = b.width * scale;
+
+  // Gameplay anchors derived from the normalized bounds: engine nozzles at
+  // the stern, cannon muzzles ahead of the wing tips.
+  const engines = [
+    new THREE.Vector3(-W * 0.16, 0, b.rearZ * scale * 0.92),
+    new THREE.Vector3(W * 0.16, 0, b.rearZ * scale * 0.92),
+  ];
+  const hardpoints = [
+    new THREE.Vector3(-W * 0.34, 0, b.noseZ * scale * 0.45),
+    new THREE.Vector3(W * 0.34, 0, b.noseZ * scale * 0.45),
+  ];
+  return { group, engines, hardpoints, radius: (b.length * scale) / 2.6, glowColor };
+}
+
+/**
+ * Player battleship: a long gun platform bristling with turret mounts.
+ * Hardpoints are the turret pods — the gunner crew fires from them in any
+ * direction, so the silhouette advertises the role.
+ */
+function buildPlayerBattleship(mats, glowColor) {
+  const group = new THREE.Group();
+  addFuselage(group, mats.hull, {
+    length: 15, rearRadius: 2.1, noseRadius: 0.9, flatten: 0.6, noseLength: 3.6,
+  });
+  const towerGeo = cached('pbattleTower', () => new THREE.BoxGeometry(1.6, 1.8, 3.4));
+  const tower = new THREE.Mesh(towerGeo, mats.accent);
+  tower.position.set(0, 1.5, 2.4);
+  group.add(tower);
+  addCanopy(group, mats.glass, { z: 1.2, width: 0.6, height: 0.5, length: 1.3 });
+  addWing(group, mats.accent, {
+    span: 6.4, rootChordZ0: -2.4, rootChordZ1: 3.6, tipChordZ0: 0.4, tipChordZ1: 2.8,
+    thickness: 0.35, y: -0.2,
+  });
+  // Four turret pods = four gunner stations.
+  const hardpoints = [
+    ...addPods(group, mats.accent, { x: 3.0, y: 0.5, z: -1.6, w: 1.1, h: 0.9, l: 2.4 }),
+    ...addPods(group, mats.accent, { x: 4.6, y: 0.3, z: 1.4, w: 1.0, h: 0.8, l: 2.2 }),
+  ];
+  addFin(group, mats.accent, { height: 2.4, rootLength: 3.2, rake: 1.6, z: 4.6, x: 1.2 });
+  addFin(group, mats.accent, { height: 2.4, rootLength: 3.2, rake: 1.6, z: 4.6, x: -1.4 });
+  const engines = [
+    ...addNacelles(group, mats.hull, mats.glow, { x: 1.3, y: 0, z: 6.8, radius: 0.8, length: 2.6 }),
+    ...addNacelles(group, mats.hull, mats.glow, { x: 2.9, y: -0.1, z: 6.9, radius: 0.6, length: 2.2 }),
+  ];
+  return { group, engines, hardpoints, radius: 11, glowColor };
+}
+
+/**
+ * Player carrier: twin flight decks flanking a central spine, command tower
+ * aft — the mobile base of the fleet. Two turret pods for point defense.
+ */
+function buildPlayerCarrier(mats, glowColor) {
+  const group = new THREE.Group();
+  addFuselage(group, mats.hull, {
+    length: 22, rearRadius: 2.6, noseRadius: 1.2, flatten: 0.7, noseLength: 5,
+  });
+  // Flight decks: broad flat slabs port + starboard (the hangar surfaces).
+  const deckGeo = cached('pcarrierDeck', () => new THREE.BoxGeometry(7, 1.4, 15));
+  for (const side of [-1, 1]) {
+    const deck = new THREE.Mesh(deckGeo, mats.hull);
+    deck.position.set(side * 5.4, 0.3, 1.5);
+    group.add(deck);
+    // Emissive deck strips read as runway lights.
+    const stripGeo = cached('pcarrierStrip', () => new THREE.BoxGeometry(0.35, 0.12, 13));
+    const strip = new THREE.Mesh(stripGeo, mats.glow);
+    strip.position.set(side * 5.4, 1.05, 1.5);
+    group.add(strip);
+  }
+  const towerGeo = cached('pcarrierTower', () => new THREE.BoxGeometry(2.2, 3.0, 4.4));
+  const tower = new THREE.Mesh(towerGeo, mats.accent);
+  tower.position.set(0, 2.4, 5.5);
+  group.add(tower);
+  addCanopy(group, mats.glass, { z: 4.0, width: 0.8, height: 0.6, length: 1.6 });
+  const hardpoints = addPods(group, mats.accent, { x: 3.2, y: 1.0, z: -4, w: 1.2, h: 1.0, l: 2.6 });
+  addFin(group, mats.accent, { height: 3.0, rootLength: 4, rake: 2, z: 7, x: 0 });
+  const engines = [
+    ...addNacelles(group, mats.hull, mats.glow, { x: 1.8, y: 0, z: 10.2, radius: 1.1, length: 3.4 }),
+    ...addNacelles(group, mats.hull, mats.glow, { x: 4.0, y: -0.2, z: 10.4, radius: 0.8, length: 2.8 }),
+  ];
+  return { group, engines, hardpoints, radius: 14, glowColor };
+}
+
+/**
+ * Playtest fix: enemies read too small at combat distance. Each class gets a
+ * uniform scale-up applied to the whole rig — the group is scaled (cached
+ * geometry untouched), the hardpoints are scaled to match (they're used in
+ * world-space math without the group transform), and the collision radius
+ * grows with it, making ships both more visible and easier to hit.
+ */
+const ENEMY_SCALE = {
+  scout: 1.6, fighter: 1.5, heavy: 1.4, cruiser: 1.35, destroyer: 1.0,
+  warship: 1.0, redcarrier: 1.0, apex: 1.3,
+};
+
+/**
+ * Enemy classes that fly the PLAYER'S hand-made hulls, repainted red — the
+ * red faction uses the same ships you do. Scale differentiates the threat.
+ */
+const ENEMY_MODEL_MAP = {
+  // Light classes fly red Sentinels at escalating scale…
+  scout: { model: 'starter', scale: 0.85 },
+  fighter: { model: 'starter', scale: 1.05 },
+  heavy: { model: 'starter', scale: 1.5 },
+  // …mid classes fly red gunships…
+  cruiser: { model: 'gunship', scale: 1.35 },
+  destroyer: { model: 'gunship', scale: 2.1 },
+  warship: { model: 'gunship', scale: 1.7 },     // red gunship, bigger than yours
+  // …and capitals fly red star destroyers.
+  redcarrier: { model: 'flagship', scale: 0.75 }, // smaller than your carrier
+  apex: { model: 'flagship', scale: 1.25 },       // the apex: bigger than EVERYTHING
+};
+
+/**
  * Enemy ship classes. Each has a distinct silhouette and threat color so
- * players can read the danger level at a glance.
+ * players can read the danger level at a glance. Assembled by a per-type
+ * builder map (keys match ENEMY_TYPES) so adding a class is one entry.
  *
- * @param {'scout'|'fighter'|'heavy'} type
+ * @param {'scout'|'fighter'|'heavy'|'cruiser'|'destroyer'} type
  * @returns {ShipRig}
  */
 export function createEnemyShip(type) {
-  const group = new THREE.Group();
-  let rig;
-
-  if (type === 'scout') {
-    // Small, dart-like, single fin — fast and fragile.
-    const glowColor = new THREE.Color(5.0, 1.4, 0.5); // hot orange
-    const mats = createMaterials({ hullColor: 0x6e7787, accentColor: 0x3d2f2a, glowColor });
-    addFuselage(group, mats.hull, {
-      length: 3.2, rearRadius: 0.45, noseRadius: 0.16, flatten: 0.66, noseLength: 1.5,
-    });
-    addWing(group, mats.accent, {
-      span: 1.9, rootChordZ0: 0.1, rootChordZ1: 1.35, tipChordZ0: 1.2, tipChordZ1: 1.55,
-      thickness: 0.07, y: 0,
-    });
-    addFin(group, mats.accent, { height: 0.8, rootLength: 0.9, rake: 0.5, z: 0.7 });
-    const engines = addNacelles(group, mats.hull, mats.glow, {
-      x: 0.42, y: 0, z: 1.3, radius: 0.24, length: 1.1,
-    });
-    const hardpoints = addCannons(group, mats.accent, { x: 1.8, y: -0.04, z: 1.05, length: 0.9 });
-    rig = { group, engines, hardpoints, radius: 2.2, glowColor };
-  } else if (type === 'heavy') {
-    // Broad gunship: wide fuselage, twin fins, four engines.
-    const glowColor = new THREE.Color(5.2, 0.7, 0.9); // menacing red
-    const mats = createMaterials({ hullColor: 0x4c5361, accentColor: 0x27221f, glowColor });
-    addFuselage(group, mats.hull, {
-      length: 6.4, rearRadius: 1.1, noseRadius: 0.55, flatten: 0.55, noseLength: 1.9,
-    });
-    addCanopy(group, mats.glass, { z: -2.0, width: 0.5, height: 0.5, length: 1.2 });
-    addWing(group, mats.accent, {
-      span: 3.6, rootChordZ0: -0.9, rootChordZ1: 2.4, tipChordZ0: 1.4, tipChordZ1: 2.6,
-      thickness: 0.14, y: -0.12,
-    });
-    addFin(group, mats.accent, { height: 1.1, rootLength: 1.5, rake: 0.7, z: 2.6, x: 0.7 });
-    addFin(group, mats.accent, { height: 1.1, rootLength: 1.5, rake: 0.7, z: 2.6, x: -0.77 });
-    const enginesInner = addNacelles(group, mats.hull, mats.glow, {
-      x: 0.85, y: -0.1, z: 2.6, radius: 0.4, length: 1.9,
-    });
-    const enginesOuter = addNacelles(group, mats.hull, mats.glow, {
-      x: 1.65, y: -0.05, z: 2.7, radius: 0.32, length: 1.6,
-    });
-    const hardpoints = addCannons(group, mats.accent, { x: 3.4, y: -0.1, z: 1.5, length: 1.5 });
-    rig = { group, engines: [...enginesInner, ...enginesOuter], hardpoints, radius: 4.4, glowColor };
-  } else {
-    // 'fighter' — the baseline adversary, mirrored planform to the player.
-    const glowColor = new THREE.Color(4.6, 1.1, 0.4); // amber
-    const mats = createMaterials({ hullColor: 0x596273, accentColor: 0x2f2721, glowColor });
-    addFuselage(group, mats.hull, {
-      length: 4.4, rearRadius: 0.6, noseRadius: 0.26, flatten: 0.62, noseLength: 1.6,
-    });
-    addCanopy(group, mats.glass, { z: -1.05, width: 0.32, height: 0.4, length: 1.0 });
-    addWing(group, mats.accent, {
-      span: 2.7, rootChordZ0: 0.3, rootChordZ1: 1.9, tipChordZ0: -0.4, tipChordZ1: 0.9,
-      thickness: 0.09, y: -0.08, // forward-swept: instantly reads as hostile
-    });
-    addFin(group, mats.accent, { height: 0.9, rootLength: 1.05, rake: 0.5, z: 2.1 });
-    const engines = addNacelles(group, mats.hull, mats.glow, {
-      x: 0.72, y: 0, z: 1.5, radius: 0.3, length: 1.5,
-    });
-    const hardpoints = addCannons(group, mats.accent, { x: 2.55, y: -0.05, z: -0.1, length: 1.1 });
-    rig = { group, engines, hardpoints, radius: 3.0, glowColor };
+  // Model-based hostile hulls (red-tinted clones of the player's ships).
+  const mm = ENEMY_MODEL_MAP[type];
+  if (mm) {
+    const proto = getEnemyModelProto(mm.model);
+    if (proto) {
+      const group = proto.clone(true); // shares the tinted material set
+      group.scale.multiplyScalar(mm.scale);
+      const b = proto.userData.shipBounds;
+      const W = b.width * mm.scale;
+      const engines = [
+        new THREE.Vector3(-W * 0.16, 0, b.rearZ * mm.scale * 0.92),
+        new THREE.Vector3(W * 0.16, 0, b.rearZ * mm.scale * 0.92),
+      ];
+      const hardpoints = [
+        new THREE.Vector3(-W * 0.3, 0, b.noseZ * mm.scale * 0.45),
+        new THREE.Vector3(W * 0.3, 0, b.noseZ * mm.scale * 0.45),
+      ];
+      return {
+        group, engines, hardpoints,
+        radius: (b.length * mm.scale) / 2.6,
+        glowColor: new THREE.Color(5.4, 0.6, 0.5),
+      };
+    }
   }
-
+  const build = ENEMY_BUILDERS[type]
+    || (type === 'apex' ? ENEMY_BUILDERS.destroyer : ENEMY_BUILDERS.fighter);
+  const rig = build();
+  const k = ENEMY_SCALE[type] ?? 1.4;
+  if (k !== 1) {
+    rig.group.scale.setScalar(k);
+    for (const hp of rig.hardpoints) hp.multiplyScalar(k);
+    rig.radius *= k;
+  }
   for (const child of rig.group.children) {
     child.castShadow = true;
     child.receiveShadow = true;
   }
   return rig;
 }
+
+const ENEMY_BUILDERS = {
+  // Small, dart-like, single fin — fast and fragile. Sized to be hittable.
+  scout() {
+    const group = new THREE.Group();
+    const glowColor = new THREE.Color(5.0, 1.4, 0.5); // hot orange
+    const mats = createMaterials({ hullColor: 0x97a3b8, accentColor: 0x9a4b2e, glowColor });
+    addFuselage(group, mats.hull, {
+      length: 3.6, rearRadius: 0.5, noseRadius: 0.18, flatten: 0.66, noseLength: 1.6,
+    });
+    addWing(group, mats.accent, {
+      span: 2.2, rootChordZ0: 0.1, rootChordZ1: 1.4, tipChordZ0: 1.2, tipChordZ1: 1.6,
+      thickness: 0.08, y: 0,
+    });
+    addFin(group, mats.accent, { height: 0.85, rootLength: 0.95, rake: 0.5, z: 0.7 });
+    const engines = addNacelles(group, mats.hull, mats.glow, {
+      x: 0.46, y: 0, z: 1.45, radius: 0.26, length: 1.2,
+    });
+    const hardpoints = addCannons(group, mats.accent, { x: 2.05, y: -0.04, z: 1.05, length: 0.9 });
+    return { group, engines, hardpoints, radius: 3.0, glowColor };
+  },
+
+  // Baseline adversary, forward-swept planform reads instantly hostile.
+  fighter() {
+    const group = new THREE.Group();
+    const glowColor = new THREE.Color(4.6, 1.1, 0.4); // amber
+    const mats = createMaterials({ hullColor: 0x8792ab, accentColor: 0xa35a2a, glowColor });
+    addFuselage(group, mats.hull, {
+      length: 4.6, rearRadius: 0.62, noseRadius: 0.26, flatten: 0.62, noseLength: 1.6,
+    });
+    addCanopy(group, mats.glass, { z: -1.05, width: 0.32, height: 0.4, length: 1.0 });
+    addWing(group, mats.accent, {
+      span: 2.8, rootChordZ0: 0.3, rootChordZ1: 1.9, tipChordZ0: -0.4, tipChordZ1: 0.9,
+      thickness: 0.1, y: -0.08,
+    });
+    addFin(group, mats.accent, { height: 0.95, rootLength: 1.05, rake: 0.5, z: 2.1 });
+    const engines = addNacelles(group, mats.hull, mats.glow, {
+      x: 0.74, y: 0, z: 1.55, radius: 0.31, length: 1.5,
+    });
+    const hardpoints = addCannons(group, mats.accent, { x: 2.65, y: -0.05, z: -0.1, length: 1.1 });
+    return { group, engines, hardpoints, radius: 3.2, glowColor };
+  },
+
+  // Broad gunship: wide fuselage, twin fins, four engines.
+  heavy() {
+    const group = new THREE.Group();
+    const glowColor = new THREE.Color(5.2, 0.7, 0.9); // menacing red
+    const mats = createMaterials({ hullColor: 0x7d8798, accentColor: 0x8f3b2b, glowColor });
+    addFuselage(group, mats.hull, {
+      length: 6.6, rearRadius: 1.15, noseRadius: 0.58, flatten: 0.55, noseLength: 2.0,
+    });
+    addCanopy(group, mats.glass, { z: -2.0, width: 0.5, height: 0.5, length: 1.2 });
+    addWing(group, mats.accent, {
+      span: 3.8, rootChordZ0: -0.9, rootChordZ1: 2.4, tipChordZ0: 1.4, tipChordZ1: 2.6,
+      thickness: 0.15, y: -0.12,
+    });
+    addFin(group, mats.accent, { height: 1.1, rootLength: 1.5, rake: 0.7, z: 2.6, x: 0.7 });
+    addFin(group, mats.accent, { height: 1.1, rootLength: 1.5, rake: 0.7, z: 2.6, x: -0.77 });
+    const enginesInner = addNacelles(group, mats.hull, mats.glow, {
+      x: 0.9, y: -0.1, z: 2.7, radius: 0.42, length: 2.0,
+    });
+    const enginesOuter = addNacelles(group, mats.hull, mats.glow, {
+      x: 1.7, y: -0.05, z: 2.8, radius: 0.34, length: 1.7,
+    });
+    const hardpoints = addCannons(group, mats.accent, { x: 3.5, y: -0.1, z: 1.5, length: 1.5 });
+    return { group, engines: [...enginesInner, ...enginesOuter], hardpoints, radius: 4.6, glowColor };
+  },
+
+  // Missile Cruiser: bulky standoff platform with big side missile pods.
+  cruiser() {
+    const group = new THREE.Group();
+    const glowColor = new THREE.Color(3.4, 0.8, 5.0); // cold violet
+    const mats = createMaterials({ hullColor: 0x837b9c, accentColor: 0x6a4fae, glowColor });
+    addFuselage(group, mats.hull, {
+      length: 8.4, rearRadius: 1.35, noseRadius: 0.7, flatten: 0.7, noseLength: 2.2,
+    });
+    addCanopy(group, mats.glass, { z: -2.7, width: 0.55, height: 0.5, length: 1.3 });
+    addWing(group, mats.accent, {
+      span: 4.4, rootChordZ0: -0.6, rootChordZ1: 2.2, tipChordZ0: 0.8, tipChordZ1: 2.0,
+      thickness: 0.2, y: -0.1,
+    });
+    // Missile pods along the wings — the class's signature launch hardpoints.
+    const hardpoints = addPods(group, mats.accent, { x: 2.6, y: 0.05, z: 0.2, w: 0.7, h: 0.6, l: 2.6 });
+    addFin(group, mats.accent, { height: 1.4, rootLength: 1.8, rake: 0.9, z: 3.2, x: 0.9 });
+    addFin(group, mats.accent, { height: 1.4, rootLength: 1.8, rake: 0.9, z: 3.2, x: -0.98 });
+    const engines = addNacelles(group, mats.hull, mats.glow, {
+      x: 1.1, y: -0.05, z: 3.4, radius: 0.5, length: 2.2,
+    });
+    return { group, engines, hardpoints, radius: 6.5, glowColor };
+  },
+
+  // Red-faction battlecruiser: a turreted gun platform, dangerous from any angle.
+  warship() {
+    const group = new THREE.Group();
+    const glowColor = new THREE.Color(5.4, 0.6, 0.5); // hostile red
+    const mats = createMaterials({ hullColor: 0x7a5150, accentColor: 0x8f2f2a, glowColor });
+    addFuselage(group, mats.hull, {
+      length: 14, rearRadius: 2.0, noseRadius: 0.9, flatten: 0.6, noseLength: 3.4,
+    });
+    const towerGeo = cached('ewarshipTower', () => new THREE.BoxGeometry(1.6, 1.7, 3.2));
+    const tower = new THREE.Mesh(towerGeo, mats.accent);
+    tower.position.set(0, 1.4, 2.2);
+    group.add(tower);
+    addWing(group, mats.accent, {
+      span: 6, rootChordZ0: -2.2, rootChordZ1: 3.4, tipChordZ0: 0.4, tipChordZ1: 2.6,
+      thickness: 0.32, y: -0.2,
+    });
+    const hardpoints = [
+      ...addPods(group, mats.accent, { x: 2.8, y: 0.5, z: -1.5, w: 1.1, h: 0.9, l: 2.3 }),
+      ...addPods(group, mats.accent, { x: 4.3, y: 0.3, z: 1.3, w: 1.0, h: 0.8, l: 2.1 }),
+    ];
+    addFin(group, mats.accent, { height: 2.2, rootLength: 3, rake: 1.5, z: 4.4, x: 1.1 });
+    addFin(group, mats.accent, { height: 2.2, rootLength: 3, rake: 1.5, z: 4.4, x: -1.3 });
+    const engines = addNacelles(group, mats.hull, mats.glow, {
+      x: 1.6, y: 0, z: 6.4, radius: 0.9, length: 2.6,
+    });
+    return { group, engines, hardpoints, radius: 10.5, glowColor };
+  },
+
+  // Red-faction Dreadcarrier: twin decks, launches fighters mid-battle.
+  redcarrier() {
+    const group = new THREE.Group();
+    const glowColor = new THREE.Color(5.8, 0.5, 0.4);
+    const mats = createMaterials({ hullColor: 0x6d4a4d, accentColor: 0x99302a, glowColor });
+    addFuselage(group, mats.hull, {
+      length: 20, rearRadius: 2.4, noseRadius: 1.1, flatten: 0.7, noseLength: 4.6,
+    });
+    const deckGeo = cached('ecarrierDeck', () => new THREE.BoxGeometry(6.4, 1.3, 14));
+    for (const side of [-1, 1]) {
+      const deck = new THREE.Mesh(deckGeo, mats.hull);
+      deck.position.set(side * 5.0, 0.3, 1.4);
+      group.add(deck);
+      const stripGeo = cached('ecarrierStrip', () => new THREE.BoxGeometry(0.3, 0.12, 12));
+      const strip = new THREE.Mesh(stripGeo, mats.glow);
+      strip.position.set(side * 5.0, 0.98, 1.4);
+      group.add(strip);
+    }
+    const towerGeo = cached('ecarrierTower', () => new THREE.BoxGeometry(2.0, 2.8, 4));
+    const tower = new THREE.Mesh(towerGeo, mats.accent);
+    tower.position.set(0, 2.2, 5);
+    group.add(tower);
+    const hardpoints = addPods(group, mats.accent, { x: 3.0, y: 0.9, z: -3.6, w: 1.2, h: 1.0, l: 2.5 });
+    addFin(group, mats.accent, { height: 2.8, rootLength: 3.6, rake: 1.8, z: 6.4, x: 0 });
+    const engines = [
+      ...addNacelles(group, mats.hull, mats.glow, { x: 1.7, y: 0, z: 9.4, radius: 1.0, length: 3.2 }),
+      ...addNacelles(group, mats.hull, mats.glow, { x: 3.7, y: -0.2, z: 9.6, radius: 0.75, length: 2.6 }),
+    ];
+    return { group, engines, hardpoints, radius: 13, glowColor };
+  },
+
+  // Planet Destroyer: a slow, colossal capital ship — a boss to avoid early.
+  destroyer() {
+    const group = new THREE.Group();
+    const glowColor = new THREE.Color(6.0, 0.5, 0.4); // deep angry red
+    const mats = createMaterials({ hullColor: 0x6b7382, accentColor: 0x66302a, glowColor });
+    // Long central spine assembled from stacked fuselage segments.
+    addFuselage(group, mats.hull, {
+      length: 26, rearRadius: 3.4, noseRadius: 1.4, flatten: 0.62, noseLength: 6,
+    });
+    // Dorsal ridge + command tower.
+    const towerGeom = cached('destroyerTower', () => new THREE.BoxGeometry(2.2, 2.6, 5));
+    const tower = new THREE.Mesh(towerGeom, mats.accent);
+    tower.position.set(0, 2.0, 4);
+    group.add(tower);
+    addCanopy(group, mats.glass, { z: 1.8, width: 0.9, height: 0.7, length: 2.0 });
+    // Broad flat wings/sponsons bristling with weapon pods.
+    addWing(group, mats.accent, {
+      span: 12, rootChordZ0: -5, rootChordZ1: 7, tipChordZ0: 0, tipChordZ1: 5,
+      thickness: 0.6, y: -0.3,
+    });
+    const hardpoints = [
+      ...addPods(group, mats.accent, { x: 5.5, y: 0.4, z: -3, w: 1.4, h: 1.2, l: 3.4 }),
+      ...addPods(group, mats.accent, { x: 8.5, y: 0.2, z: 1, w: 1.2, h: 1.0, l: 3.0 }),
+    ];
+    addFin(group, mats.accent, { height: 4.2, rootLength: 6, rake: 3, z: 8, x: 2.4 });
+    addFin(group, mats.accent, { height: 4.2, rootLength: 6, rake: 3, z: 8, x: -2.8 });
+    // A bank of engines across the stern.
+    const e1 = addNacelles(group, mats.hull, mats.glow, { x: 2.2, y: 0, z: 12, radius: 1.3, length: 4 });
+    const e2 = addNacelles(group, mats.hull, mats.glow, { x: 5.0, y: -0.2, z: 12, radius: 1.1, length: 3.6 });
+    return { group, engines: [...e1, ...e2], hardpoints, radius: 26, glowColor };
+  },
+};

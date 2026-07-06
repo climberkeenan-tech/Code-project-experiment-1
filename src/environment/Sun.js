@@ -94,6 +94,15 @@ export class Sun {
 
     // Keep the directional light + shadow box centered on the player.
     this.getLightDirection(this._sunDir, player.position);
+
+    // Day/night: near a planet, rotate the light by that planet's spin so
+    // the ground lighting agrees with its (rotated) atmosphere terminator —
+    // stand on the surface and the sun genuinely crosses the sky.
+    const nearPlanet = this.game.universe?.playerContext?.planet;
+    if (nearPlanet) {
+      this._sunDir.applyAxisAngle(nearPlanet.up, nearPlanet.spinAngle);
+    }
+
     this.light.position.copy(player.position).addScaledVector(this._sunDir, -180);
     this.light.target.position.copy(player.position);
   }

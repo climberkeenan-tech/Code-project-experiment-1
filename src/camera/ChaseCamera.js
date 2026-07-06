@@ -56,6 +56,12 @@ export class ChaseCamera {
     const player = this.game.player;
     if (!player) return;
 
+    // On foot, the first-person camera owns game.engine.camera.
+    if (this.game.mode === 'onfoot') {
+      this.initialized = false; // re-seat smoothly when we re-board
+      return;
+    }
+
     if (!this.initialized) {
       this.smoothedQuat.copy(player.quaternion);
       this.smoothedPos.copy(player.position);
@@ -69,8 +75,10 @@ export class ChaseCamera {
 
     // --- Position ---
     const speed01 = clamp(player.speed / 600, 0, 1);
-    this._offset.copy(this.baseOffset);
-    this._offset.z += speed01 * 3.2; // pull back as speed rises
+    // Bigger hulls need a longer leash (capitals are 3-4x the fighter).
+    const hullScale = Math.max(1, player.radius / 3.2);
+    this._offset.copy(this.baseOffset).multiplyScalar(hullScale);
+    this._offset.z += speed01 * 3.2 * hullScale; // pull back as speed rises
     this._offset.applyQuaternion(this.smoothedQuat);
 
     this.smoothedPos.lerp(player.position, damp(30, dt));
@@ -97,9 +105,10 @@ export class ChaseCamera {
       this.trauma = Math.max(0, this.trauma - dt * 1.4);
     }
 
-    // --- Dynamic FOV: widen under boost and at cruise speed ---
+    // --- Dynamic FOV: widen under boost, cruise speed, and hyperdrive ---
     const targetFov = this.baseFov
       + (player.boostActive ? 9 : 0)
+      + (this.game.warp?.engaged ? 22 : 0) // light-speed stretch
       + speed01 * 5;
     this._fovCurrent = lerp(this._fovCurrent, targetFov, damp(4.5, dt));
     if (Math.abs(this._fovCurrent - this.camera.fov) > 0.01) {

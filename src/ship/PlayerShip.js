@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ShipBase } from './ShipBase.js';
-import { createPlayerShip } from './ShipFactory.js';
+import { createPlayerShip, PLAYER_SHIP_BY_ID } from './ShipFactory.js';
 import { EngineGlow } from '../fx/EngineGlow.js';
 import { ShieldEffect } from '../fx/ShieldEffect.js';
 import { damp, clamp, lerp } from '../core/math/noise.js';
@@ -64,11 +64,31 @@ export class PlayerShip extends ShipBase {
     /** Set by the universe system each frame (gravity, atmosphere etc). */
     this.gravity = new THREE.Vector3();
 
-    /** Resources collected from wrecks and discoveries. */
+    /** True while the auto-landing system is flying the ship. */
+    this.autolanding = false;
+
+    /** Resources collected from wrecks and discoveries (legacy soft counter). */
     this.resources = 0;
 
-    /** Permanent upgrade multipliers, improved by exploration finds. */
+    /** Universal currency: earned from kills + selling mined rocks. */
+    this.credits = 0;
+
+    /**
+     * Mined-rock inventory, keyed by rarity id → count. Filled on foot while
+     * mining, emptied when sold at a shop. Lost with the ship on death.
+     * @type {Record<string, number>}
+     */
+    this.inventory = {};
+
+    /** Permanent upgrade multipliers, improved by exploration finds + shop. */
     this.upgrades = { engine: 1, shield: 1, weapon: 1 };
+
+    /**
+     * Ship collection (bible: bought ships are kept; the active one is lost
+     * on destruction). `statMult` mirrors the active catalog entry.
+     */
+    this.ships = { owned: ['starter'], active: 'starter' };
+    this.statMult = PLAYER_SHIP_BY_ID.starter;
 
     this.glow = new EngineGlow(this.visual, this.engines, this.glowColor);
     this.shieldFx = new ShieldEffect(this.object3D, this.radius * 1.4);
@@ -91,10 +111,34 @@ export class PlayerShip extends ShipBase {
   update(dt, elapsed) {
     this.shieldFx.update(dt);
     if (!this.alive) return;
+
+    // Parked while the player is walking around on foot: hold station, bleed
+    // any residual drift, and skip the flight model entirely.
+    if (this.game.mode === 'onfoot') {
+      this.velocity.multiplyScalar(Math.exp(-6 * dt));
+      this.position.addScaledVector(this.velocity, dt);
+      this.updateDefense(dt);
+      return;
+    }
+
+    // Auto-landing: the landing system owns velocity + orientation; just
+    // integrate position and keep the defense model ticking.
+    if (this.autolanding) {
+      this.angularRates.set(0, 0, 0);
+      this.position.addScaledVector(this.velocity, dt);
+      this.updateDefense(dt);
+      this.glow.update(0.35, 0, elapsed);
+      return;
+    }
+
     const input = this.game.input.state;
 
+    // Hyperdrive cruise: the warp system owns the velocity vector; the pilot
+    // keeps damped steering authority so travel direction = look direction.
+    const warping = !!(this.game.warp && this.game.warp.engaged);
+
     // --- Boost energy management (with engage hysteresis) ---
-    const wantBoost = input.boost && input.throttle > 0;
+    const wantBoost = !warping && input.boost && input.throttle > 0;
     if (wantBoost && !this.boostActive && this.boostEnergy > TUNING.boostMinEngage) {
       this.boostActive = true;
       this.game.events.emit('player:boost-start');
@@ -115,40 +159,43 @@ export class PlayerShip extends ShipBase {
     }
 
     // --- Rotation: smoothed angular rates chasing stick deflection ---
+    const steer = warping ? 0.45 : 1; // heavier hands at light speed
     const response = damp(TUNING.angularResponse, dt);
-    this.angularRates.x = lerp(this.angularRates.x, input.pitch * TUNING.pitchRate, response);
-    this.angularRates.y = lerp(this.angularRates.y, -input.yaw * TUNING.yawRate, response);
-    this.angularRates.z = lerp(this.angularRates.z, -input.roll * TUNING.rollRate, response);
+    this.angularRates.x = lerp(this.angularRates.x, input.pitch * TUNING.pitchRate * steer, response);
+    this.angularRates.y = lerp(this.angularRates.y, -input.yaw * TUNING.yawRate * steer, response);
+    this.angularRates.z = lerp(this.angularRates.z, -input.roll * TUNING.rollRate * steer, response);
 
-    // --- Thrust ---
-    const engineMult = this.upgrades.engine;
-    const boostAccel = this.boostActive ? TUNING.boostAccelMult : 1;
-    const forwardAccel = input.throttle >= 0
-      ? input.throttle * TUNING.accelForward
-      : input.throttle * TUNING.accelReverse;
-    this._thrust.set(
-      input.strafeX * TUNING.accelStrafe,
-      input.strafeY * TUNING.accelStrafe,
-      -forwardAccel, // ship forward is -Z
-    ).multiplyScalar(boostAccel * engineMult);
-    this._thrust.applyQuaternion(this.quaternion);
-    this.velocity.addScaledVector(this._thrust, dt);
+    if (!warping) {
+      // --- Thrust ---
+      const engineMult = this.upgrades.engine * (this.statMult.engine ?? 1);
+      const boostAccel = this.boostActive ? TUNING.boostAccelMult : 1;
+      const forwardAccel = input.throttle >= 0
+        ? input.throttle * TUNING.accelForward
+        : input.throttle * TUNING.accelReverse;
+      this._thrust.set(
+        input.strafeX * TUNING.accelStrafe,
+        input.strafeY * TUNING.accelStrafe,
+        -forwardAccel, // ship forward is -Z
+      ).multiplyScalar(boostAccel * engineMult);
+      this._thrust.applyQuaternion(this.quaternion);
+      this.velocity.addScaledVector(this._thrust, dt);
 
-    // Gravity from the universe system (zero in deep space).
-    this.velocity.addScaledVector(this.gravity, dt);
+      // Gravity from the universe system (zero in deep space).
+      this.velocity.addScaledVector(this.gravity, dt);
 
-    // --- Damping & soft speed limit ---
-    const dampingRate = input.brake ? TUNING.brakeDamping : TUNING.damping;
-    this.velocity.multiplyScalar(Math.exp(-dampingRate * dt));
+      // --- Damping & soft speed limit ---
+      const dampingRate = input.brake ? TUNING.brakeDamping : TUNING.damping;
+      this.velocity.multiplyScalar(Math.exp(-dampingRate * dt));
 
-    const maxSpeed = TUNING.baseMaxSpeed * this.envSpeedScale * engineMult
-      * (this.boostActive ? TUNING.boostMaxMult : 1);
-    const speed = this.velocity.length();
-    if (speed > maxSpeed) {
-      // Soft limit: squash the excess quickly but continuously, so crossing
-      // the boundary (e.g. leaving boost) never snaps the camera.
-      const over = speed / maxSpeed;
-      this.velocity.multiplyScalar(Math.pow(over, -Math.min(1, 6 * dt)));
+      const maxSpeed = TUNING.baseMaxSpeed * this.envSpeedScale * engineMult
+        * (this.boostActive ? TUNING.boostMaxMult : 1);
+      const speed = this.velocity.length();
+      if (speed > maxSpeed) {
+        // Soft limit: squash the excess quickly but continuously, so crossing
+        // the boundary (e.g. leaving boost) never snaps the camera.
+        const over = speed / maxSpeed;
+        this.velocity.multiplyScalar(Math.pow(over, -Math.min(1, 6 * dt)));
+      }
     }
 
     this.integrate(dt);
@@ -164,6 +211,67 @@ export class PlayerShip extends ShipBase {
     this.visual.rotation.x = lerp(this.visual.rotation.x, this.angularRates.x * 0.1, damp(6, dt));
 
     this.glow.update(this._throttleSmooth, this._boostBlend, elapsed);
+  }
+
+  /**
+   * Re-derive stat caps from upgrade multipliers × the active ship's catalog
+   * multipliers. Call after load, after any purchase, and after a ship swap.
+   */
+  applyUpgrades() {
+    const v = this.statMult;
+    const prevShieldMax = this.shieldMax;
+    const prevHullMax = this.hullMax;
+    this.shieldMax = Math.round(100 * this.upgrades.shield * v.shield);
+    this.shieldRegenRate = 10 * this.upgrades.shield;
+    this.hullMax = Math.round(100 * v.hull);
+    // Top up by the capacity gained so an upgrade never leaves bars over-full.
+    if (this.shieldMax > prevShieldMax) this.shield += this.shieldMax - prevShieldMax;
+    if (this.hullMax > prevHullMax) this.hull += this.hullMax - prevHullMax;
+    this.shield = Math.min(this.shield, this.shieldMax);
+    this.hull = Math.min(this.hull, this.hullMax);
+  }
+
+  /**
+   * Rebuild the current hull in place (used when an async ship model
+   * finishes loading after the rig was built with the procedural fallback).
+   */
+  refreshShip() {
+    const id = this.ships.active;
+    this.ships.active = null; // defeat the same-id guard
+    this.setShip(id);
+  }
+
+  /**
+   * Switch the active ship: swap the procedural hull, FX anchors, radius and
+   * stat multipliers in place. The transform/velocity are untouched, so a
+   * swap at the Exchange is seamless.
+   * @param {string} id catalog id (must be owned; ownership enforced by shop)
+   */
+  setShip(id) {
+    const v = PLAYER_SHIP_BY_ID[id];
+    if (!v || this.ships.active === id) return;
+    this.ships.active = id;
+    this.statMult = v;
+
+    // Swap the visual rig (old glow sprites live inside the old visual group).
+    this.object3D.remove(this.visual);
+    this.object3D.remove(this.shieldFx.mesh);
+    this.shieldFx.dispose();
+
+    const rig = createPlayerShip(id);
+    this.visual = rig.group;
+    this.object3D.add(this.visual);
+    this.radius = rig.radius;
+    this.engines = rig.engines;
+    this.hardpoints = rig.hardpoints;
+    this.glowColor = rig.glowColor;
+    this.glow = new EngineGlow(this.visual, this.engines, this.glowColor);
+    this.shieldFx = new ShieldEffect(this.object3D, this.radius * 1.4);
+
+    this.applyUpgrades();
+    this.hull = this.hullMax;
+    this.shield = this.shieldMax;
+    this.game.events.emit('ship:changed', v);
   }
 
   /** Fraction accessors for the HUD. */

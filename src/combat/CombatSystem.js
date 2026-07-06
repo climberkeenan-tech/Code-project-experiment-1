@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { clamp } from '../core/math/noise.js';
 import { PLAYER_SPAWN } from '../world/constants.js';
+import { PLAYER_SHIP_BY_ID } from '../ship/ShipFactory.js';
 
 /**
  * Combat orchestration: death handling, ship-vs-ship ramming, respawn.
@@ -26,9 +27,20 @@ export class CombatSystem {
     game.events.on('ship:destroyed', ({ ship, byPlayer }) => {
       if (ship === game.player) {
         this._onPlayerDestroyed();
+      } else if (ship.isEscort) {
+        // A deployed wingman went down — the fleet handles the loss.
+        game.fleet?.onEscortDestroyed(ship);
       } else {
+        // Kill reward: credits scaled by enemy class (level).
+        if (byPlayer) {
+          const reward = ship.stats?.credits ?? 0;
+          game.player.credits += reward;
+          game.events.emit('enemy:killed', ship);
+          game.events.emit('combat:reward', {
+            credits: reward, name: ship.stats?.displayName ?? 'Hostile',
+          });
+        }
         game.enemies.remove(ship);
-        if (byPlayer) game.events.emit('enemy:killed', ship);
       }
     });
 
@@ -46,8 +58,18 @@ export class CombatSystem {
     const game = this.game;
     const player = game.player;
 
-    // Salvage tax: losing the ship costs a share of carried resources.
+    // Death economy: the ACTIVE ship, its hold (mined ore) and onboard crew
+    // are lost; stored ships and banked credits survive. Legacy salvage
+    // counter still takes a tax.
+    player.inventory = {};
     player.resources = Math.floor(player.resources * 0.7);
+    const lost = player.ships.active;
+    const i = player.ships.owned.indexOf(lost);
+    if (i !== -1) player.ships.owned.splice(i, 1);
+    if (player.ships.owned.length === 0) player.ships.owned.push('starter');
+    const cheapest = [...player.ships.owned]
+      .sort((a, b) => (PLAYER_SHIP_BY_ID[a]?.cost ?? 0) - (PLAYER_SHIP_BY_ID[b]?.cost ?? 0))[0];
+    if (cheapest !== lost) player.setShip(cheapest);
 
     // Respawn at the universe spawn anchor, expressed in current render
     // space (absolute = render + origin offset).

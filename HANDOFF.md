@@ -1,6 +1,100 @@
 # Starfall Frontier — Developer Handoff
 
-_Last updated against commit `e82286f` ("Fix 14 issues from adversarial code review"), branch `claude/3d-space-exploration-game-ogrezx`. Working tree is clean; everything described below is committed._
+_Last updated after the "playable half" expansion, branch `claude/3d-space-exploration-handoff-tbt0ss`. Working tree is clean; everything described below is committed and pushed._
+
+## ⭐ Playable-Half Expansion (added this cycle)
+The base was exploration + flight + light combat. This cycle added the core
+**gameplay loop** from the design bible, in six verified, separately-committed
+phases. Each is built on the existing service/system + floating-origin +
+single-terrain-sampler contracts.
+
+1. **On-foot + mining + economy** (`src/economy/Rarity.js`, `src/onfoot/*`):
+   land → **disembark (E)** → first-person walk on the sphere (radial gravity,
+   jump, ground-follow via the one terrain sampler) → **mine rarity-tiered
+   rocks** (gray1…gold500) into a typed inventory → board. Procedural instanced
+   trees/grass around the landing site. `game.mode` ('flight'|'onfoot') gates
+   the flight model, chase camera, and input scheme; the floating-origin rebase
+   anchor follows the active body (`game.rebaseAnchor`).
+2. **Outpost Exchange shop** (`src/ui/Shop.js`): paused modal, hailable with
+   **T**/TRADE button. Sell ore for credits, buy engine/weapon/**shield**
+   upgrades (shield mult now wired via `PlayerShip.applyUpgrades()`), repair hull.
+3. **Combat overhaul — classes** (`ENEMY_TYPES`, `ShipFactory` builder map):
+   five classes (Scout/Fighter/Heavy Assault/Missile Cruiser/Planet Destroyer)
+   with levels (10→100), credit rewards (20→10,000), distinct procedural hulls,
+   a balance pass (all slower than the player, hittable, actually accurate), red
+   lasers, and a **death economy** (lose the ship's ore + crew, keep credits).
+4. **Combat overhaul — feel** (`WeaponSystem`, `src/ui/TargetOverlay.js`):
+   pooled **homing missiles** (Cruiser/Destroyer) + incoming warning + **C**
+   anti-missile countermeasure; a full-screen **threat overlay** (red target
+   boxes with `Lv{n} {class}` + health pips, off-screen arrows, missile markers).
+5. **Warp + navigation** (`src/warp/WarpSystem.js`): lock a planet (**B**/Nav),
+   **warp (J)** — charge → jump to just outside the target's atmosphere → arrive.
+   HUD warp readout + a cyan destination marker/arrow in the overlay.
+6. **Crew** (`src/crew/CrewManager.js`): hire an **Engineer** (auto-repairs
+   hull) and **Gunner** (auto-fires, star-scaled accuracy), 1–5★, priced 20→500
+   cr, in the shop's Crew tab. Persisted; lost with the ship on death.
+
+**Save schema is v2**: credits + typed inventory + crew persist alongside the
+originals, behind a swappable storage adapter + pure `serialize()` snapshot with
+`rev`/`savedAt` (cloud-sync-ready; no backend yet). Autosaves on more events and
+flushes on tab hide/close.
+
+## ⭐⭐ Playtest-fix + bible-completion cycle (second pass)
+Driven by structured playtest feedback; all verified via the harness:
+1. **Combat readability**: enemies scaled up per class (scout 1.6×…), much
+   slower than the player, less HP/evade, brighter liveries, red bolts slowed
+   to 480, spawns closer (1000–1700u).
+2. **Cursor aim + assist** (`WeaponSystem`): bolts fly toward the mouse cursor
+   (camera-ray unproject); magnetic assist snaps to a lead-predicted intercept
+   within a ~7° cone; player dmg 13; 1.35× forgiving hitboxes; aim reticle +
+   lock highlight + white-hot hit flash in `TargetOverlay`.
+3. **Hyperdrive rework** (`WarpSystem`): now a *flight mode* — J charges then
+   cruises to ~42k u/s **along the nose** (steerable; camera dir = travel dir);
+   auto-drop only for planets genuinely ahead (~26° cone — the "sent me back to
+   the same planet" bug is fixed); soft assist bends the track onto the
+   B-locked planet; `PlayerShip` yields thrust/cap while engaged.
+4. **Auto-landing** (`src/ship/LandingSystem.js`): L (or LAND button) below
+   3,200u → autopilot bleeds tangential speed, descends, levels with terrain,
+   damage-free touchdown; strong stick input cancels; airless worlds landable
+   (grounded check de-atmosphered).
+5. **Living planets**: scatter density tripled; `src/world/ApproachScatter.js`
+   builds forests under the ship below 1,500u in flight (on-foot adopts the
+   patch on disembark); terrain sampler adds continent-scale forest patches on
+   vegetated worlds (biomes readable from orbit).
+6. **Ship collection** (`PLAYER_SHIPS`, Shop "Ships" tab): six ships Lv 10→100
+   (Sparrow→Sovereign), buy/select/swap hulls in place (`PlayerShip.setShip`),
+   catalog multipliers bake into hull/shield/engine + crew capacity; death
+   destroys only the ACTIVE ship, stored ships survive; persisted.
+7. **Day/night**: planets "spin" via sun-direction sweep around the polar axis
+   (9–16-min day) + the global light rotates by the local planet's spin —
+   geometry never rotates so collision stays exact; sun crosses the sky on foot.
+8. **Wildlife**: grazing critters (wander/flee, terrain-snapped) + circling
+   birds per scatter patch; airless worlds lifeless.
+9. **Civilizations** (`src/world/Settlements.js`): seeded settlements on three
+   atmosphere worlds — lit procedural buildings + beacon, discovery banner.
+
+## ⭐⭐⭐ Capital ships + carrier fleet (third pass)
+- **Player capitals**: SF-85 Warlord battleship (4 turret stations) and SF-110
+  Vanguard carrier (hangar 4, twin flight decks). Camera leash scales with hull.
+- **Fleet command** (`src/fleet/`): on a carrier, **G** launches your stored
+  ships as AI escorts (wedge formation → break to dogfight, fromPlayer fire,
+  draw enemy fire); G recalls (fly home, dock, repaired). Destroyed escort =
+  permanently lost from the collection. Auto-recall on atmosphere/death/foot.
+- **Gunner turret stations**: each hired gunner mans one station, independent
+  cooldowns, different targets.
+- **Enemy red capitals**: Lv75 Battlecruiser (turret fire, no alignment
+  needed) + Lv90 Dreadcarrier (deploys fighters mid-battle); capital patrol
+  territories (tiers 6/7); rewards 1.5k/4k cr under the 10k Destroyer.
+
+**Still TODO from the bible**: walk-in first-person carrier interior (the shop
+is hailed via T; the owned carrier is flyable but not walkable inside);
+fish/ocean life; research; diplomacy; multi-system galaxy; deeper player-ship
+visual polish. Controls: **L** auto-land, **J** hyperdrive, **B** cycle
+destination, **C** anti-missile, **G** fleet launch/recall; touch has
+LAND/WARP/NAV/DEFEND/FLEET buttons.
+
+---
+
 
 ## Project Goal
 A seamless, mobile-browser 3D space-exploration and combat game. The intended experience: fly a fully maneuverable fighter (6DOF) through open space, descend through a planet's atmosphere down to its surface and back out **with no loading screens**, explore a procedurally generated single-star system of unique worlds, discover hidden sites, and fight occasional pirate encounters — exploration-first, combat as punctuation. Tone is a simplified blend of No Man's Sky / Elite Dangerous / Star Wars space combat. Every subsystem is written to be expandable (more planets, factions, missions, upgrades) without rewriting the core.
@@ -28,8 +122,13 @@ Vite single-page app; all game code under `src/` (~8,000 lines JS + `src/ui/hud.
 - `src/exploration/` — `POISystem`, `POIFactory`.
 - `src/fx/` — `EngineGlow`, `ShieldEffect`, `Explosions`, `textures.js` (procedural FX texture atlas).
 - `src/ui/` — `HUD`, `Radar`, `TouchControls`, `Screens`, `hud.css`.
-- `src/camera/` — `ChaseCamera`.
-- `tools/screenshot.mjs` — headless Chromium render/smoke-test + screenshot harness (used for all verification).
+- `src/camera/` — `ChaseCamera` (early-returns on foot).
+- `src/economy/` — `Rarity.js` (rock tiers + values, the economy's single source of truth).
+- `src/onfoot/` — `OnFootController` (disembark/board, sphere walking, mining, FP camera), `SurfaceScatter` (mineable rocks + instanced trees/grass).
+- `src/warp/` — `WarpSystem` (target-lock + light-speed jump).
+- `src/crew/` — `CrewManager` (engineer/gunner effects + roster).
+- `src/ui/` also now — `Shop` (Outpost Exchange modal), `TargetOverlay` (combat/nav overlay canvas).
+- `tools/screenshot.mjs` — headless Chromium render/smoke-test + screenshot harness (used for all verification; supports `tap`/`key`/`wait`/`eval`/`evalFile`/`shot`; `window.__game` is the live Game).
 
 ## Important Files (entry points & key modules)
 - `index.html` — page shell; loads `src/main.js` as a module; contains critical inline CSS and mobile viewport meta.
@@ -53,10 +152,10 @@ Most recent commit fixed 14 issues from an adversarial code review:
 
 ## Known Bugs / Rough Edges
 _Only issues substantiated by the code are listed._
-- **Navigation to specific planets is hard (UX gap, not speed).** Planets are 55,000–235,000 world units apart; the homeworld is hardcoded near spawn. There is **no target-lock, waypoint, autopilot, or off-screen planet indicator**. The radar only draws planet rim-arcs within 40,000 units. So deliberately reaching a chosen distant planet means aligning by eye over a long empty flight. Actual top speed is not the problem (deep-space cap ≈ `240 × 24 × 2.4 ≈ 13,800` u/s under boost), but the ramp-in (`damp(1.8)`) and the deliberate drop to `240` u/s near a body make travel *feel* slow at both ends.
-- **Enemies can be hard to find.** They only exist inside `EncounterDirector` regions (guard squads on stations/caches/anomalies, plus a few pirate territories); global cap is 6; the wandering "ambient" patrol requires >90s elapsed, zero live enemies, deep space, and a 4.5%/2s roll. Away from territories you may see none, and there's no on-HUD cue pointing to combat regions.
-- **Scouts read as small/hard to hit.** Scout collision radius is 2.2 (vs player 3.2), maxSpeed 310, `evadeSkill 0.85` — small, fast, jinky targets. (Heavies are the opposite: large, `evadeSkill 0.2`.) Damage math is fine — player fire is ~69 dmg/s; scout has 50 effective HP — so scouts are killable but evasive; heavies (250 HP) take ~3.6s of sustained fire.
-- **No audio mute / volume / pause / settings UI.** `AudioEngine.setMuted()` exists but nothing calls it; there is no pause menu (`game.paused` is only used by start/death screens).
+- **~~Navigation~~ / ~~enemies hard to find~~ / ~~scout balance~~ — ADDRESSED this cycle** (warp + target-lock + overlay arrows; global cap 10, tier-4/5 squads, ambient every 30s @16%; scout radius 3.0, all classes slower than the player, accuracy raised). Left here for history.
+- **Slow planet rotation / day-night is NOT implemented (deliberately deferred).** The safe path: rotate an *inner* terrain group about `planet.up` and apply the **inverse** rotation to the local direction inside the four sampler methods (`getAltitude`/`getSurfaceNormal`/`getAtmosphereDensity`/`getAltitudeSpherical`) AND to the camera-local vector the LOD mesher uses (`Planet.update`'s `this._local` before `terrain.update`). Do NOT rotate the outer `group` (samplers subtract only its position, not its rotation — see the caution below), or see≠hit. Landed entities must be co-rotated (add the per-frame spin about `planet.up` to the parked ship + on-foot avatar) so they ride the surface. The terminator already sweeps from `uSunDir` once the ground turns, so day/night comes "for free" after that.
+- **Shop is hailable from anywhere (interim).** `T`/TRADE opens the Outpost Exchange with no physical station to fly to. Intentional stopgap until the callable carrier (ToDo #1) exists; the modal is built to be reused on dock.
+- **No audio mute / volume / pause / settings UI.** `AudioEngine.setMuted()` exists but nothing calls it; `game.paused` is now used by the shop modal too, but there's still no dedicated pause/settings menu.
 - **Directional light is approximate for distant planets** (one sun light tracks sun→player). This is intentional but means a planet far from the player can be lit from a slightly wrong angle; per-planet atmosphere/cloud sun direction is exact, so the mismatch is subtle.
 - **No tests and no CI.** There is no automated test suite and no `.github/` workflows; correctness has only been verified manually through the screenshot harness.
 
@@ -78,16 +177,32 @@ _Only issues substantiated by the code are listed._
 - **Config**: `vite.config.js` uses `base: './'` so the build can be hosted from any sub-path.
 - **Debug**: append `?debug` to the URL for an FPS/draw-call/triangle overlay. `window.__game` is the live `Game` instance.
 - **Screenshot harness**: `node tools/screenshot.mjs <url> <out.png> <waitMs> '<actionsJson>'` — supports `tap`, `key`, `wait`, `eval`, `evalFile`, `shot` actions; set `VIEWPORT=WxH` env for resolution. Chromium path defaults to `/opt/pw-browsers/chromium`.
-- **Controls**: desktop — mouse steer, `W/S` throttle, `A/D` roll, `Q/E`+`R/F` strafe, `Shift` boost, `Space`/click fire, `X` brake. Touch — left stick steer, right stick throttle/roll, FIRE/BOOST buttons.
+- **Controls (flight)**: desktop — mouse steer, `W/S` throttle, `A/D` roll, `Q/E`+`R/F` strafe, `Shift` boost, `Space`/click fire, `X` brake, **`C` anti-missile**, **`B` cycle warp target**, **`J` warp**, **`T` open shop**, **`E` disembark (when landed)**. Touch — left stick steer, right stick throttle/roll, FIRE/BOOST/Defend + Warp/Nav buttons, TRADE button.
+- **Controls (on-foot)**: desktop — `W/A/S/D` walk, mouse look, `Space` jump, `Shift` sprint, `E` mine / board. Touch — left stick walk, right stick look, Use/Jump buttons. Mode switches automatically on disembark/board.
 
-## ToDo (prioritized)
-1. **Navigation aids** (highest gameplay impact): add a target-lock / "nearest discovered planet" indicator, off-screen direction arrows on the HUD, and/or a system map. This directly addresses the "hard to travel between planets" problem.
-2. **Combat discoverability**: surface a cue (radar region highlight, "contacts in sector" prompt) so players can find the territory-based encounters; consider a slightly higher ambient-patrol chance.
-3. **Enemy readability/balance pass**: reconsider scout size/evade so it isn't frustrating to hit; playtest heavy time-to-kill.
-4. **Settings/pause UI**: wire `AudioEngine.setMuted()` to a mute button; add a pause screen and basic volume control.
-5. **Ship upgrades UX**: upgrades exist (engine/shield/weapon multipliers from anomalies) and persist, but nothing in the UI shows current levels or lets the player spend collected resources — add a progression surface.
-6. **Automated tests / CI**: add at least smoke-level checks (the screenshot harness is a good basis) and a GitHub Actions build so regressions are caught.
-7. **Content expansion**: more POI variety, missions/objectives, factions — the architecture is built for this.
+## ToDo (prioritized) — post-expansion
+_Items 1–3, 5 from the old list are now DONE (navigation/warp, combat frequency
++ overlay, enemy balance, upgrade/shop UX). Remaining, roughly by bible priority:_
+1. **Callable outpost carrier + first-person interior**: a summonable station
+   you dock with and walk inside (reuse the `Shop` modal on dock; reuse the
+   on-foot controller with flat-floor collision). Currently the shop is hailed
+   from anywhere (interim). This is the biggest remaining vision piece.
+2. **Owned-ship collection / buy new ships / ship levels 10→100**: add a
+   `PLAYER_SHIPS` table + hull swap (preserve the rig shape) + a Ships shop tab
+   + persistence; respawn should let you pick a stored ship. (Stat upgrades and
+   the death-drop-ship rule already exist.)
+3. **Slow planet rotation + day/night** (deferred; see Known Bugs for the exact
+   collision-safe approach) — user explicitly wants "the sun moving through."
+4. **Wildlife + fish + civilizations/buildings**: extend `SurfaceScatter` with
+   simple instanced fauna and, on select worlds, procedural settlements.
+5. **Player-ship visual polish**: the *player* hull is unchanged from the base
+   (a top playtest complaint); enemy hulls were expanded but the hero ship
+   deserves greebles/detail. Also an upgrade→mesh hook.
+6. **Settings/pause UI**: wire `AudioEngine.setMuted()` to a mute button; volume.
+7. **Automated tests / CI**: promote the screenshot harness into a smoke test +
+   a GitHub Actions build.
+8. **Fleet command / research / diplomacy / multi-system galaxy**: the bible's
+   endgame — large, later.
 
 ## Important Notes / Technical Debt
 - The bootstrap (`main.js`) is the only place composition is visible; when adding a system, register it in the correct update-order slot and, if it holds world positions, add the `onShift` subscription.

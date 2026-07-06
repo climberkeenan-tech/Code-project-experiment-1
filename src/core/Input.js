@@ -30,11 +30,51 @@ export class Input {
       fire: false,
     };
 
+    /**
+     * On-foot control state, populated only in 'foot' mode.
+     *   moveX +1 = step right, moveZ +1 = step forward
+     *   lookX +1 = turn right, lookY +1 = look down (rate, joystick-style)
+     *   jump/sprint = held
+     */
+    this.walk = {
+      moveX: 0,
+      moveZ: 0,
+      lookX: 0,
+      lookY: 0,
+      jump: false,
+      sprint: false,
+    };
+
+    /** Active control context, mirrors game.mode: 'flight' | 'foot'. */
+    this.mode = 'flight';
+
+    /** Edge-triggered "interact / mine / board / disembark" press. */
+    this.interactQueued = false;
+
+    /** Edge-triggered "hail the outpost / open trade" press. */
+    this.tradeQueued = false;
+
+    /** Edge-triggered anti-missile countermeasure press. */
+    this.counterQueued = false;
+
+    /** Edge-triggered warp engage + cycle-target presses. */
+    this.warpQueued = false;
+    this.warpCycleQueued = false;
+
+    /** Edge-triggered auto-land toggle press. */
+    this.landQueued = false;
+
+    /** Edge-triggered fleet launch/recall press. */
+    this.fleetQueued = false;
+
     /** Keys currently held, by KeyboardEvent.code. */
     this.keys = new Set();
 
-    /** Mouse steering vector, normalized to [-1, 1] from screen center. */
-    this.mouse = { x: 0, y: 0, active: false, buttons: 0 };
+    /**
+     * Mouse steering vector, normalized to [-1, 1] from screen center, plus
+     * the raw pixel position (px/py) for cursor-aimed weapons.
+     */
+    this.mouse = { x: 0, y: 0, px: 0, py: 0, active: false, buttons: 0 };
 
     /**
      * Virtual axes written by the touch UI. When a virtual source is active
@@ -46,6 +86,10 @@ export class Input {
       roll: { value: 0, active: false },
       boost: false,
       fire: false,
+      // On-foot virtual axes (written by TouchControls in foot mode).
+      walk: { x: 0, y: 0, active: false },
+      look: { x: 0, y: 0, active: false },
+      jump: false,
     };
 
     /** True once any touch input has been seen (drives UI layout). */
@@ -83,6 +127,20 @@ export class Input {
     if (e.metaKey || e.ctrlKey) return;
     this.keys.add(e.code);
     if (e.code === 'Space') e.preventDefault();
+    // Context action (interact / mine / board / disembark) — edge-triggered,
+    // ignore auto-repeat so a held key fires once.
+    if (e.code === 'KeyE' && !e.repeat) this.interactQueued = true;
+    // Hail the outpost exchange (open the shop).
+    if (e.code === 'KeyT' && !e.repeat) this.tradeQueued = true;
+    // Anti-missile countermeasure.
+    if (e.code === 'KeyC' && !e.repeat) this.counterQueued = true;
+    // Warp: engage (J) + cycle destination (B).
+    if (e.code === 'KeyJ' && !e.repeat) this.warpQueued = true;
+    if (e.code === 'KeyB' && !e.repeat) this.warpCycleQueued = true;
+    // Auto-land toggle.
+    if (e.code === 'KeyL' && !e.repeat) this.landQueued = true;
+    // Fleet launch/recall.
+    if (e.code === 'KeyG' && !e.repeat) this.fleetQueued = true;
   }
 
   _onKeyUp(e) {
@@ -96,6 +154,8 @@ export class Input {
     const radius = Math.min(window.innerWidth, window.innerHeight) * 0.42;
     this.mouse.x = clampAxis((e.clientX - cx) / radius);
     this.mouse.y = clampAxis((e.clientY - cy) / radius);
+    this.mouse.px = e.clientX;
+    this.mouse.py = e.clientY;
     this.mouse.active = true;
   }
 
@@ -123,6 +183,55 @@ export class Input {
     this.actionQueue.push(name);
   }
 
+  /** Consume the edge-triggered interact press (true once per press). */
+  consumeInteract() {
+    const v = this.interactQueued;
+    this.interactQueued = false;
+    return v;
+  }
+
+  /** Consume the edge-triggered trade/hail press (true once per press). */
+  consumeTrade() {
+    const v = this.tradeQueued;
+    this.tradeQueued = false;
+    return v;
+  }
+
+  /** Consume the edge-triggered countermeasure press (true once per press). */
+  consumeCounter() {
+    const v = this.counterQueued;
+    this.counterQueued = false;
+    return v;
+  }
+
+  /** Consume the edge-triggered warp-engage press. */
+  consumeWarp() {
+    const v = this.warpQueued;
+    this.warpQueued = false;
+    return v;
+  }
+
+  /** Consume the edge-triggered warp-cycle-target press. */
+  consumeWarpCycle() {
+    const v = this.warpCycleQueued;
+    this.warpCycleQueued = false;
+    return v;
+  }
+
+  /** Consume the edge-triggered auto-land press. */
+  consumeLand() {
+    const v = this.landQueued;
+    this.landQueued = false;
+    return v;
+  }
+
+  /** Consume the edge-triggered fleet launch/recall press. */
+  consumeFleet() {
+    const v = this.fleetQueued;
+    this.fleetQueued = false;
+    return v;
+  }
+
   /** Drain and return queued one-shot actions. */
   drainActions() {
     const actions = this.actionQueue;
@@ -138,6 +247,14 @@ export class Input {
     const s = this.state;
     const k = this.keys;
     const v = this.virtual;
+
+    if (this.mode === 'foot') {
+      this._updateWalk();
+      // Suppress flight outputs so a parked ship never twitches or fires.
+      s.pitch = s.yaw = s.roll = s.throttle = s.strafeX = s.strafeY = 0;
+      s.boost = s.brake = s.fire = false;
+      return;
+    }
 
     // --- Steering (pitch / yaw) ---
     let pitch = 0;
@@ -185,6 +302,47 @@ export class Input {
     s.boost = v.boost || k.has('ShiftLeft') || k.has('ShiftRight');
     s.brake = k.has('KeyX');
     s.fire = v.fire || k.has('Space') || (this.mouse.buttons & 1) !== 0;
+  }
+
+  /** Merge the on-foot control state from keyboard, mouse and touch. */
+  _updateWalk() {
+    const w = this.walk;
+    const k = this.keys;
+    const v = this.virtual;
+
+    // --- Movement (WASD / left touch stick) ---
+    let mx = 0;
+    let mz = 0;
+    if (v.walk.active) {
+      mx = v.walk.x;
+      mz = -v.walk.y; // stick up (negative y) = forward
+    }
+    if (k.has('KeyW')) mz = 1;
+    if (k.has('KeyS')) mz = -1;
+    if (k.has('KeyA')) mx = -1;
+    if (k.has('KeyD')) mx = 1;
+    w.moveX = clampAxis(mx);
+    w.moveZ = clampAxis(mz);
+
+    // --- Look (mouse-as-rate / right touch stick / arrow keys) ---
+    let lx = 0;
+    let ly = 0;
+    if (v.look.active) {
+      lx = v.look.x;
+      ly = v.look.y;
+    } else if (this.mouse.active) {
+      lx = applyResponse(this.mouse.x);
+      ly = applyResponse(this.mouse.y);
+    }
+    if (k.has('ArrowLeft')) lx = -1;
+    if (k.has('ArrowRight')) lx = 1;
+    if (k.has('ArrowUp')) ly = -1;
+    if (k.has('ArrowDown')) ly = 1;
+    w.lookX = clampAxis(lx);
+    w.lookY = clampAxis(ly);
+
+    w.jump = v.jump || k.has('Space');
+    w.sprint = k.has('ShiftLeft') || k.has('ShiftRight');
   }
 }
 

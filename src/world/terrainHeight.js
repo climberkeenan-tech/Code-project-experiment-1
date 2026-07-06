@@ -156,6 +156,11 @@ export function createTerrainSampler(descriptor) {
   }
 
   const _colorScratch = new THREE.Color();
+  // Forest patches: vegetated worlds get continent-scale bands of deep green
+  // so biomes read clearly from orbit (playtest: "can't see forests from
+  // space"). Seeded noise keeps the pattern deterministic per planet.
+  const _forest = new THREE.Color(0x1c4a24);
+  const vegetated = descriptor.archetype === 'terran' || descriptor.archetype === 'ocean';
 
   /**
    * Biome color for a vertex.
@@ -183,6 +188,14 @@ export function createTerrainSampler(descriptor) {
       const toMid = smoothstep(0.08, 0.34, h01 + jitter);
       const toHigh = smoothstep(0.3, 0.62, h01 + jitter);
       target.copy(pal.low).lerp(pal.mid, toMid).lerp(pal.high, toHigh);
+    }
+
+    // Forest patches on vegetated lowlands (visible from orbit).
+    if (vegetated && h01 > 0.03) {
+      const mask = smoothstep(0.15, 0.6,
+        biomeNoise.noise3(dir.x * 7 + 41, dir.y * 7 + 41, dir.z * 7 + 41));
+      const band = smoothstep(0.03, 0.09, h01) * (1 - smoothstep(0.38, 0.58, h01));
+      target.lerp(_forest, mask * band * 0.7);
     }
 
     // Steep faces expose bare rock.
