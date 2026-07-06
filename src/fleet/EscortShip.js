@@ -15,6 +15,7 @@ import { clamp, damp } from '../core/math/noise.js';
  */
 
 const ENGAGE_RANGE = 1300;
+const COMMAND_RANGE = 5000; // ordered targets are pursued much further
 const FIRE_INTERVAL = 0.42;
 const ESCORT_SPEED = 330; // keeps pace with the flagship
 
@@ -122,8 +123,18 @@ export class EscortShip extends ShipBase {
     this.glow.update(clamp(this.velocity.length() / ESCORT_SPEED, 0.2, 1), 0, this.slot * 3);
   }
 
-  /** Nearest live hostile within engagement range. */
+  /**
+   * Target selection. A focus-fire order (V) overrides everything: the whole
+   * wing converges on the commanded hostile, pursuing well beyond normal
+   * engagement range. With no order they hunt on their own initiative —
+   * nearest live hostile in range, no command needed.
+   */
   _acquire() {
+    const ordered = this.game.fleet?.focusTarget;
+    if (ordered?.alive
+      && ordered.position.distanceToSquared(this.position) < COMMAND_RANGE * COMMAND_RANGE) {
+      return ordered;
+    }
     let best = null;
     let bestSq = ENGAGE_RANGE * ENGAGE_RANGE;
     for (const enemy of this.game.enemies?.enemies ?? []) {

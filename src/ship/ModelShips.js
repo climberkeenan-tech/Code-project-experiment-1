@@ -32,6 +32,15 @@ const MODELS = {
     yaw: -Math.PI / 2, // authored nose along -X → rotate onto -Z
     pitch: 0,
   },
+  // "Obsidian Dreadnought" — the mid capital: bridges the 50→100 gap.
+  // Big, but deliberately in the MIDDLE: it dwarfs the fighters yet is
+  // clearly outclassed by the flagship parked next to it.
+  dreadnought: {
+    url: 'models/dreadnought.fbx',
+    targetLength: 32,
+    yaw: -Math.PI / 2, // Meshy convention: authored nose along -X
+    pitch: 0,
+  },
   // "Imperial Star Destroyer"-style flagship — the fleet carrier.
   flagship: {
     url: 'models/flagship.fbx',

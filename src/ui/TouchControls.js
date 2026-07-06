@@ -31,6 +31,7 @@ export class TouchControls {
       <button class="touch-btn warp" data-btn="warp">Warp</button>
       <button class="touch-btn land" data-btn="land">Land</button>
       <button class="touch-btn fleet" data-btn="fleet">Fleet</button>
+      <button class="touch-btn focus" data-btn="focus">Attack</button>
       <button class="touch-btn interact" data-btn="interact">Use</button>
       <button class="touch-btn jump" data-btn="jump">Jump</button>
     `;
@@ -100,6 +101,7 @@ export class TouchControls {
       ['interact', 'interactQueued'], ['counter', 'counterQueued'],
       ['warp', 'warpQueued'], ['navcycle', 'warpCycleQueued'],
       ['land', 'landQueued'], ['fleet', 'fleetQueued'],
+      ['focus', 'fleetFocusQueued'],
     ]) {
       const btn = this.layer.querySelector(`[data-btn="${name}"]`);
       btn.addEventListener('pointerdown', (e) => {
