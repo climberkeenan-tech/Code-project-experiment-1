@@ -12,6 +12,10 @@ import * as THREE from 'three';
  */
 
 const MAX_RANGE = 12000;
+// The apex hunter stays invisible to the overlay until it could actually
+// hit you (fire range 1600 + margin) — before that it exists only as the
+// planet-like arc on the radar, so avoiding it is a real choice.
+const APEX_REVEAL = 2600;
 
 export class TargetOverlay {
   /** @param {import('../core/Game.js').Game} game */
@@ -57,6 +61,7 @@ export class TargetOverlay {
       if (enemy.hitFlash > 0) enemy.hitFlash -= dt;
       const dist = enemy.position.distanceTo(cam.position);
       if (dist > MAX_RANGE) continue;
+      if (enemy.stats?.apex && dist > APEX_REVEAL) continue;
       const p = this._screen(enemy.position, cam);
       if (p.onScreen) {
         this._drawBox(ctx, p.x, p.y, enemy, dist, focal, elapsed, enemy === assist);
@@ -137,7 +142,7 @@ export class TargetOverlay {
 
   _drawBox(ctx, sx, sy, enemy, dist, focal, elapsed, locked = false) {
     const pixR = Math.max(14, Math.min(240, (enemy.radius / dist) * focal * 1.7));
-    const isBoss = enemy.type === 'destroyer';
+    const isBoss = enemy.type === 'destroyer' || enemy.stats?.apex;
     const pulse = isBoss ? 0.6 + 0.4 * Math.sin(elapsed * 6) : 1;
     // White-hot flash on a confirmed hit; bright solid when aim-locked.
     const flashing = (enemy.hitFlash ?? 0) > 0;

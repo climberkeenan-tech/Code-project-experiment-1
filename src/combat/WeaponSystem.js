@@ -21,7 +21,7 @@ const BOLT_LIFETIME = 1.6;
 const PLAYER_BOLT_SPEED = 950;
 const ENEMY_BOLT_SPEED = 480; // slow enough to read and dodge
 const PLAYER_FIRE_INTERVAL = 0.13;
-const PLAYER_DAMAGE = 13;
+const PLAYER_DAMAGE = 50; // per player request: enemies take 50 per hit
 /** Player-bolt hit forgiveness: enemies are easier to hit than their mesh. */
 const HIT_FORGIVENESS = 1.35;
 /** Aim-assist cone half-angle (radians) and range. */
@@ -345,7 +345,7 @@ export class WeaponSystem {
         this._dir.lerp(this._toTarget, 0.5).normalize();
         this.fire(this._muzzle, this._dir, {
           fromPlayer: false,
-          damage: enemy.stats.damage,
+          damage: enemy.stats.damage * (enemy.damageScale ?? 1),
           speed: MISSILE_SPEED,
           source: enemy,
           inheritVel: enemy.velocity,
@@ -375,7 +375,7 @@ export class WeaponSystem {
 
       this.fire(this._muzzle, this._toTarget, {
         fromPlayer: false,
-        damage: enemy.stats.damage,
+        damage: enemy.stats.damage * (enemy.damageScale ?? 1),
         speed: ENEMY_BOLT_SPEED,
         source: enemy,
         inheritVel: enemy.velocity,

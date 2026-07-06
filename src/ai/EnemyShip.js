@@ -61,6 +61,19 @@ export const ENEMY_TYPES = {
     evadeSkill: 0.02, attackRunTime: 30, resources: 30,
     kiteRange: 420,
   },
+  // THE APEX: a roaming hunter dreadnought — the highest-level threat. It
+  // always knows where you are and closes in slowly, forever. It shows on
+  // the radar like a planet (a nav arc, not an arrow) and only earns threat
+  // arrows once it's near enough to actually hit you. Avoid it — or bring a
+  // fleet and end it for the biggest bounty in the game.
+  apex: {
+    displayName: 'Ravager Dreadnought', level: 120, credits: 25000, weapon: 'missile',
+    accuracy: 0.92, turret: true, deploys: 'fighter', apex: true,
+    hull: 6000, shield: 2500, accel: 20, maxSpeed: 58, turnRate: 0.2,
+    fireRange: 1600, fireInterval: 2.0, damage: 60, detectRange: 1e9,
+    evadeSkill: 0, attackRunTime: 9999, resources: 120,
+    kiteRange: 900,
+  },
   // Deploys escort fighters while it fights — kill the carrier to stop the flow.
   redcarrier: {
     displayName: 'Dreadcarrier', level: 90, credits: 4000, weapon: 'missile', accuracy: 0.85,
@@ -228,8 +241,13 @@ export class EnemyShip extends ShipBase {
     const player = this.game.player;
     this.triggerHeld = false;
 
-    // Universal retreat check.
-    if (this.state !== State.RETREAT && this.hull / this.hullMax < 0.28) {
+    // The apex never patrols, never loses you, never retreats.
+    if (stats.apex && playerAlive && this.state === State.PATROL) {
+      this._setState(State.CHASE);
+    }
+
+    // Universal retreat check (apex excluded: it does not know fear).
+    if (!stats.apex && this.state !== State.RETREAT && this.hull / this.hullMax < 0.28) {
       this._setState(State.RETREAT);
       this.game.events.emit('enemy:retreating', this);
     }

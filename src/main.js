@@ -6,6 +6,7 @@ import { PlayerShip } from './ship/PlayerShip.js';
 import { loadModelShips } from './ship/ModelShips.js';
 import { EnemyManager } from './ai/EnemyManager.js';
 import { EncounterDirector } from './ai/EncounterDirector.js';
+import { ApexHunter } from './ai/ApexHunter.js';
 import { WeaponSystem } from './combat/WeaponSystem.js';
 import { CombatSystem } from './combat/CombatSystem.js';
 import { CrewManager } from './crew/CrewManager.js';
@@ -96,6 +97,11 @@ game.addSystem('director', new EncounterDirector(game));
 const enemies = new EnemyManager(game);
 game.enemies = enemies;
 game.addSystem('enemies', enemies);
+
+// --- The apex predator: one avoidable, always-visible roaming dreadnought ---
+const apex = new ApexHunter(game);
+game.apexSystem = apex;
+game.addSystem('apex', apex);
 
 const weapons = new WeaponSystem(game);
 game.weapons = weapons;

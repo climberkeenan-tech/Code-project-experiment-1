@@ -35,11 +35,43 @@ const MODELS = {
 };
 
 const protos = {};
+const enemyProtos = {};
 let loadPromise = null;
 
 /** The normalized prototype for a model id, or null while loading/failed. */
 export function getModelProto(id) {
   return protos[id] ?? null;
+}
+
+/**
+ * Red-faction variant of a model: same geometry, materials cloned ONCE and
+ * tinted hostile red (shared by every enemy clone — no per-ship leaks).
+ * Enemies fly the same hulls the player does, repainted.
+ */
+export function getEnemyModelProto(id) {
+  if (enemyProtos[id]) return enemyProtos[id];
+  const base = protos[id];
+  if (!base) return null;
+  const clone = base.clone(true);
+  const matCache = new Map();
+  clone.traverse((c) => {
+    if (!c.isMesh) return;
+    const arr = Array.isArray(c.material) ? c.material : [c.material];
+    const tinted = arr.map((m) => {
+      if (!m) return m;
+      if (!matCache.has(m.uuid)) {
+        const t = m.clone();
+        if (t.color) t.color.multiply(new THREE.Color(1.05, 0.42, 0.38));
+        if (t.emissive) t.emissive.setRGB(0.22, 0.015, 0.015);
+        matCache.set(m.uuid, t);
+      }
+      return matCache.get(m.uuid);
+    });
+    c.material = Array.isArray(c.material) ? tinted : tinted[0];
+  });
+  clone.userData.shipBounds = base.userData.shipBounds;
+  enemyProtos[id] = clone;
+  return clone;
 }
 
 /** Kick off (or join) loading of all registered models. */

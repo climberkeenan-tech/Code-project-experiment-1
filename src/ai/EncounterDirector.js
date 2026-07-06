@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Rng } from '../core/math/rng.js';
 import { UNIVERSE_SEED } from '../world/constants.js';
+import { PLAYER_SHIP_BY_ID } from '../ship/ShipFactory.js';
 
 /**
  * Encounter director: decides where and when hostiles appear.
@@ -151,15 +152,18 @@ export class EncounterDirector {
     const enemies = game.enemies;
     if (!player || !player.alive || !enemies) return;
 
-    // Despawn stragglers the player has left behind.
+    // Despawn stragglers the player has left behind. The apex hunter is
+    // exempt: it lives outside the encounter economy and never despawns.
     for (const enemy of [...enemies.enemies]) {
+      if (enemy.stats?.apex) continue;
       if (enemy.position.distanceTo(player.position) > DESPAWN_RANGE) {
         enemies.remove(enemy);
       }
     }
 
-    // Region bookkeeping: live counts + cooldowns.
-    const liveTotal = enemies.enemies.length;
+    // Region bookkeeping: live counts + cooldowns (apex doesn't count
+    // against the cap — it must never block normal encounters).
+    const liveTotal = enemies.enemies.filter((e) => !e.stats?.apex).length;
     for (const region of this.regions) {
       if (region.planet) region.center.copy(region.planet.group.position);
       if (region.cooldown > 0) region.cooldown -= CHECK_INTERVAL;
@@ -193,10 +197,27 @@ export class EncounterDirector {
     }
   }
 
+  /**
+   * The danger of what actually spawns tracks the danger of what the player
+   * flies: starter pilots never meet capital squads, and flagship captains
+   * never coast through scout-only space.
+   */
+  _effectiveTier(regionTier) {
+    const level = PLAYER_SHIP_BY_ID[this.game.player?.ships?.active]?.level ?? 10;
+    const maxTier = level >= 100 ? 7
+      : level >= 85 ? 6
+        : level >= 70 ? 5
+          : level >= 50 ? 4
+            : level >= 30 ? 3
+              : 2;
+    const minTier = level >= 100 ? 3 : level >= 70 ? 2 : 1;
+    return Math.min(maxTier, Math.max(regionTier, minTier));
+  }
+
   _deploySquad(region) {
     const game = this.game;
     const player = game.player;
-    const types = TIER_SQUADS[region.tier];
+    const types = TIER_SQUADS[this._effectiveTier(region.tier)];
 
     // Spawn point: a ring around the player, biased toward the region
     // center so squads come from "their" space.
@@ -206,9 +227,19 @@ export class EncounterDirector {
       .addScaledVector(this._dir, this.rng.range(SPAWN_MIN, SPAWN_MAX));
 
     const squad = game.enemies.spawnSquad(spawnCenter, types, 220, region.radius * 0.4);
+    // Veteran crews for veteran pilots: hostiles hit harder and take more
+    // punishment as the player's ship class climbs.
+    const level = PLAYER_SHIP_BY_ID[player?.ships?.active]?.level ?? 10;
+    const toughness = 1 + Math.max(0, level - 10) / 120;
+    const damageScale = 1 + Math.max(0, level - 10) / 150;
     for (const enemy of squad) {
       enemy.region = region;
       enemy.homeCenter.copy(region.center);
+      enemy.damageScale = damageScale;
+      enemy.hullMax = Math.round(enemy.hullMax * toughness);
+      enemy.hull = enemy.hullMax;
+      enemy.shieldMax = Math.round(enemy.shieldMax * toughness);
+      enemy.shield = enemy.shieldMax;
     }
 
     // Wiping the squad silences the region for minutes.

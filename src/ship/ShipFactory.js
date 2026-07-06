@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Rng } from '../core/math/rng.js';
-import { getModelProto } from './ModelShips.js';
+import { getModelProto, getEnemyModelProto } from './ModelShips.js';
 
 /**
  * Procedural ship meshes.
@@ -432,7 +432,17 @@ function buildPlayerCarrier(mats, glowColor) {
  */
 const ENEMY_SCALE = {
   scout: 1.6, fighter: 1.5, heavy: 1.4, cruiser: 1.35, destroyer: 1.0,
-  warship: 1.0, redcarrier: 1.0,
+  warship: 1.0, redcarrier: 1.0, apex: 1.3,
+};
+
+/**
+ * Enemy classes that fly the PLAYER'S hand-made hulls, repainted red — the
+ * red faction uses the same ships you do. Scale differentiates the threat.
+ */
+const ENEMY_MODEL_MAP = {
+  warship: { model: 'gunship', scale: 1.7 },     // red gunship, bigger than yours
+  redcarrier: { model: 'flagship', scale: 0.75 }, // red star destroyer, smaller than yours
+  apex: { model: 'flagship', scale: 1.25 },       // the apex: bigger than EVERYTHING
 };
 
 /**
@@ -444,7 +454,32 @@ const ENEMY_SCALE = {
  * @returns {ShipRig}
  */
 export function createEnemyShip(type) {
-  const build = ENEMY_BUILDERS[type] || ENEMY_BUILDERS.fighter;
+  // Model-based hostile hulls (red-tinted clones of the player's ships).
+  const mm = ENEMY_MODEL_MAP[type];
+  if (mm) {
+    const proto = getEnemyModelProto(mm.model);
+    if (proto) {
+      const group = proto.clone(true); // shares the tinted material set
+      group.scale.multiplyScalar(mm.scale);
+      const b = proto.userData.shipBounds;
+      const W = b.width * mm.scale;
+      const engines = [
+        new THREE.Vector3(-W * 0.16, 0, b.rearZ * mm.scale * 0.92),
+        new THREE.Vector3(W * 0.16, 0, b.rearZ * mm.scale * 0.92),
+      ];
+      const hardpoints = [
+        new THREE.Vector3(-W * 0.3, 0, b.noseZ * mm.scale * 0.45),
+        new THREE.Vector3(W * 0.3, 0, b.noseZ * mm.scale * 0.45),
+      ];
+      return {
+        group, engines, hardpoints,
+        radius: (b.length * mm.scale) / 2.6,
+        glowColor: new THREE.Color(5.4, 0.6, 0.5),
+      };
+    }
+  }
+  const build = ENEMY_BUILDERS[type]
+    || (type === 'apex' ? ENEMY_BUILDERS.destroyer : ENEMY_BUILDERS.fighter);
   const rig = build();
   const k = ENEMY_SCALE[type] ?? 1.4;
   if (k !== 1) {
