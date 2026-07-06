@@ -47,8 +47,13 @@ export class SurfaceScatter {
     this._buildRocks(centerWorld);
     this._buildTrees(centerWorld);
     this._buildGrass(centerWorld);
+    this._buildWildlife(centerWorld);
 
     this._tmp = new THREE.Vector3();
+    this._wUp = new THREE.Vector3();
+    this._wT1 = new THREE.Vector3();
+    this._wT2 = new THREE.Vector3();
+    this._wQuat = new THREE.Quaternion();
   }
 
   /** True if a world point is on solid ground above any ocean. */
@@ -188,6 +193,120 @@ export class SurfaceScatter {
     this._grass = grass;
   }
 
+  _buildWildlife(centerWorld) {
+    this.critters = [];
+    this.birds = [];
+    if (!this.planet.descriptor.hasAtmosphere) return; // airless = lifeless
+
+    // Grazers: simple two-box creatures that wander and flee the player.
+    const bodyGeo = new THREE.BoxGeometry(0.7, 0.55, 1.3);
+    const headGeo = new THREE.BoxGeometry(0.4, 0.4, 0.5);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x8a6f4d, roughness: 0.9, flatShading: true });
+    this._critterAssets = [bodyGeo, headGeo, mat];
+    for (let i = 0; i < 40 && this.critters.length < 10; i++) {
+      const s = this._sampleSurface(centerWorld, 20, SCATTER_RADIUS * 0.8);
+      if (!s) continue;
+      const mesh = new THREE.Group();
+      const body = new THREE.Mesh(bodyGeo, mat);
+      body.position.y = 0.6;
+      const head = new THREE.Mesh(headGeo, mat);
+      head.position.set(0, 0.95, -0.75);
+      mesh.add(body, head);
+      const local = s.point.clone().sub(this.center);
+      mesh.position.copy(local);
+      this._group.add(mesh);
+      this.critters.push({
+        mesh, local, heading: Math.random() * Math.PI * 2,
+        speed: 1.2 + Math.random() * 1.4, panic: 0, turnTimer: Math.random() * 3,
+      });
+    }
+
+    // Birds: cones circling above the site.
+    const birdGeo = new THREE.ConeGeometry(0.35, 1.1, 4);
+    birdGeo.rotateX(Math.PI / 2);
+    const birdMat = new THREE.MeshStandardMaterial({ color: 0x3a3f4a, roughness: 0.8, flatShading: true });
+    this._birdAssets = [birdGeo, birdMat];
+    const centerLocal = centerWorld.clone().sub(this.center);
+    for (let i = 0; i < 6; i++) {
+      const mesh = new THREE.Mesh(birdGeo, birdMat);
+      this._group.add(mesh);
+      this.birds.push({
+        mesh, centerLocal,
+        phase: Math.random() * Math.PI * 2,
+        r: 40 + Math.random() * 90,
+        h: 30 + Math.random() * 35,
+        speed: 0.25 + Math.random() * 0.3,
+      });
+    }
+  }
+
+  /**
+   * Animate wildlife. Called by whoever owns the patch (on-foot controller
+   * passes the avatar position so critters flee; flight passes null).
+   * @param {number} dt
+   * @param {THREE.Vector3|null} avatarWorld
+   */
+  update(dt, avatarWorld = null) {
+    const R = this.planet.radius;
+    for (const c of this.critters ?? []) {
+      // Wander: drift the heading; flee: run from the avatar.
+      c.turnTimer -= dt;
+      if (c.turnTimer <= 0) {
+        c.turnTimer = 1.5 + Math.random() * 3;
+        c.heading += (Math.random() - 0.5) * 1.6;
+      }
+      this._wUp.copy(c.local).normalize();
+
+      // Tangent basis at the critter.
+      this._wT1.set(0, 1, 0);
+      if (Math.abs(this._wUp.dot(this._wT1)) > 0.9) this._wT1.set(1, 0, 0);
+      this._wT1.crossVectors(this._wUp, this._wT1).normalize();
+      this._wT2.crossVectors(this._wUp, this._wT1).normalize();
+
+      // Flee: run directly away from a close avatar (heading in basis terms).
+      if (avatarWorld) {
+        this._tmp.copy(avatarWorld).sub(this.center); // avatar planet-local
+        if (this._tmp.distanceTo(c.local) < 16) {
+          this._tmp.subVectors(c.local, this._tmp); // away vector
+          c.heading = Math.atan2(this._tmp.dot(this._wT2), this._tmp.dot(this._wT1));
+          c.panic = 2.2;
+        }
+      }
+      c.panic = Math.max(0, c.panic - dt);
+      const speed = c.speed * (c.panic > 0 ? 3 : 1);
+      this._tmp.copy(this._wT1).multiplyScalar(Math.cos(c.heading))
+        .addScaledVector(this._wT2, Math.sin(c.heading));
+      c.local.addScaledVector(this._tmp, speed * dt);
+
+      // Snap to the terrain along the radial (the one true sampler).
+      this._wUp.copy(c.local).normalize();
+      const h = this.planet.sampler.height(this._wUp.x, this._wUp.y, this._wUp.z);
+      c.local.copy(this._wUp).multiplyScalar(R + Math.max(h, 0.5));
+      c.mesh.position.copy(c.local);
+      // Stand upright, face travel direction.
+      this._wQuat.setFromUnitVectors(UP, this._wUp);
+      c.mesh.quaternion.copy(this._wQuat);
+    }
+
+    for (const b of this.birds ?? []) {
+      b.phase += b.speed * dt;
+      this._wUp.copy(b.centerLocal).normalize();
+      this._wT1.set(0, 1, 0);
+      if (Math.abs(this._wUp.dot(this._wT1)) > 0.9) this._wT1.set(1, 0, 0);
+      this._wT1.crossVectors(this._wUp, this._wT1).normalize();
+      this._wT2.crossVectors(this._wUp, this._wT1).normalize();
+      b.mesh.position.copy(b.centerLocal)
+        .addScaledVector(this._wUp, b.h)
+        .addScaledVector(this._wT1, Math.cos(b.phase) * b.r)
+        .addScaledVector(this._wT2, Math.sin(b.phase) * b.r);
+      // Nose along the circular travel direction (cone tip is local +Z).
+      this._tmp.copy(this._wT1).multiplyScalar(-Math.sin(b.phase))
+        .addScaledVector(this._wT2, Math.cos(b.phase)).normalize();
+      this._wQuat.setFromUnitVectors(FORWARD_Z, this._tmp);
+      b.mesh.quaternion.copy(this._wQuat);
+    }
+  }
+
   /**
    * Find the nearest mineable rock within `range` of a world position.
    * @returns {{ rock: object, dist: number } | null}
@@ -223,10 +342,13 @@ export class SurfaceScatter {
     this._rockMats.forEach((m) => m.dispose());
     if (this._trees) this._trees.forEach((t) => { t.geometry.dispose(); t.material.dispose(); });
     if (this._grass) { this._grass.geometry.dispose(); this._grass.material.dispose(); }
+    if (this._critterAssets) this._critterAssets.forEach((a) => a.dispose());
+    if (this._birdAssets) this._birdAssets.forEach((a) => a.dispose());
   }
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
+const FORWARD_Z = new THREE.Vector3(0, 0, 1);
 
 /** A pleasant foliage tint per planet archetype. */
 function pickFoliage(descriptor) {

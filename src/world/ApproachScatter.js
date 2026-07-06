@@ -31,9 +31,10 @@ export class ApproachScatter {
     game.approach = this;
   }
 
-  update() {
+  update(dt) {
     const game = this.game;
     if (game.mode !== 'flight') return; // on-foot owns its own scatter
+    this.scatter?.update(dt ?? 0.016, null); // wildlife keeps moving below
 
     const ctx = game.universe?.playerContext;
     const planet = ctx?.planet;

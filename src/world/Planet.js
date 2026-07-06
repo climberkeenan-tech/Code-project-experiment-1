@@ -41,6 +41,18 @@ export class Planet {
     /** Live planet→sun unit vector shared by all planet materials. */
     this.sunDir = new THREE.Vector3(0, 1, 0);
 
+    /**
+     * Slow planetary rotation → day/night cycle (bible ask). The terrain
+     * mesh itself NEVER rotates (the collision samplers assume a static
+     * local frame — rotating geometry would silently desync see-vs-hit).
+     * Instead the sun direction sweeps around the polar axis: the terminator,
+     * atmosphere, clouds and — via the Sun system — the ground lighting all
+     * follow, which reads as the planet turning. Day length ≈ 9–16 real
+     * minutes, deterministic per planet.
+     */
+    this.spinAngle = 0;
+    this.spinRate = (Math.PI * 2) / (540 + (descriptor.radius % 7) * 60);
+
     this.hazeUniforms = {
       uHazeColor: { value: descriptor.hazeColor },
       uHazeDensity: { value: 0 },
@@ -171,7 +183,11 @@ export class Planet {
    */
   update(dt, elapsed, cameraWorldPos, sunRenderPos) {
     // Planet→sun direction feeds atmosphere, clouds and haze tinting.
-    this.sunDir.copy(sunRenderPos).sub(this.group.position).normalize();
+    // The spin offset makes the lit hemisphere sweep slowly around the
+    // polar axis — the day/night cycle.
+    this.spinAngle = (this.spinAngle + this.spinRate * dt) % (Math.PI * 2);
+    this.sunDir.copy(sunRenderPos).sub(this.group.position).normalize()
+      .applyAxisAngle(this.up, this.spinAngle);
 
     // Terrain LOD in planet-local space.
     this._local.copy(cameraWorldPos).sub(this.group.position);

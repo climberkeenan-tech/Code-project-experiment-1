@@ -92,6 +92,7 @@ export class OnFootController {
     }
 
     this._walk(dt);
+    this.scatter?.update(dt, this.avatar.position); // wildlife wanders/flees
 
     // Interaction: mine a nearby rock, or board the ship if next to it.
     const near = this.scatter?.nearestRock(this.avatar.position, MINE_RANGE);
