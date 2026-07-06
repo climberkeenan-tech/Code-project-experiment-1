@@ -27,6 +27,9 @@ export class CombatSystem {
     game.events.on('ship:destroyed', ({ ship, byPlayer }) => {
       if (ship === game.player) {
         this._onPlayerDestroyed();
+      } else if (ship.isEscort) {
+        // A deployed wingman went down — the fleet handles the loss.
+        game.fleet?.onEscortDestroyed(ship);
       } else {
         // Kill reward: credits scaled by enemy class (level).
         if (byPlayer) {

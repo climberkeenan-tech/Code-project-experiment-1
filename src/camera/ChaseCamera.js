@@ -75,8 +75,10 @@ export class ChaseCamera {
 
     // --- Position ---
     const speed01 = clamp(player.speed / 600, 0, 1);
-    this._offset.copy(this.baseOffset);
-    this._offset.z += speed01 * 3.2; // pull back as speed rises
+    // Bigger hulls need a longer leash (capitals are 3-4x the fighter).
+    const hullScale = Math.max(1, player.radius / 3.2);
+    this._offset.copy(this.baseOffset).multiplyScalar(hullScale);
+    this._offset.z += speed01 * 3.2 * hullScale; // pull back as speed rises
     this._offset.applyQuaternion(this.smoothedQuat);
 
     this.smoothedPos.lerp(player.position, damp(30, dt));

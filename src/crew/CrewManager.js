@@ -32,7 +32,6 @@ export class CrewManager {
     /** @type {Array<{id:number, role:string, name:string, stars:number}>} */
     this.roster = [];
 
-    this._gunnerCooldown = 0;
     this._muzzle = new THREE.Vector3();
     this._toTarget = new THREE.Vector3();
     this._dir = new THREE.Vector3();
@@ -99,30 +98,36 @@ export class CrewManager {
       player.hull = Math.min(player.hullMax, player.hull + rate * dt);
     }
 
-    // --- Gunner: auto-fire at the nearest hostile ---
-    this._gunnerCooldown -= dt;
-    const gun = this.gunner;
-    if (gun && this._gunnerCooldown <= 0 && game.enemies && game.weapons) {
-      const enemy = this._nearestEnemy(player.position, GUNNER_RANGE);
-      if (enemy) this._gunnerFire(player, enemy, gun);
+    // --- Gunners: one per turret station (capitals have several) ---
+    // Each gunner runs an independent cooldown and engages a DIFFERENT
+    // nearby hostile, so a fully-crewed battleship pours fire in several
+    // directions at once — the capital-ship fantasy.
+    const stations = Math.max(1, player.statMult?.turrets ?? 1);
+    const gunners = this.roster.filter((c) => c.role === 'gunner').slice(0, stations);
+    if (gunners.length && game.enemies && game.weapons) {
+      let targets = null; // lazily sorted nearest-first
+      for (let i = 0; i < gunners.length; i++) {
+        const gun = gunners[i];
+        gun._cd = (gun._cd ?? Math.random()) - dt;
+        if (gun._cd > 0) continue;
+        if (!targets) {
+          targets = game.enemies.enemies
+            .filter((e) => e.alive
+              && e.position.distanceToSquared(player.position) < GUNNER_RANGE * GUNNER_RANGE)
+            .sort((a, b) => a.position.distanceToSquared(player.position)
+              - b.position.distanceToSquared(player.position));
+        }
+        if (targets.length === 0) break;
+        this._gunnerFire(player, targets[i % targets.length], gun);
+      }
     }
   }
 
-  _nearestEnemy(pos, range) {
-    let best = null;
-    let bestSq = range * range;
-    for (const e of this.game.enemies.enemies) {
-      if (!e.alive) continue;
-      const d = e.position.distanceToSquared(pos);
-      if (d < bestSq) { bestSq = d; best = e; }
-    }
-    return best;
-  }
 
   _gunnerFire(player, enemy, gun) {
     const weapons = this.game.weapons;
-    // Cadence: 5★ ~0.35s, 1★ ~0.85s.
-    this._gunnerCooldown = 0.95 - gun.stars * 0.12;
+    // Cadence: 5★ ~0.35s, 1★ ~0.85s (per-gunner cooldown).
+    gun._cd = 0.95 - gun.stars * 0.12;
 
     // Muzzle from a player hardpoint.
     const hp = player.hardpoints[Math.floor(Math.random() * player.hardpoints.length)];

@@ -152,7 +152,7 @@ export class Shop {
       return `
         <div class="shop-row">
           <span class="shop-row-name">${s.name} <small>Lv ${s.level}</small></span>
-          <span class="shop-row-meta">hull ×${s.hull} · shd ×${s.shield} · eng ×${s.engine} · crew ${s.crew}</span>
+          <span class="shop-row-meta">hull ×${s.hull} · shd ×${s.shield} · crew ${s.crew}${s.turrets ? ` · ⌖${s.turrets} turrets` : ''}${s.hangar ? ` · ⬡${s.hangar} hangar` : ''}</span>
           ${btn}
         </div>`;
     }).join('');

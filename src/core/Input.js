@@ -64,6 +64,9 @@ export class Input {
     /** Edge-triggered auto-land toggle press. */
     this.landQueued = false;
 
+    /** Edge-triggered fleet launch/recall press. */
+    this.fleetQueued = false;
+
     /** Keys currently held, by KeyboardEvent.code. */
     this.keys = new Set();
 
@@ -136,6 +139,8 @@ export class Input {
     if (e.code === 'KeyB' && !e.repeat) this.warpCycleQueued = true;
     // Auto-land toggle.
     if (e.code === 'KeyL' && !e.repeat) this.landQueued = true;
+    // Fleet launch/recall.
+    if (e.code === 'KeyG' && !e.repeat) this.fleetQueued = true;
   }
 
   _onKeyUp(e) {
@@ -217,6 +222,13 @@ export class Input {
   consumeLand() {
     const v = this.landQueued;
     this.landQueued = false;
+    return v;
+  }
+
+  /** Consume the edge-triggered fleet launch/recall press. */
+  consumeFleet() {
+    const v = this.fleetQueued;
+    this.fleetQueued = false;
     return v;
   }
 

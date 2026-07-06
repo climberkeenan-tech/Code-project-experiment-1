@@ -23,7 +23,7 @@ const PLANET_COLORS = {
 };
 
 /** Radar blip radius by enemy class — bigger threats read bigger. */
-const ENEMY_BLIP = { scout: 2.4, fighter: 2.8, heavy: 3.6, cruiser: 4.6, destroyer: 6.5 };
+const ENEMY_BLIP = { scout: 2.4, fighter: 2.8, heavy: 3.6, cruiser: 4.6, destroyer: 6.5, warship: 5.4, redcarrier: 6.2 };
 
 export class Radar {
   /**
@@ -113,6 +113,12 @@ export class Radar {
       this._toLocal(enemy.position, player);
       const size2 = ENEMY_BLIP[enemy.type] ?? 2.6;
       this._blip(ctx, half, 'rgba(255, 93, 108, 0.95)', size2, false);
+    }
+
+    // --- Friendly escorts (green) ---
+    for (const esc of game.fleet?.escorts ?? []) {
+      this._toLocal(esc.position, player);
+      this._blip(ctx, half, 'rgba(143, 225, 176, 0.95)', 2.6, false);
     }
 
     // Center: the ship.

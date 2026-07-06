@@ -50,6 +50,26 @@ export const ENEMY_TYPES = {
     evadeSkill: 0.02, attackRunTime: 40, resources: 60,
     kiteRange: 900,
   },
+  // --- Red-faction capitals (fleet-combat expansion) ---
+  // `turret: true` = multi-directional fire: no nose alignment needed, so
+  // these slow hulls stay dangerous from any angle.
+  warship: {
+    displayName: 'Battlecruiser', level: 75, credits: 1500, weapon: 'bolt', accuracy: 0.8,
+    turret: true,
+    hull: 900, shield: 400, accel: 30, maxSpeed: 70, turnRate: 0.3,
+    fireRange: 700, fireInterval: 0.55, damage: 10, detectRange: 1600,
+    evadeSkill: 0.02, attackRunTime: 30, resources: 30,
+    kiteRange: 420,
+  },
+  // Deploys escort fighters while it fights — kill the carrier to stop the flow.
+  redcarrier: {
+    displayName: 'Dreadcarrier', level: 90, credits: 4000, weapon: 'missile', accuracy: 0.85,
+    turret: true, deploys: 'fighter',
+    hull: 1500, shield: 700, accel: 24, maxSpeed: 60, turnRate: 0.24,
+    fireRange: 1300, fireInterval: 3.5, damage: 40, detectRange: 2000,
+    evadeSkill: 0.01, attackRunTime: 40, resources: 45,
+    kiteRange: 800,
+  },
 };
 
 /** AI states — see `_updateAI` for the transition graph. */
@@ -241,7 +261,8 @@ export class EnemyShip extends ShipBase {
         } else {
           this._lostSightTime = 0;
         }
-        if (distToPlayer < stats.fireRange && this._isAlignedWithPlayer(0.93)) {
+        // Turret ships open fire from any angle; gunships must line up first.
+        if (distToPlayer < stats.fireRange && (stats.turret || this._isAlignedWithPlayer(0.93))) {
           this._setState(State.ATTACK);
           this._attackRunTime = stats.attackRunTime;
         }
@@ -255,12 +276,20 @@ export class EnemyShip extends ShipBase {
 
         if (stats.weapon === 'missile') {
           // Missile boats kite: hold at range and lob homing warheads.
-          // Aim is forgiving because the missile does the tracking.
+          // Aim is forgiving because the missile does the tracking; turret
+          // hulls launch from any facing.
           const kite = stats.kiteRange || 600;
           speedFactor = distToPlayer < kite ? 0.45 : 0.85;
-          this.triggerHeld = distToPlayer < stats.fireRange && this._isAlignedWithPlayer(0.72);
+          this.triggerHeld = distToPlayer < stats.fireRange
+            && (stats.turret || this._isAlignedWithPlayer(0.72));
           if (this._attackRunTime <= 0) this._startEvade();
           else if (distToPlayer > stats.fireRange * 1.4) this._setState(State.CHASE);
+        } else if (stats.turret) {
+          // Turret gun platforms: hold station near kite range, fire freely.
+          const kite = stats.kiteRange || 400;
+          speedFactor = distToPlayer < kite ? 0.3 : 0.7;
+          this.triggerHeld = distToPlayer < stats.fireRange;
+          if (distToPlayer > stats.fireRange * 1.5) this._setState(State.CHASE);
         } else {
           // Gunships close in and strafe. Bleed speed near the merge.
           speedFactor = clamp(distToPlayer / 220, 0.35, 1);
@@ -270,6 +299,20 @@ export class EnemyShip extends ShipBase {
             this._startEvade();
           } else if (distToPlayer > stats.fireRange * 1.35) {
             this._setState(State.CHASE);
+          }
+        }
+
+        // Carriers launch escorts while engaged (capped so the swarm stays fair).
+        if (stats.deploys) {
+          this._deployCooldown = (this._deployCooldown ?? 2) - dt;
+          if (this._deployCooldown <= 0 && this.game.enemies.enemies.length < 14) {
+            this._deployCooldown = 9;
+            const spawnPos = this.position.clone();
+            spawnPos.x += (Math.random() - 0.5) * 60;
+            spawnPos.y += 20;
+            const fighter = this.game.enemies.spawn(stats.deploys, spawnPos, this.homeCenter);
+            fighter.region = this.region;
+            fighter.state = State.CHASE; // launches hot
           }
         }
         break;

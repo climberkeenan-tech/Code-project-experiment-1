@@ -8,6 +8,7 @@ import { EncounterDirector } from './ai/EncounterDirector.js';
 import { WeaponSystem } from './combat/WeaponSystem.js';
 import { CombatSystem } from './combat/CombatSystem.js';
 import { CrewManager } from './crew/CrewManager.js';
+import { FleetSystem } from './fleet/FleetSystem.js';
 import { Pickups } from './combat/Pickups.js';
 import { Explosions } from './fx/Explosions.js';
 import { ChaseCamera } from './camera/ChaseCamera.js';
@@ -101,8 +102,11 @@ game.addSystem('weapons', weapons);
 
 game.addSystem('combat', new CombatSystem(game));
 
-// --- Crew: engineer repairs, gunner auto-fires (fires pooled bolts) ---
+// --- Crew: engineer repairs, gunners man the turrets ---
 game.addSystem('crew', new CrewManager(game));
+
+// --- Fleet: carrier-launched AI escorts from your stored ships ---
+game.addSystem('fleet', new FleetSystem(game));
 
 const explosions = new Explosions(game);
 game.explosions = explosions;

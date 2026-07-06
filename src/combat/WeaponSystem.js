@@ -306,20 +306,42 @@ export class WeaponSystem {
     const player = this.game.player;
     if (!enemies || !player) return;
 
+    const escorts = this.game.fleet?.escorts;
+
     for (const enemy of enemies.enemies) {
       if (!enemy.alive || !enemy.triggerHeld || enemy.fireCooldown > 0) continue;
 
       enemy.fireCooldown = enemy.stats.fireInterval * (0.85 + Math.random() * 0.3);
 
+      // Target selection: the player by default, but a closer deployed
+      // escort draws fire about half the time — fleets share the heat.
+      let target = player;
+      if (escorts && escorts.length) {
+        let nearest = null;
+        let nearestSq = Infinity;
+        for (const esc of escorts) {
+          if (!esc.alive) continue;
+          const d = esc.position.distanceToSquared(enemy.position);
+          if (d < nearestSq) { nearestSq = d; nearest = esc; }
+        }
+        // An escort at comparable range (within ~1.3x the player's distance)
+        // draws fire — dogfighting wingmen genuinely share the heat.
+        if (nearest
+          && nearestSq < enemy.position.distanceToSquared(player.position) * 1.7
+          && Math.random() < 0.4) {
+          target = nearest;
+        }
+      }
+
       const hardpoint = enemy.hardpoints[Math.floor(Math.random() * enemy.hardpoints.length)];
       this._muzzle.copy(hardpoint).applyQuaternion(enemy.quaternion).add(enemy.position);
-      const dist = this._toTarget.copy(player.position).sub(this._muzzle).length();
+      const dist = this._toTarget.copy(target.position).sub(this._muzzle).length();
 
       if (enemy.stats.weapon === 'missile') {
-        // Launch a homing missile roughly toward the player; it does the
+        // Launch a homing missile roughly toward the target; it does the
         // tracking. Fired forward-ish so it clears the hull, then homes.
         enemy.getForward(this._dir);
-        this._toTarget.copy(player.position).sub(this._muzzle).normalize();
+        this._toTarget.copy(target.position).sub(this._muzzle).normalize();
         this._dir.lerp(this._toTarget, 0.5).normalize();
         this.fire(this._muzzle, this._dir, {
           fromPlayer: false,
@@ -328,7 +350,7 @@ export class WeaponSystem {
           source: enemy,
           inheritVel: enemy.velocity,
           missile: true,
-          target: player,
+          target,
           life: MISSILE_LIFETIME,
         });
         this.game.audio?.playTone?.({ type: 'sawtooth', freq: 260, freqEnd: 520, duration: 0.3, gain: 0.16 });
@@ -337,8 +359,8 @@ export class WeaponSystem {
 
       // Lasers: aim at a lead point with per-class-accuracy jitter.
       const leadTime = dist / ENEMY_BOLT_SPEED;
-      this._toTarget.copy(player.position)
-        .addScaledVector(player.velocity, leadTime * 1.0)
+      this._toTarget.copy(target.position)
+        .addScaledVector(target.velocity, leadTime * 1.0)
         .sub(this._muzzle)
         .normalize();
 
@@ -453,6 +475,21 @@ export class WeaponSystem {
           return true;
         }
       }
+      // Deployed escorts are in the crossfire too.
+      const escorts = game.fleet?.escorts;
+      if (escorts) {
+        for (const esc of escorts) {
+          if (!esc.alive) continue;
+          const distSq = this._segmentPointDistanceSq(
+            bolt.prevPos, bolt.mesh.position, esc.position,
+          );
+          const hitR = bolt.isMissile ? MISSILE_HIT_RADIUS : esc.radius * 1.1;
+          if (distSq < hitR * hitR) {
+            this._applyHit(bolt, esc, false);
+            return true;
+          }
+        }
+      }
     }
 
     // Bolts die against large bodies. Planets get a precise terrain test
@@ -512,13 +549,19 @@ export class WeaponSystem {
           type: 'triangle', freq: 1900, freqEnd: 1100, duration: 0.06, gain: 0.08,
         });
       }
-    } else {
+    } else if (target === game.player) {
       game.events.emit('player:hit', { damage: bolt.damage });
       game.events.emit('camera:shake', 0.22);
       if (result.shieldAbsorbed > 0 && result.hullDamage === 0) {
         game.audio.playTone({ type: 'sine', freq: 480, freqEnd: 300, duration: 0.22, gain: 0.3 });
       } else {
         game.audio.playNoise({ duration: 0.3, gain: 0.4, filterFreq: 1400, filterEnd: 160 });
+      }
+    } else {
+      // A wingman took the hit: no vignette/shake, just a distant report.
+      if (this._soundBudget >= 0.5) {
+        this._soundBudget -= 0.5;
+        game.audio.playTone({ type: 'sine', freq: 380, freqEnd: 240, duration: 0.14, gain: 0.1 });
       }
     }
 

@@ -37,6 +37,7 @@ export class HUD {
         <div class="credits">&#9672; <span data-el="credits">0</span> cr</div>
         <div class="resources">&#9671; <span data-el="resources">0</span></div>
         <div class="cargo" data-el="cargo"></div>
+        <div class="fleet" data-el="fleet"></div>
         <div class="contacts" data-el="contacts"></div>
       </div>
 
@@ -115,6 +116,11 @@ export class HUD {
     game.events.on('missile:destroyed', () => {
       this.showBanner('Missile Intercepted', '', 1.2);
     });
+    game.events.on('fleet:launched', (n) => this.showBanner('Fleet Launched', `${n} ships deployed — G recalls`, 2.5));
+    game.events.on('fleet:recalled', () => this.showBanner('Fleet Docked', 'wing stored and repaired', 1.8));
+    game.events.on('fleet:ship-lost', (id) => this.showBanner('Wingman Down', `${id} destroyed — removed from your fleet`, 3));
+    game.events.on('fleet:denied', () => this.showBanner('No Hangar', 'a carrier-class ship is required to launch a fleet', 2.4));
+    game.events.on('fleet:empty', () => this.showBanner('Hangar Empty', 'buy more ships to fill the hangar', 2.4));
     game.events.on('onfoot:prompt', (text) => this.setPrompt(text));
     game.events.on('landing:hint', (text) => {
       this.refs.landHint.textContent = text;
@@ -197,6 +203,8 @@ export class HUD {
     const onfoot = this.game.mode === 'onfoot';
     const cargo = this.game.onfoot ? this.game.onfoot.carrying : 0;
     this._setText('cargo', cargo > 0 ? `▰ ${cargo} ore` : '');
+    const wing = this.game.fleet?.escorts.length ?? 0;
+    this._setText('fleet', wing > 0 ? `⬡ wing ${wing}` : '');
     this._setBar('hullBar', player.hull01);
     this._setBar('shieldBar', player.shield01);
     this._setBar('boostBar', player.boost01);

@@ -36,6 +36,8 @@ const TIER_SQUADS = {
   3: ['heavy', 'fighter', 'fighter'],
   4: ['cruiser', 'fighter', 'fighter', 'scout'],
   5: ['destroyer', 'heavy', 'fighter'],
+  6: ['warship', 'fighter', 'fighter'],
+  7: ['redcarrier', 'warship'],
 };
 
 export class EncounterDirector {
@@ -84,6 +86,18 @@ export class EncounterDirector {
         11000,
         rng.chance(0.3) ? 4 : (rng.chance(0.5) ? 3 : 2),
         `territory ${i}`,
+      );
+    }
+
+    // Red-faction capital patrols: a battlecruiser group and a carrier fleet.
+    for (const [tier, dMin, dMax] of [[6, 90000, 180000], [7, 120000, 220000]]) {
+      const angle = rng.range(0, Math.PI * 2);
+      const distance = rng.range(dMin, dMax);
+      this._addRegion(
+        new THREE.Vector3(
+          Math.cos(angle) * distance, rng.gaussian() * 7000, Math.sin(angle) * distance,
+        ),
+        13000, tier, tier === 7 ? 'carrier fleet' : 'capital patrol',
       );
     }
 
