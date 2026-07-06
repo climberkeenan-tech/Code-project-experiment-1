@@ -242,7 +242,7 @@ export class Shop {
   _renderRepair() {
     const player = this.game.player;
     const missing = Math.ceil(player.hullMax - player.hull);
-    const cost = Math.ceil(missing * 2);
+    const cost = Math.ceil(missing * 0.8);
     if (missing <= 0) return `<div class="shop-empty">Hull is at full integrity.</div>`;
     const afford = player.credits >= cost;
     return `
@@ -256,7 +256,7 @@ export class Shop {
   }
 
   _upgradeCost(level) {
-    return 120 + level * 100;
+    return 40 + level * 35;
   }
 
   // --- Actions ---
@@ -355,7 +355,7 @@ export class Shop {
   _repair() {
     const player = this.game.player;
     const missing = Math.ceil(player.hullMax - player.hull);
-    const cost = Math.ceil(missing * 2);
+    const cost = Math.ceil(missing * 0.8);
     if (missing <= 0 || player.credits < cost) { this._deny(); return; }
     player.credits -= cost;
     player.hull = player.hullMax;

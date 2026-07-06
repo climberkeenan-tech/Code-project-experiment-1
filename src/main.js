@@ -7,6 +7,7 @@ import { loadModelShips } from './ship/ModelShips.js';
 import { EnemyManager } from './ai/EnemyManager.js';
 import { EncounterDirector } from './ai/EncounterDirector.js';
 import { ApexHunter } from './ai/ApexHunter.js';
+import { Reinforcements } from './ai/Reinforcements.js';
 import { WeaponSystem } from './combat/WeaponSystem.js';
 import { CombatSystem } from './combat/CombatSystem.js';
 import { CrewManager } from './crew/CrewManager.js';
@@ -102,6 +103,11 @@ game.addSystem('enemies', enemies);
 const apex = new ApexHunter(game);
 game.apexSystem = apex;
 game.addSystem('apex', apex);
+
+// --- Escalation: every kill calls in two replacements; warp out to escape ---
+const reinforcements = new Reinforcements(game);
+game.reinforcements = reinforcements;
+game.addSystem('reinforcements', reinforcements);
 
 const weapons = new WeaponSystem(game);
 game.weapons = weapons;

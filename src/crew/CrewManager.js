@@ -22,7 +22,7 @@ let nextCrewId = 1;
 
 /** Credit cost of a crew member by star rating (20 → 500). */
 export function crewCost(stars) {
-  return Math.round(20 + (stars - 1) * 120);
+  return Math.round(20 + (stars - 1) * 70);
 }
 
 export class CrewManager {
