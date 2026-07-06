@@ -35,7 +35,7 @@ export class WeaponSystem {
     // --- Bolt visuals: crossed additive planes, one geometry shared ---
     const geometry = buildBoltGeometry(0.55, 7.0);
     const playerMat = boltMaterial(new THREE.Color(0.5, 2.2, 3.2));
-    const enemyMat = boltMaterial(new THREE.Color(3.4, 0.9, 0.35));
+    const enemyMat = boltMaterial(new THREE.Color(4.0, 0.35, 0.28)); // hostile red
 
     /**
      * Pool entries: { mesh, velocity, life, damage, fromPlayer, source,

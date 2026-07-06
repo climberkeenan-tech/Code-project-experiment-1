@@ -8,24 +8,47 @@ import { damp, clamp, lerp } from '../core/math/noise.js';
 
 /**
  * Enemy ship classes. Stats shape behavior as much as durability: scouts
- * detect far, turn hard and dodge constantly but melt under fire; heavies
- * barely evade yet hit like a truck.
+ * detect far, turn hard and dodge constantly but melt under fire; the Planet
+ * Destroyer is a slow, near-unkillable boss you avoid until much later.
+ *
+ * Balance philosophy (from the design bible / playtest): enemies move slower
+ * than the player's cruise so they never feel unfair to catch, are large
+ * enough to hit, and actually land shots (per-class `accuracy`), scaling in
+ * threat by `level`. `credits` is the kill reward; `weapon` selects laser vs
+ * homing missile; `displayName` shows in target boxes.
  */
 export const ENEMY_TYPES = {
   scout: {
-    hull: 30, shield: 20, accel: 135, maxSpeed: 310, turnRate: 2.0,
-    fireRange: 270, fireInterval: 1.0, damage: 4, detectRange: 1000,
-    evadeSkill: 0.85, attackRunTime: 4, resources: 2,
+    displayName: 'Scout', level: 10, credits: 20, weapon: 'bolt', accuracy: 0.6,
+    hull: 40, shield: 20, accel: 120, maxSpeed: 210, turnRate: 2.0,
+    fireRange: 300, fireInterval: 1.1, damage: 5, detectRange: 1200,
+    evadeSkill: 0.6, attackRunTime: 4, resources: 2,
   },
   fighter: {
-    hull: 60, shield: 45, accel: 105, maxSpeed: 255, turnRate: 1.45,
-    fireRange: 340, fireInterval: 0.7, damage: 7, detectRange: 800,
-    evadeSkill: 0.55, attackRunTime: 6, resources: 4,
+    displayName: 'Fighter', level: 20, credits: 50, weapon: 'bolt', accuracy: 0.7,
+    hull: 75, shield: 45, accel: 100, maxSpeed: 205, turnRate: 1.5,
+    fireRange: 360, fireInterval: 0.8, damage: 8, detectRange: 950,
+    evadeSkill: 0.45, attackRunTime: 6, resources: 4,
   },
   heavy: {
-    hull: 150, shield: 100, accel: 72, maxSpeed: 195, turnRate: 0.85,
-    fireRange: 440, fireInterval: 1.7, damage: 16, detectRange: 750,
-    evadeSkill: 0.2, attackRunTime: 9, resources: 9,
+    displayName: 'Heavy Assault', level: 40, credits: 160, weapon: 'bolt', accuracy: 0.8,
+    hull: 220, shield: 120, accel: 70, maxSpeed: 160, turnRate: 0.85,
+    fireRange: 460, fireInterval: 1.6, damage: 16, detectRange: 850,
+    evadeSkill: 0.18, attackRunTime: 9, resources: 10,
+  },
+  cruiser: {
+    displayName: 'Missile Cruiser', level: 60, credits: 420, weapon: 'missile', accuracy: 0.85,
+    hull: 340, shield: 200, accel: 52, maxSpeed: 140, turnRate: 0.7,
+    fireRange: 1100, fireInterval: 3.0, damage: 34, detectRange: 1400,
+    evadeSkill: 0.14, attackRunTime: 14, resources: 16,
+    kiteRange: 620, // prefers to hold this distance and lob missiles
+  },
+  destroyer: {
+    displayName: 'Planet Destroyer', level: 100, credits: 10000, weapon: 'missile', accuracy: 0.9,
+    hull: 2800, shield: 1400, accel: 26, maxSpeed: 82, turnRate: 0.26,
+    fireRange: 1500, fireInterval: 2.2, damage: 60, detectRange: 2400,
+    evadeSkill: 0.04, attackRunTime: 40, resources: 60,
+    kiteRange: 900,
   },
 };
 
@@ -228,18 +251,26 @@ export class EnemyShip extends ShipBase {
       case State.ATTACK: {
         if (!playerAlive) { this._setState(State.PATROL); break; }
         target = player.position;
-        // Arrive: bleed speed when close so we don't overshoot into orbit.
-        speedFactor = clamp(distToPlayer / 220, 0.35, 1);
         this._attackRunTime -= dt;
 
-        const aligned = this._isAlignedWithPlayer(0.988);
-        this.triggerHeld = aligned && distToPlayer < stats.fireRange;
-
-        if (distToPlayer < 70 || this._attackRunTime <= 0) {
-          // Break off the run: peel away, then come back around.
-          this._startEvade();
-        } else if (distToPlayer > stats.fireRange * 1.35) {
-          this._setState(State.CHASE);
+        if (stats.weapon === 'missile') {
+          // Missile boats kite: hold at range and lob homing warheads.
+          // Aim is forgiving because the missile does the tracking.
+          const kite = stats.kiteRange || 600;
+          speedFactor = distToPlayer < kite ? 0.45 : 0.85;
+          this.triggerHeld = distToPlayer < stats.fireRange && this._isAlignedWithPlayer(0.72);
+          if (this._attackRunTime <= 0) this._startEvade();
+          else if (distToPlayer > stats.fireRange * 1.4) this._setState(State.CHASE);
+        } else {
+          // Gunships close in and strafe. Bleed speed near the merge.
+          speedFactor = clamp(distToPlayer / 220, 0.35, 1);
+          // Loosened from 0.988 so enemies actually land shots (playtest fix).
+          this.triggerHeld = this._isAlignedWithPlayer(0.965) && distToPlayer < stats.fireRange;
+          if (distToPlayer < 70 || this._attackRunTime <= 0) {
+            this._startEvade();
+          } else if (distToPlayer > stats.fireRange * 1.35) {
+            this._setState(State.CHASE);
+          }
         }
         break;
       }
@@ -263,9 +294,11 @@ export class EnemyShip extends ShipBase {
     }
 
     // --- Desired direction ---
+    const kiteAway = this.state === State.ATTACK && stats.weapon === 'missile'
+      && playerAlive && distToPlayer < (stats.kiteRange || 600) * 0.8;
     if (this.state === State.EVADE) {
       this._desired.copy(this._evadeDir);
-    } else if (this.state === State.RETREAT && playerAlive) {
+    } else if ((this.state === State.RETREAT || kiteAway) && playerAlive) {
       this._desired.copy(this.position).sub(player.position).normalize();
     } else {
       this._desired.copy(target).sub(this.position);

@@ -23,7 +23,7 @@ import { UNIVERSE_SEED } from '../world/constants.js';
  *  - enemies far behind the player despawn silently
  */
 
-const GLOBAL_CAP = 6;
+const GLOBAL_CAP = 10;
 const SPAWN_MIN = 1600;
 const SPAWN_MAX = 2400;
 const DESPAWN_RANGE = 14000;
@@ -34,6 +34,8 @@ const TIER_SQUADS = {
   1: ['scout', 'scout'],
   2: ['fighter', 'scout', 'scout'],
   3: ['heavy', 'fighter', 'fighter'],
+  4: ['cruiser', 'fighter', 'fighter', 'scout'],
+  5: ['destroyer', 'heavy', 'fighter'],
 };
 
 export class EncounterDirector {
@@ -71,17 +73,29 @@ export class EncounterDirector {
       }
     }
 
-    // Free-space pirate territories.
-    for (let i = 0; i < 3; i++) {
+    // Free-space pirate territories (more of them, and tougher).
+    for (let i = 0; i < 5; i++) {
       const angle = rng.range(0, Math.PI * 2);
-      const distance = rng.range(50000, 200000);
+      const distance = rng.range(45000, 200000);
       this._addRegion(
         new THREE.Vector3(
           Math.cos(angle) * distance, rng.gaussian() * 6000, Math.sin(angle) * distance,
         ),
-        9000,
-        rng.chance(0.4) ? 3 : 2,
+        11000,
+        rng.chance(0.3) ? 4 : (rng.chance(0.5) ? 3 : 2),
         `territory ${i}`,
+      );
+    }
+
+    // A single Planet Destroyer patrol far out — a late-game boss encounter.
+    {
+      const angle = rng.range(0, Math.PI * 2);
+      const distance = rng.range(150000, 240000);
+      this._addRegion(
+        new THREE.Vector3(
+          Math.cos(angle) * distance, rng.gaussian() * 8000, Math.sin(angle) * distance,
+        ),
+        14000, 5, 'Destroyer patrol',
       );
     }
 
@@ -152,13 +166,15 @@ export class EncounterDirector {
       return;
     }
 
-    // Ambient wandering patrol: rare, only in quiet deep space.
+    // Ambient wandering patrol: keeps deep space from feeling empty. More
+    // frequent than before (playtest: "flew for ages and saw no one").
     this._ambientTimer += CHECK_INTERVAL;
     const nearPlanet = game.universe?.playerContext.planet;
-    if (liveTotal === 0 && !nearPlanet && this._ambientTimer > 90 && Math.random() < 0.045) {
+    if (liveTotal < 2 && !nearPlanet && this._ambientTimer > 30 && Math.random() < 0.16) {
       this._ambientTimer = 0;
       this._deploySquad({
-        center: player.position, radius: 6000, tier: 1, cooldown: 0, label: 'wanderers',
+        center: player.position, radius: 6000,
+        tier: this.rng.chance(0.4) ? 2 : 1, cooldown: 0, label: 'wanderers',
       });
     }
   }

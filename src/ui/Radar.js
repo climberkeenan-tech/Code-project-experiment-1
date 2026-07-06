@@ -22,6 +22,9 @@ const PLANET_COLORS = {
   rocky: '#9a938c',
 };
 
+/** Radar blip radius by enemy class — bigger threats read bigger. */
+const ENEMY_BLIP = { scout: 2.4, fighter: 2.8, heavy: 3.6, cruiser: 4.6, destroyer: 6.5 };
+
 export class Radar {
   /**
    * @param {import('../core/Game.js').Game} game
@@ -105,10 +108,10 @@ export class Radar {
       this._blip(ctx, half, `rgba(134, 231, 255, ${alpha.toFixed(2)})`, 2.6, true);
     }
 
-    // --- Enemies ---
+    // --- Enemies (blip scales with class threat) ---
     for (const enemy of game.enemies?.enemies ?? []) {
       this._toLocal(enemy.position, player);
-      const size2 = enemy.type === 'heavy' ? 3.6 : 2.6;
+      const size2 = ENEMY_BLIP[enemy.type] ?? 2.6;
       this._blip(ctx, half, 'rgba(255, 93, 108, 0.95)', size2, false);
     }
 

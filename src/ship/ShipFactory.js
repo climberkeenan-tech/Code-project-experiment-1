@@ -232,79 +232,156 @@ export function createPlayerShip() {
   return { group, engines, hardpoints, radius: 3.2, glowColor };
 }
 
+/** A boxy weapon/sensor pod, mirrored on both sides. Returns its anchors. */
+function addPods(group, material, { x, y, z, w, h, l }) {
+  const anchors = [];
+  const geom = cached(`pod:${w}:${h}:${l}`, () => new THREE.BoxGeometry(w, h, l));
+  for (const side of [-1, 1]) {
+    const pod = new THREE.Mesh(geom, material);
+    pod.position.set(side * x, y, z);
+    group.add(pod);
+    anchors.push(new THREE.Vector3(side * x, y, z - l / 2 - 0.1));
+  }
+  return anchors;
+}
+
 /**
  * Enemy ship classes. Each has a distinct silhouette and threat color so
- * players can read the danger level at a glance.
+ * players can read the danger level at a glance. Assembled by a per-type
+ * builder map (keys match ENEMY_TYPES) so adding a class is one entry.
  *
- * @param {'scout'|'fighter'|'heavy'} type
+ * @param {'scout'|'fighter'|'heavy'|'cruiser'|'destroyer'} type
  * @returns {ShipRig}
  */
 export function createEnemyShip(type) {
-  const group = new THREE.Group();
-  let rig;
-
-  if (type === 'scout') {
-    // Small, dart-like, single fin — fast and fragile.
-    const glowColor = new THREE.Color(5.0, 1.4, 0.5); // hot orange
-    const mats = createMaterials({ hullColor: 0x6e7787, accentColor: 0x3d2f2a, glowColor });
-    addFuselage(group, mats.hull, {
-      length: 3.2, rearRadius: 0.45, noseRadius: 0.16, flatten: 0.66, noseLength: 1.5,
-    });
-    addWing(group, mats.accent, {
-      span: 1.9, rootChordZ0: 0.1, rootChordZ1: 1.35, tipChordZ0: 1.2, tipChordZ1: 1.55,
-      thickness: 0.07, y: 0,
-    });
-    addFin(group, mats.accent, { height: 0.8, rootLength: 0.9, rake: 0.5, z: 0.7 });
-    const engines = addNacelles(group, mats.hull, mats.glow, {
-      x: 0.42, y: 0, z: 1.3, radius: 0.24, length: 1.1,
-    });
-    const hardpoints = addCannons(group, mats.accent, { x: 1.8, y: -0.04, z: 1.05, length: 0.9 });
-    rig = { group, engines, hardpoints, radius: 2.2, glowColor };
-  } else if (type === 'heavy') {
-    // Broad gunship: wide fuselage, twin fins, four engines.
-    const glowColor = new THREE.Color(5.2, 0.7, 0.9); // menacing red
-    const mats = createMaterials({ hullColor: 0x4c5361, accentColor: 0x27221f, glowColor });
-    addFuselage(group, mats.hull, {
-      length: 6.4, rearRadius: 1.1, noseRadius: 0.55, flatten: 0.55, noseLength: 1.9,
-    });
-    addCanopy(group, mats.glass, { z: -2.0, width: 0.5, height: 0.5, length: 1.2 });
-    addWing(group, mats.accent, {
-      span: 3.6, rootChordZ0: -0.9, rootChordZ1: 2.4, tipChordZ0: 1.4, tipChordZ1: 2.6,
-      thickness: 0.14, y: -0.12,
-    });
-    addFin(group, mats.accent, { height: 1.1, rootLength: 1.5, rake: 0.7, z: 2.6, x: 0.7 });
-    addFin(group, mats.accent, { height: 1.1, rootLength: 1.5, rake: 0.7, z: 2.6, x: -0.77 });
-    const enginesInner = addNacelles(group, mats.hull, mats.glow, {
-      x: 0.85, y: -0.1, z: 2.6, radius: 0.4, length: 1.9,
-    });
-    const enginesOuter = addNacelles(group, mats.hull, mats.glow, {
-      x: 1.65, y: -0.05, z: 2.7, radius: 0.32, length: 1.6,
-    });
-    const hardpoints = addCannons(group, mats.accent, { x: 3.4, y: -0.1, z: 1.5, length: 1.5 });
-    rig = { group, engines: [...enginesInner, ...enginesOuter], hardpoints, radius: 4.4, glowColor };
-  } else {
-    // 'fighter' — the baseline adversary, mirrored planform to the player.
-    const glowColor = new THREE.Color(4.6, 1.1, 0.4); // amber
-    const mats = createMaterials({ hullColor: 0x596273, accentColor: 0x2f2721, glowColor });
-    addFuselage(group, mats.hull, {
-      length: 4.4, rearRadius: 0.6, noseRadius: 0.26, flatten: 0.62, noseLength: 1.6,
-    });
-    addCanopy(group, mats.glass, { z: -1.05, width: 0.32, height: 0.4, length: 1.0 });
-    addWing(group, mats.accent, {
-      span: 2.7, rootChordZ0: 0.3, rootChordZ1: 1.9, tipChordZ0: -0.4, tipChordZ1: 0.9,
-      thickness: 0.09, y: -0.08, // forward-swept: instantly reads as hostile
-    });
-    addFin(group, mats.accent, { height: 0.9, rootLength: 1.05, rake: 0.5, z: 2.1 });
-    const engines = addNacelles(group, mats.hull, mats.glow, {
-      x: 0.72, y: 0, z: 1.5, radius: 0.3, length: 1.5,
-    });
-    const hardpoints = addCannons(group, mats.accent, { x: 2.55, y: -0.05, z: -0.1, length: 1.1 });
-    rig = { group, engines, hardpoints, radius: 3.0, glowColor };
-  }
-
+  const build = ENEMY_BUILDERS[type] || ENEMY_BUILDERS.fighter;
+  const rig = build();
   for (const child of rig.group.children) {
     child.castShadow = true;
     child.receiveShadow = true;
   }
   return rig;
 }
+
+const ENEMY_BUILDERS = {
+  // Small, dart-like, single fin — fast and fragile. Sized to be hittable.
+  scout() {
+    const group = new THREE.Group();
+    const glowColor = new THREE.Color(5.0, 1.4, 0.5); // hot orange
+    const mats = createMaterials({ hullColor: 0x6e7787, accentColor: 0x3d2f2a, glowColor });
+    addFuselage(group, mats.hull, {
+      length: 3.6, rearRadius: 0.5, noseRadius: 0.18, flatten: 0.66, noseLength: 1.6,
+    });
+    addWing(group, mats.accent, {
+      span: 2.2, rootChordZ0: 0.1, rootChordZ1: 1.4, tipChordZ0: 1.2, tipChordZ1: 1.6,
+      thickness: 0.08, y: 0,
+    });
+    addFin(group, mats.accent, { height: 0.85, rootLength: 0.95, rake: 0.5, z: 0.7 });
+    const engines = addNacelles(group, mats.hull, mats.glow, {
+      x: 0.46, y: 0, z: 1.45, radius: 0.26, length: 1.2,
+    });
+    const hardpoints = addCannons(group, mats.accent, { x: 2.05, y: -0.04, z: 1.05, length: 0.9 });
+    return { group, engines, hardpoints, radius: 3.0, glowColor };
+  },
+
+  // Baseline adversary, forward-swept planform reads instantly hostile.
+  fighter() {
+    const group = new THREE.Group();
+    const glowColor = new THREE.Color(4.6, 1.1, 0.4); // amber
+    const mats = createMaterials({ hullColor: 0x596273, accentColor: 0x2f2721, glowColor });
+    addFuselage(group, mats.hull, {
+      length: 4.6, rearRadius: 0.62, noseRadius: 0.26, flatten: 0.62, noseLength: 1.6,
+    });
+    addCanopy(group, mats.glass, { z: -1.05, width: 0.32, height: 0.4, length: 1.0 });
+    addWing(group, mats.accent, {
+      span: 2.8, rootChordZ0: 0.3, rootChordZ1: 1.9, tipChordZ0: -0.4, tipChordZ1: 0.9,
+      thickness: 0.1, y: -0.08,
+    });
+    addFin(group, mats.accent, { height: 0.95, rootLength: 1.05, rake: 0.5, z: 2.1 });
+    const engines = addNacelles(group, mats.hull, mats.glow, {
+      x: 0.74, y: 0, z: 1.55, radius: 0.31, length: 1.5,
+    });
+    const hardpoints = addCannons(group, mats.accent, { x: 2.65, y: -0.05, z: -0.1, length: 1.1 });
+    return { group, engines, hardpoints, radius: 3.2, glowColor };
+  },
+
+  // Broad gunship: wide fuselage, twin fins, four engines.
+  heavy() {
+    const group = new THREE.Group();
+    const glowColor = new THREE.Color(5.2, 0.7, 0.9); // menacing red
+    const mats = createMaterials({ hullColor: 0x4c5361, accentColor: 0x27221f, glowColor });
+    addFuselage(group, mats.hull, {
+      length: 6.6, rearRadius: 1.15, noseRadius: 0.58, flatten: 0.55, noseLength: 2.0,
+    });
+    addCanopy(group, mats.glass, { z: -2.0, width: 0.5, height: 0.5, length: 1.2 });
+    addWing(group, mats.accent, {
+      span: 3.8, rootChordZ0: -0.9, rootChordZ1: 2.4, tipChordZ0: 1.4, tipChordZ1: 2.6,
+      thickness: 0.15, y: -0.12,
+    });
+    addFin(group, mats.accent, { height: 1.1, rootLength: 1.5, rake: 0.7, z: 2.6, x: 0.7 });
+    addFin(group, mats.accent, { height: 1.1, rootLength: 1.5, rake: 0.7, z: 2.6, x: -0.77 });
+    const enginesInner = addNacelles(group, mats.hull, mats.glow, {
+      x: 0.9, y: -0.1, z: 2.7, radius: 0.42, length: 2.0,
+    });
+    const enginesOuter = addNacelles(group, mats.hull, mats.glow, {
+      x: 1.7, y: -0.05, z: 2.8, radius: 0.34, length: 1.7,
+    });
+    const hardpoints = addCannons(group, mats.accent, { x: 3.5, y: -0.1, z: 1.5, length: 1.5 });
+    return { group, engines: [...enginesInner, ...enginesOuter], hardpoints, radius: 4.6, glowColor };
+  },
+
+  // Missile Cruiser: bulky standoff platform with big side missile pods.
+  cruiser() {
+    const group = new THREE.Group();
+    const glowColor = new THREE.Color(3.4, 0.8, 5.0); // cold violet
+    const mats = createMaterials({ hullColor: 0x4a4658, accentColor: 0x241f30, glowColor });
+    addFuselage(group, mats.hull, {
+      length: 8.4, rearRadius: 1.35, noseRadius: 0.7, flatten: 0.7, noseLength: 2.2,
+    });
+    addCanopy(group, mats.glass, { z: -2.7, width: 0.55, height: 0.5, length: 1.3 });
+    addWing(group, mats.accent, {
+      span: 4.4, rootChordZ0: -0.6, rootChordZ1: 2.2, tipChordZ0: 0.8, tipChordZ1: 2.0,
+      thickness: 0.2, y: -0.1,
+    });
+    // Missile pods along the wings — the class's signature launch hardpoints.
+    const hardpoints = addPods(group, mats.accent, { x: 2.6, y: 0.05, z: 0.2, w: 0.7, h: 0.6, l: 2.6 });
+    addFin(group, mats.accent, { height: 1.4, rootLength: 1.8, rake: 0.9, z: 3.2, x: 0.9 });
+    addFin(group, mats.accent, { height: 1.4, rootLength: 1.8, rake: 0.9, z: 3.2, x: -0.98 });
+    const engines = addNacelles(group, mats.hull, mats.glow, {
+      x: 1.1, y: -0.05, z: 3.4, radius: 0.5, length: 2.2,
+    });
+    return { group, engines, hardpoints, radius: 6.5, glowColor };
+  },
+
+  // Planet Destroyer: a slow, colossal capital ship — a boss to avoid early.
+  destroyer() {
+    const group = new THREE.Group();
+    const glowColor = new THREE.Color(6.0, 0.5, 0.4); // deep angry red
+    const mats = createMaterials({ hullColor: 0x3a3f4a, accentColor: 0x1c1815, glowColor });
+    // Long central spine assembled from stacked fuselage segments.
+    addFuselage(group, mats.hull, {
+      length: 26, rearRadius: 3.4, noseRadius: 1.4, flatten: 0.62, noseLength: 6,
+    });
+    // Dorsal ridge + command tower.
+    const towerGeom = cached('destroyerTower', () => new THREE.BoxGeometry(2.2, 2.6, 5));
+    const tower = new THREE.Mesh(towerGeom, mats.accent);
+    tower.position.set(0, 2.0, 4);
+    group.add(tower);
+    addCanopy(group, mats.glass, { z: 1.8, width: 0.9, height: 0.7, length: 2.0 });
+    // Broad flat wings/sponsons bristling with weapon pods.
+    addWing(group, mats.accent, {
+      span: 12, rootChordZ0: -5, rootChordZ1: 7, tipChordZ0: 0, tipChordZ1: 5,
+      thickness: 0.6, y: -0.3,
+    });
+    const hardpoints = [
+      ...addPods(group, mats.accent, { x: 5.5, y: 0.4, z: -3, w: 1.4, h: 1.2, l: 3.4 }),
+      ...addPods(group, mats.accent, { x: 8.5, y: 0.2, z: 1, w: 1.2, h: 1.0, l: 3.0 }),
+    ];
+    addFin(group, mats.accent, { height: 4.2, rootLength: 6, rake: 3, z: 8, x: 2.4 });
+    addFin(group, mats.accent, { height: 4.2, rootLength: 6, rake: 3, z: 8, x: -2.8 });
+    // A bank of engines across the stern.
+    const e1 = addNacelles(group, mats.hull, mats.glow, { x: 2.2, y: 0, z: 12, radius: 1.3, length: 4 });
+    const e2 = addNacelles(group, mats.hull, mats.glow, { x: 5.0, y: -0.2, z: 12, radius: 1.1, length: 3.6 });
+    return { group, engines: [...e1, ...e2], hardpoints, radius: 26, glowColor };
+  },
+};

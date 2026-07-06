@@ -27,8 +27,16 @@ export class CombatSystem {
       if (ship === game.player) {
         this._onPlayerDestroyed();
       } else {
+        // Kill reward: credits scaled by enemy class (level).
+        if (byPlayer) {
+          const reward = ship.stats?.credits ?? 0;
+          game.player.credits += reward;
+          game.events.emit('enemy:killed', ship);
+          game.events.emit('combat:reward', {
+            credits: reward, name: ship.stats?.displayName ?? 'Hostile',
+          });
+        }
         game.enemies.remove(ship);
-        if (byPlayer) game.events.emit('enemy:killed', ship);
       }
     });
 
@@ -46,7 +54,10 @@ export class CombatSystem {
     const game = this.game;
     const player = game.player;
 
-    // Salvage tax: losing the ship costs a share of carried resources.
+    // Death economy: the ship and its hold are lost — mined ore (and, later,
+    // onboard crew) go down with it — but credits are banked ("in the cloud")
+    // and carry over. Legacy salvage counter still takes a tax.
+    player.inventory = {};
     player.resources = Math.floor(player.resources * 0.7);
 
     // Respawn at the universe spawn anchor, expressed in current render
