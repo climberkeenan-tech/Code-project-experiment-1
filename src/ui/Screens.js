@@ -34,7 +34,7 @@ export class Screens {
       <div class="tagline">Explore &nbsp;·&nbsp; Discover &nbsp;·&nbsp; Survive</div>
       <div class="prompt">Tap to Launch</div>
       <div class="controls-hint">${this._controlsHint()}</div>
-      <div class="build-tag">BUILD 8 — dreadnought · fleet commands · 4 hero ships</div>
+      <div class="build-tag">BUILD 9 — fast-loading ships (compressed models)</div>
     `;
     this.root.appendChild(el);
 
