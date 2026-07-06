@@ -733,3 +733,17 @@
 .shop-btn.primary { border-color: #ffd479; color: #ffd479; background: rgba(255, 212, 121, 0.12); }
 .shop-btn:active { background: rgba(134, 231, 255, 0.24); }
 .shop-btn.disabled { opacity: 0.4; }
+
+/* Build stamp on the start screen: makes "which version am I playing?"
+   answerable at a glance during playtests. */
+.build-tag {
+  position: absolute;
+  bottom: calc(14px + var(--safe-b, 0px));
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: rgba(134, 231, 255, 0.55);
+  text-transform: uppercase;
+}
