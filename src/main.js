@@ -3,6 +3,7 @@ import './ui/hud.css';
 import { Game } from './core/Game.js';
 import { PLAYER_SPAWN, SUN_POSITION } from './world/constants.js';
 import { PlayerShip } from './ship/PlayerShip.js';
+import { PLAYER_SHIP_BY_ID } from './ship/ShipFactory.js';
 import { loadModelShips } from './ship/ModelShips.js';
 import { EnemyManager } from './ai/EnemyManager.js';
 import { EncounterDirector } from './ai/EncounterDirector.js';
@@ -170,9 +171,8 @@ player.applyUpgrades();
 
 // Hand-modeled ships load async; hot-swap the hull if we're flying one.
 loadModelShips().then((protos) => {
-  const active = player.ships.active;
-  if ((active === 'explorer' && protos.gunship)
-    || (active === 'carrier' && protos.flagship)) player.refreshShip();
+  const variant = PLAYER_SHIP_BY_ID[player.ships.active];
+  if (variant?.model && protos[variant.model]) player.refreshShip();
 });
 
 game.start();

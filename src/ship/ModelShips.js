@@ -18,6 +18,13 @@ import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
  */
 
 const MODELS = {
+  // "Nebula Sentinel" — the starter ship (design 1 of 4 in the progression).
+  starter: {
+    url: 'models/starter.fbx',
+    targetLength: 9,
+    yaw: -Math.PI / 2, // Meshy convention: authored nose along -X
+    pitch: 0,
+  },
   // "Nebula Vanguard" gunship — the second ship in the progression.
   gunship: {
     url: 'models/gunship.fbx',

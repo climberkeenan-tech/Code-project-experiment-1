@@ -207,16 +207,19 @@ function buildMaterials({ hullColor, accentColor, glowColor }) {
  * extra engine pair, twin fins, and a per-tier livery.
  */
 export const PLAYER_SHIPS = [
-  { id: 'starter', name: 'SF-10 Sparrow', level: 10, cost: 0,
-    hull: 1, shield: 1, engine: 1, crew: 2,
+  // Design 1 of 4: the hand-modeled "Nebula Sentinel" (player-supplied
+  // Meshy asset, /models/starter.fbx — procedural fallback until loaded).
+  { id: 'starter', name: 'SF-10 Sentinel', level: 10, cost: 0,
+    hull: 1, shield: 1, engine: 1, crew: 2, model: 'starter',
     scale: 1, hullColor: 0xb9c6d6, accentColor: 0x24303f, glow: [0.9, 2.6, 5.2] },
   // The second ship: a hand-modeled gunship (player-supplied Meshy asset,
   // loaded async from /models/gunship.fbx — procedural fallback until ready).
   { id: 'explorer', name: 'SF-20 Nebula Gunship', level: 20, cost: 200,
     hull: 1.25, shield: 1.2, engine: 1.08, crew: 3, model: 'gunship',
     scale: 1.08, hullColor: 0xc9d4c8, accentColor: 0x2e4034, glow: [0.8, 3.2, 3.4] },
+  // Design 2 covers the 20–40 band: the Kestrel is an up-armored gunship.
   { id: 'interceptor', name: 'SF-30 Kestrel', level: 30, cost: 500,
-    hull: 1.5, shield: 1.45, engine: 1.18, crew: 3,
+    hull: 1.5, shield: 1.45, engine: 1.18, crew: 3, model: 'gunship', modelScale: 1.18,
     scale: 1.14, hullColor: 0xd6c9b9, accentColor: 0x4a3524, glow: [3.6, 2.2, 0.7] },
   { id: 'frigate', name: 'SF-50 Aegis', level: 50, cost: 1300,
     hull: 2.2, shield: 2.1, engine: 1.28, crew: 4, twinFin: true,
@@ -261,7 +264,7 @@ export function createPlayerShip(variantId = 'starter') {
   // Hand-modeled hulls (clone the loaded prototype; procedural fallback
   // below keeps working until the async load lands).
   if (v.model) {
-    const rig = buildModelRig(v.model, glowColor);
+    const rig = buildModelRig(v.model, glowColor, v.modelScale ?? 1);
     if (rig) return rig;
   }
 
@@ -336,23 +339,25 @@ function addPods(group, material, { x, y, z, w, h, l }) {
  * is still loading so the procedural recipe stays in charge.
  * @returns {ShipRig|null}
  */
-function buildModelRig(modelId, glowColor) {
+function buildModelRig(modelId, glowColor, scale = 1) {
   const proto = getModelProto(modelId);
   if (!proto) return null;
   const group = proto.clone(true);
+  if (scale !== 1) group.scale.multiplyScalar(scale);
   const b = proto.userData.shipBounds;
+  const W = b.width * scale;
 
   // Gameplay anchors derived from the normalized bounds: engine nozzles at
   // the stern, cannon muzzles ahead of the wing tips.
   const engines = [
-    new THREE.Vector3(-b.width * 0.16, 0, b.rearZ * 0.92),
-    new THREE.Vector3(b.width * 0.16, 0, b.rearZ * 0.92),
+    new THREE.Vector3(-W * 0.16, 0, b.rearZ * scale * 0.92),
+    new THREE.Vector3(W * 0.16, 0, b.rearZ * scale * 0.92),
   ];
   const hardpoints = [
-    new THREE.Vector3(-b.width * 0.34, 0, b.noseZ * 0.45),
-    new THREE.Vector3(b.width * 0.34, 0, b.noseZ * 0.45),
+    new THREE.Vector3(-W * 0.34, 0, b.noseZ * scale * 0.45),
+    new THREE.Vector3(W * 0.34, 0, b.noseZ * scale * 0.45),
   ];
-  return { group, engines, hardpoints, radius: b.length / 2.6, glowColor };
+  return { group, engines, hardpoints, radius: (b.length * scale) / 2.6, glowColor };
 }
 
 /**
@@ -440,8 +445,16 @@ const ENEMY_SCALE = {
  * red faction uses the same ships you do. Scale differentiates the threat.
  */
 const ENEMY_MODEL_MAP = {
+  // Light classes fly red Sentinels at escalating scale…
+  scout: { model: 'starter', scale: 0.85 },
+  fighter: { model: 'starter', scale: 1.05 },
+  heavy: { model: 'starter', scale: 1.5 },
+  // …mid classes fly red gunships…
+  cruiser: { model: 'gunship', scale: 1.35 },
+  destroyer: { model: 'gunship', scale: 2.1 },
   warship: { model: 'gunship', scale: 1.7 },     // red gunship, bigger than yours
-  redcarrier: { model: 'flagship', scale: 0.75 }, // red star destroyer, smaller than yours
+  // …and capitals fly red star destroyers.
+  redcarrier: { model: 'flagship', scale: 0.75 }, // smaller than your carrier
   apex: { model: 'flagship', scale: 1.25 },       // the apex: bigger than EVERYTHING
 };
 
