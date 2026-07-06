@@ -146,6 +146,7 @@ export class Universe {
     // --- Landed check: resting on a surface, slow enough to step out ---
     // (No atmosphere requirement: airless worlds are walkable too.)
     const grounded = context.planet !== null
+      && !player.statMult?.noLanding // the flagship never touches down
       && altitude < player.radius + 8
       && player.speed < 32
       && player.alive;

@@ -157,8 +157,10 @@ save.load();
 player.applyUpgrades();
 
 // Hand-modeled ships load async; hot-swap the hull if we're flying one.
-loadModelShips().then((proto) => {
-  if (proto && player.ships.active === 'explorer') player.refreshShip();
+loadModelShips().then((protos) => {
+  const active = player.ships.active;
+  if ((active === 'explorer' && protos.gunship)
+    || (active === 'carrier' && protos.flagship)) player.refreshShip();
 });
 
 game.start();

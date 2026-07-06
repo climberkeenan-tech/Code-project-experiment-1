@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Rng } from '../core/math/rng.js';
-import { getGunshipProto } from './ModelShips.js';
+import { getModelProto } from './ModelShips.js';
 
 /**
  * Procedural ship meshes.
@@ -233,8 +233,12 @@ export const PLAYER_SHIPS = [
   { id: 'battleship', name: 'SF-85 Warlord', level: 85, cost: 26000,
     hull: 7, shield: 5.5, engine: 1.05, crew: 6, turrets: 4, capital: 'battleship',
     scale: 1, hullColor: 0x8d97a8, accentColor: 0x33475f, glow: [1.0, 2.0, 5.0] },
+  // The flagship: a hand-modeled star-destroyer-class carrier. VASTLY larger
+  // than everything else (it stores whole ships in its side hangars) — and
+  // far too large to land: switch to a smaller ship for planetfall.
   { id: 'carrier', name: 'SF-110 Vanguard', level: 110, cost: 80000,
     hull: 11, shield: 8, engine: 0.85, crew: 8, turrets: 2, hangar: 4, capital: 'carrier',
+    model: 'flagship', noLanding: true,
     scale: 1, hullColor: 0xaab4c6, accentColor: 0x2a5246, glow: [0.8, 3.0, 4.6] },
 ];
 
@@ -256,8 +260,8 @@ export function createPlayerShip(variantId = 'starter') {
 
   // Hand-modeled hulls (clone the loaded prototype; procedural fallback
   // below keeps working until the async load lands).
-  if (v.model === 'gunship') {
-    const rig = buildGunshipRig(glowColor);
+  if (v.model) {
+    const rig = buildModelRig(v.model, glowColor);
     if (rig) return rig;
   }
 
@@ -327,13 +331,13 @@ function addPods(group, material, { x, y, z, w, h, l }) {
 }
 
 /**
- * Rig built from the loaded gunship model prototype. Geometry and textures
- * are shared across clones (player hull + escort copies). Returns null while
- * the model is still loading so the procedural recipe stays in charge.
+ * Rig built from a loaded model prototype. Geometry and textures are shared
+ * across clones (player hull + escort copies). Returns null while the model
+ * is still loading so the procedural recipe stays in charge.
  * @returns {ShipRig|null}
  */
-function buildGunshipRig(glowColor) {
-  const proto = getGunshipProto();
+function buildModelRig(modelId, glowColor) {
+  const proto = getModelProto(modelId);
   if (!proto) return null;
   const group = proto.clone(true);
   const b = proto.userData.shipBounds;

@@ -35,6 +35,11 @@ export class LandingSystem {
     game.events.on('player:died', () => this._disengage(false));
   }
 
+  /** True when only the hull size prevents landing (drives the HUD hint). */
+  get tooLarge() {
+    return !!this.game.player?.statMult?.noLanding;
+  }
+
   get eligible() {
     // Near any planet below the approach ceiling — atmosphere NOT required
     // (thin-atmosphere and airless worlds must be landable too; requiring
@@ -45,9 +50,22 @@ export class LandingSystem {
     return g.mode === 'flight'
       && g.player?.alive
       && !g.warp?.engaged
+      && !this.tooLarge
       && !!ctx?.planet
       && !ctx.grounded
       && ctx.altitude < APPROACH_CEILING;
+  }
+
+  /** Eligible-except-size: used to explain WHY the flagship can't land. */
+  get blockedBySize() {
+    const g = this.game;
+    const ctx = g.universe?.playerContext;
+    return this.tooLarge
+      && g.mode === 'flight'
+      && g.player?.alive
+      && !g.warp?.engaged
+      && !!ctx?.planet
+      && ctx.altitude < APPROACH_CEILING * 2;
   }
 
   update(dt) {
@@ -62,7 +80,8 @@ export class LandingSystem {
 
     // Landing hint on its own HUD line (never fights the on-foot prompt).
     const hint = this.active ? 'AUTO-LAND ENGAGED — L to cancel'
-      : this.eligible ? 'Press L — Auto-Land' : '';
+      : this.eligible ? 'Press L — Auto-Land'
+        : this.blockedBySize ? 'FLAGSHIP TOO LARGE TO LAND — switch ships (T → Ships)' : '';
     if (hint !== this._hint) {
       this._hint = hint;
       game.events.emit('landing:hint', hint);
