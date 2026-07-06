@@ -39,12 +39,46 @@ originals, behind a swappable storage adapter + pure `serialize()` snapshot with
 `rev`/`savedAt` (cloud-sync-ready; no backend yet). Autosaves on more events and
 flushes on tab hide/close.
 
-**Still TODO from the bible** (deferred, architecture left open): callable
-outpost **carrier with a first-person interior**; **owned-ship collection /
-buying new ships / ship levels** (upgrade multipliers exist; hull swapping does
-not); **slow planet rotation + day/night** (deferred deliberately — see Known
-Bugs for the collision-safe approach); **wildlife/fish**, **civilizations/
-buildings**; fleet command; deeper visual polish on the *player* ship.
+## ⭐⭐ Playtest-fix + bible-completion cycle (second pass)
+Driven by structured playtest feedback; all verified via the harness:
+1. **Combat readability**: enemies scaled up per class (scout 1.6×…), much
+   slower than the player, less HP/evade, brighter liveries, red bolts slowed
+   to 480, spawns closer (1000–1700u).
+2. **Cursor aim + assist** (`WeaponSystem`): bolts fly toward the mouse cursor
+   (camera-ray unproject); magnetic assist snaps to a lead-predicted intercept
+   within a ~7° cone; player dmg 13; 1.35× forgiving hitboxes; aim reticle +
+   lock highlight + white-hot hit flash in `TargetOverlay`.
+3. **Hyperdrive rework** (`WarpSystem`): now a *flight mode* — J charges then
+   cruises to ~42k u/s **along the nose** (steerable; camera dir = travel dir);
+   auto-drop only for planets genuinely ahead (~26° cone — the "sent me back to
+   the same planet" bug is fixed); soft assist bends the track onto the
+   B-locked planet; `PlayerShip` yields thrust/cap while engaged.
+4. **Auto-landing** (`src/ship/LandingSystem.js`): L (or LAND button) below
+   3,200u → autopilot bleeds tangential speed, descends, levels with terrain,
+   damage-free touchdown; strong stick input cancels; airless worlds landable
+   (grounded check de-atmosphered).
+5. **Living planets**: scatter density tripled; `src/world/ApproachScatter.js`
+   builds forests under the ship below 1,500u in flight (on-foot adopts the
+   patch on disembark); terrain sampler adds continent-scale forest patches on
+   vegetated worlds (biomes readable from orbit).
+6. **Ship collection** (`PLAYER_SHIPS`, Shop "Ships" tab): six ships Lv 10→100
+   (Sparrow→Sovereign), buy/select/swap hulls in place (`PlayerShip.setShip`),
+   catalog multipliers bake into hull/shield/engine + crew capacity; death
+   destroys only the ACTIVE ship, stored ships survive; persisted.
+7. **Day/night**: planets "spin" via sun-direction sweep around the polar axis
+   (9–16-min day) + the global light rotates by the local planet's spin —
+   geometry never rotates so collision stays exact; sun crosses the sky on foot.
+8. **Wildlife**: grazing critters (wander/flee, terrain-snapped) + circling
+   birds per scatter patch; airless worlds lifeless.
+9. **Civilizations** (`src/world/Settlements.js`): seeded settlements on three
+   atmosphere worlds — lit procedural buildings + beacon, discovery banner.
+
+**Still TODO from the bible**: callable outpost **carrier with a walk-in
+first-person interior** (shop is hailed via T as the interim); fish/ocean life;
+fleet command / autonomous escorts; research; diplomacy; multi-system galaxy;
+deeper player-ship visual polish. New controls: **L** auto-land, **J**
+hyperdrive, **B** cycle destination, **C** anti-missile; touch has LAND/WARP/
+NAV/DEFEND buttons.
 
 ---
 
