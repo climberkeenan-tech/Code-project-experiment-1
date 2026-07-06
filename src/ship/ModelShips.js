@@ -32,6 +32,15 @@ const MODELS = {
     yaw: -Math.PI / 2, // authored nose along -X → rotate onto -Z
     pitch: 0,
   },
+  // "Obsidian Dreadnought" — the mid capital: bridges the 50→100 gap.
+  // Big, but deliberately in the MIDDLE: it dwarfs the fighters yet is
+  // clearly outclassed by the flagship parked next to it.
+  dreadnought: {
+    url: 'models/dreadnought.fbx',
+    targetLength: 32,
+    yaw: -Math.PI / 2, // Meshy convention: authored nose along -X
+    pitch: 0,
+  },
   // "Imperial Star Destroyer"-style flagship — the fleet carrier.
   flagship: {
     url: 'models/flagship.fbx',
@@ -44,6 +53,17 @@ const MODELS = {
 const protos = {};
 const enemyProtos = {};
 let loadPromise = null;
+const loadListeners = [];
+
+/**
+ * Subscribe to per-model arrival (fires as EACH model finishes, not when
+ * all do — on a slow connection the fleet upgrades hull by hull). Models
+ * already loaded are replayed immediately.
+ */
+export function onModelLoaded(cb) {
+  loadListeners.push(cb);
+  for (const id of Object.keys(protos)) cb(id);
+}
 
 /** The normalized prototype for a model id, or null while loading/failed. */
 export function getModelProto(id) {
@@ -92,6 +112,7 @@ export function loadModelShips() {
         (obj) => {
           try {
             protos[id] = normalize(obj, spec);
+            for (const cb of loadListeners) cb(id);
           } catch (err) {
             console.warn(`[models] ${id} normalize failed:`, err);
           }

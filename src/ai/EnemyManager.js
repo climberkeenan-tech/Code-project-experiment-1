@@ -73,6 +73,11 @@ export class EnemyManager {
     enemy.dispose();
   }
 
+  /** Upgrade any live procedural stand-ins to their freshly loaded models. */
+  refreshModels() {
+    for (const enemy of this.enemies) enemy.refreshVisual();
+  }
+
   /** Count of enemies within a radius of a point (used by the director). */
   countNear(position, radius) {
     let count = 0;

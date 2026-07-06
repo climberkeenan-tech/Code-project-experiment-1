@@ -67,6 +67,9 @@ export class Input {
     /** Edge-triggered fleet launch/recall press. */
     this.fleetQueued = false;
 
+    /** Edge-triggered fleet focus-fire command press. */
+    this.fleetFocusQueued = false;
+
     /** Keys currently held, by KeyboardEvent.code. */
     this.keys = new Set();
 
@@ -141,6 +144,8 @@ export class Input {
     if (e.code === 'KeyL' && !e.repeat) this.landQueued = true;
     // Fleet launch/recall.
     if (e.code === 'KeyG' && !e.repeat) this.fleetQueued = true;
+    // Fleet focus-fire: order escorts onto your current target.
+    if (e.code === 'KeyV' && !e.repeat) this.fleetFocusQueued = true;
   }
 
   _onKeyUp(e) {
@@ -229,6 +234,13 @@ export class Input {
   consumeFleet() {
     const v = this.fleetQueued;
     this.fleetQueued = false;
+    return v;
+  }
+
+  /** Consume the edge-triggered fleet focus-fire press. */
+  consumeFleetFocus() {
+    const v = this.fleetFocusQueued;
+    this.fleetFocusQueued = false;
     return v;
   }
 

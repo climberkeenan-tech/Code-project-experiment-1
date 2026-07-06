@@ -23,6 +23,13 @@ export class FleetSystem {
     /** @type {EscortShip[]} */
     this.escorts = [];
 
+    /**
+     * Focus-fire order (V / ATTACK button): the hostile every escort must
+     * prioritize. null = free engage — the wing hunts on its own initiative.
+     * @type {import('../ai/EnemyShip.js').EnemyShip|null}
+     */
+    this.focusTarget = null;
+
     game.fleet = this;
 
     game.origin.onShift((delta) => {
@@ -52,6 +59,20 @@ export class FleetSystem {
     if (game.mode === 'flight' && game.input.consumeFleet()) {
       if (this.deployed) this.recall(false);
       else this.launch();
+    }
+
+    // Focus-fire command: V with a target under your aim (or the nearest
+    // hostile in front) directs the whole wing onto it; V with nothing in
+    // reach releases them back to free engage.
+    if (game.mode === 'flight' && game.input.consumeFleetFocus()) {
+      this._commandFocus();
+    }
+
+    // A dead or despawned focus target releases the wing automatically.
+    if (this.focusTarget
+      && (!this.focusTarget.alive || !game.enemies.enemies.includes(this.focusTarget))) {
+      this.focusTarget = null;
+      if (this.deployed) game.events.emit('fleet:free');
     }
 
     // Auto-recall when the flagship dives into an atmosphere.
@@ -95,6 +116,37 @@ export class FleetSystem {
     game.audio?.playTone?.({ type: 'sine', freq: 500, freqEnd: 840, duration: 0.3, gain: 0.16 });
   }
 
+  /**
+   * Resolve and issue the focus-fire order. Target priority: whatever the
+   * aim assist has locked, else the nearest hostile within command range.
+   */
+  _commandFocus() {
+    const game = this.game;
+    if (!this.deployed) {
+      game.events.emit('fleet:no-wing');
+      return;
+    }
+    let target = game.weapons?.assistTarget ?? null;
+    if (!target || !target.alive) {
+      target = null;
+      let bestSq = 3000 * 3000;
+      for (const enemy of game.enemies?.enemies ?? []) {
+        if (!enemy.alive) continue;
+        const d = enemy.position.distanceToSquared(game.player.position);
+        if (d < bestSq) { bestSq = d; target = enemy; }
+      }
+    }
+    if (target) {
+      this.focusTarget = target;
+      game.events.emit('fleet:focus', target);
+      game.audio?.playTone?.({ type: 'sine', freq: 620, freqEnd: 980, duration: 0.16, gain: 0.14 });
+    } else {
+      this.focusTarget = null;
+      game.events.emit('fleet:free');
+      game.audio?.playTone?.({ type: 'sine', freq: 560, freqEnd: 440, duration: 0.14, gain: 0.12 });
+    }
+  }
+
   /** Order the wing home. `instant` skips the fly-back (mode changes). */
   recall(instant) {
     if (!this.deployed) return;
@@ -114,7 +166,10 @@ export class FleetSystem {
     if (i !== -1) this.escorts.splice(i, 1);
     esc.dispose();
     this.game.audio?.playTone?.({ type: 'triangle', freq: 620, freqEnd: 880, duration: 0.12, gain: 0.12 });
-    if (this.escorts.length === 0) this.game.events.emit('fleet:recalled');
+    if (this.escorts.length === 0) {
+      this.focusTarget = null;
+      this.game.events.emit('fleet:recalled');
+    }
   }
 
   /** A wingman went down: the ship is permanently lost from the collection. */
@@ -132,5 +187,6 @@ export class FleetSystem {
   _despawnAll() {
     for (const esc of this.escorts) esc.dispose();
     this.escorts.length = 0;
+    this.focusTarget = null;
   }
 }

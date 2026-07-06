@@ -116,7 +116,10 @@ export class HUD {
     game.events.on('missile:destroyed', () => {
       this.showBanner('Missile Intercepted', '', 1.2);
     });
-    game.events.on('fleet:launched', (n) => this.showBanner('Fleet Launched', `${n} ships deployed — G recalls`, 2.5));
+    game.events.on('fleet:launched', (n) => this.showBanner('Fleet Launched', `${n} ships deployed — V directs fire · G recalls`, 2.8));
+    game.events.on('fleet:focus', (t) => this.showBanner('Fleet: Focus Fire', `wing attacking Lv${t.stats?.level ?? '?'} ${t.stats?.displayName ?? 'hostile'}`, 2.4));
+    game.events.on('fleet:free', () => this.showBanner('Fleet: Free Engage', 'wing hunting on its own', 2));
+    game.events.on('fleet:no-wing', () => this.showBanner('No Wing Deployed', 'press G to launch your fleet first', 2.2));
     game.events.on('fleet:recalled', () => this.showBanner('Fleet Docked', 'wing stored and repaired', 1.8));
     game.events.on('fleet:ship-lost', (id) => this.showBanner('Wingman Down', `${id} destroyed — removed from your fleet`, 3));
     game.events.on('fleet:denied', () => this.showBanner('No Hangar', 'a carrier-class ship is required to launch a fleet', 2.4));

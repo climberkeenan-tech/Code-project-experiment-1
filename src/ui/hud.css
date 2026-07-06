@@ -500,6 +500,14 @@
   color: var(--hud-accent);
 }
 .touch-btn.fleet:active, .touch-btn.fleet.held { background: rgba(134, 231, 255, 0.2); }
+.touch-btn.focus {
+  width: 56px; height: 56px; font-size: 9px;
+  left: calc(12px + var(--safe-l));
+  bottom: calc(406px + var(--safe-b));
+  color: var(--hud-warn);
+  border-color: rgba(255, 180, 84, 0.4);
+}
+.touch-btn.focus:active, .touch-btn.focus.held { background: rgba(255, 180, 84, 0.2); }
 .touch-btn.warp:active, .touch-btn.warp.held,
 .touch-btn.navcycle:active, .touch-btn.navcycle.held { background: rgba(134, 231, 255, 0.2); }
 .touch-btn.land:active, .touch-btn.land.held { background: rgba(143, 225, 176, 0.2); }
@@ -508,7 +516,7 @@
 .touch-btn.interact, .touch-btn.jump { display: none; }
 .touch-layer.foot .counter, .touch-layer.foot .warp,
 .touch-layer.foot .navcycle, .touch-layer.foot .land,
-.touch-layer.foot .fleet { display: none; }
+.touch-layer.foot .fleet, .touch-layer.foot .focus { display: none; }
 .touch-btn.interact {
   right: calc(146px + var(--safe-r));
   bottom: calc(46px + var(--safe-b));
