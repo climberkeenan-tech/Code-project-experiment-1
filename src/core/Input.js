@@ -57,6 +57,10 @@ export class Input {
     /** Edge-triggered anti-missile countermeasure press. */
     this.counterQueued = false;
 
+    /** Edge-triggered warp engage + cycle-target presses. */
+    this.warpQueued = false;
+    this.warpCycleQueued = false;
+
     /** Keys currently held, by KeyboardEvent.code. */
     this.keys = new Set();
 
@@ -121,6 +125,9 @@ export class Input {
     if (e.code === 'KeyT' && !e.repeat) this.tradeQueued = true;
     // Anti-missile countermeasure.
     if (e.code === 'KeyC' && !e.repeat) this.counterQueued = true;
+    // Warp: engage (J) + cycle destination (B).
+    if (e.code === 'KeyJ' && !e.repeat) this.warpQueued = true;
+    if (e.code === 'KeyB' && !e.repeat) this.warpCycleQueued = true;
   }
 
   _onKeyUp(e) {
@@ -179,6 +186,20 @@ export class Input {
   consumeCounter() {
     const v = this.counterQueued;
     this.counterQueued = false;
+    return v;
+  }
+
+  /** Consume the edge-triggered warp-engage press. */
+  consumeWarp() {
+    const v = this.warpQueued;
+    this.warpQueued = false;
+    return v;
+  }
+
+  /** Consume the edge-triggered warp-cycle-target press. */
+  consumeWarpCycle() {
+    const v = this.warpCycleQueued;
+    this.warpCycleQueued = false;
     return v;
   }
 

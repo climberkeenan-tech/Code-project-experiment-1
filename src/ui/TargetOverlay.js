@@ -72,6 +72,31 @@ export class TargetOverlay {
         this._drawArrow(ctx, p.x, p.y, 'rgba(255,170,60,0.95)');
       }
     }
+
+    // --- Warp destination marker (navigation aid) ---
+    const warp = game.warp;
+    if (warp && warp.target) {
+      const p = this._screen(warp.target.group.position, cam);
+      const style = 'rgba(134,231,255,0.95)';
+      if (!p.onScreen) {
+        this._drawArrow(ctx, p.x, p.y, style);
+        this._label(ctx, p.x, p.y, warp.target.descriptor.name, style, 16);
+      } else {
+        ctx.strokeStyle = style;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 12 + 2 * Math.sin(elapsed * 3), 0, Math.PI * 2);
+        ctx.stroke();
+        this._label(ctx, p.x, p.y - 20, warp.target.descriptor.name, style, 0);
+      }
+    }
+  }
+
+  _label(ctx, x, y, text, style, dy) {
+    ctx.font = '11px ui-monospace, monospace';
+    ctx.fillStyle = style;
+    ctx.textAlign = 'center';
+    ctx.fillText(text, x, y + dy);
   }
 
   /** Project a world point to screen; returns {x,y,onScreen}. */

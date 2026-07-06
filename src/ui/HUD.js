@@ -67,6 +67,7 @@ export class HUD {
       </div>
       <div class="hud-alert" data-el="alert"></div>
       <div class="hud-prompt" data-el="prompt"></div>
+      <div class="hud-warp" data-el="warp"></div>
 
       <canvas class="hud-radar" data-el="radar" width="236" height="236"></canvas>
 
@@ -230,6 +231,20 @@ export class HUD {
       alert = player.hull01 < 0.3 ? 'Hull Critical' : 'Shields Down';
     }
     this.setAlert(alert);
+
+    // Warp target readout (flight only).
+    const warp = this.game.warp;
+    if (!onfoot && warp && warp.target) {
+      const name = warp.target.descriptor.name;
+      if (warp.state === 'charging') {
+        this._setText('warp', `⟢ WARP CHARGING → ${name} ${Math.round(warp.charge01 * 100)}%`);
+      } else {
+        const d = Math.max(0, warp.targetDistance);
+        this._setText('warp', `◎ ${name} · ${formatDistance(d)} · [J] warp · [B] cycle`);
+      }
+    } else {
+      this._setText('warp', '');
+    }
 
     // Banner lifetime.
     if (this._bannerTimer > 0) {

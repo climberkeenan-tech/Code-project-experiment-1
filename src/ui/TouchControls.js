@@ -27,6 +27,8 @@ export class TouchControls {
       <button class="touch-btn fire" data-btn="fire">Fire</button>
       <button class="touch-btn boost" data-btn="boost">Boost</button>
       <button class="touch-btn counter" data-btn="counter">Defend</button>
+      <button class="touch-btn navcycle" data-btn="navcycle">Nav ▸</button>
+      <button class="touch-btn warp" data-btn="warp">Warp</button>
       <button class="touch-btn interact" data-btn="interact">Use</button>
       <button class="touch-btn jump" data-btn="jump">Jump</button>
     `;
@@ -91,8 +93,11 @@ export class TouchControls {
       btn.addEventListener('contextmenu', (e) => e.preventDefault());
     }
 
-    // Edge-triggered buttons: interact (mine/board) + counter (anti-missile).
-    for (const [name, flag] of [['interact', 'interactQueued'], ['counter', 'counterQueued']]) {
+    // Edge-triggered buttons.
+    for (const [name, flag] of [
+      ['interact', 'interactQueued'], ['counter', 'counterQueued'],
+      ['warp', 'warpQueued'], ['navcycle', 'warpCycleQueued'],
+    ]) {
       const btn = this.layer.querySelector(`[data-btn="${name}"]`);
       btn.addEventListener('pointerdown', (e) => {
         e.preventDefault();

@@ -326,6 +326,20 @@
 }
 .hud-prompt.visible { opacity: 1; }
 
+.hud-warp {
+  position: absolute;
+  left: 50%;
+  bottom: calc(150px + var(--safe-b));
+  transform: translateX(-50%);
+  font-family: var(--hud-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--hud-accent);
+  text-shadow: 0 0 8px var(--hud-accent-dim);
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
 /* ---------- radar (bottom-right) ---------- */
 
 .hud-radar {
@@ -444,9 +458,19 @@
 }
 .touch-btn.counter:active, .touch-btn.counter.held { background: rgba(255, 180, 84, 0.2); }
 
+.touch-btn.warp, .touch-btn.navcycle {
+  width: 56px; height: 56px; font-size: 9px;
+  color: var(--hud-accent);
+  left: calc(12px + var(--safe-l));
+}
+.touch-btn.warp { bottom: calc(150px + var(--safe-b)); }
+.touch-btn.navcycle { bottom: calc(214px + var(--safe-b)); }
+.touch-btn.warp:active, .touch-btn.warp.held,
+.touch-btn.navcycle:active, .touch-btn.navcycle.held { background: rgba(134, 231, 255, 0.2); }
+
 /* On-foot buttons: hidden in flight, shown when the layer is in foot mode. */
 .touch-btn.interact, .touch-btn.jump { display: none; }
-.touch-layer.foot .counter { display: none; }
+.touch-layer.foot .counter, .touch-layer.foot .warp, .touch-layer.foot .navcycle { display: none; }
 .touch-btn.interact {
   right: calc(146px + var(--safe-r));
   bottom: calc(46px + var(--safe-b));
