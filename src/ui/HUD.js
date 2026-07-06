@@ -101,6 +101,18 @@ export class HUD {
     game.events.on('combat:contact', ({ count }) => {
       this.showBanner('Hostile Contacts', `${count} signatures approaching`, 3);
     });
+    game.events.on('combat:reward', ({ credits, name }) => {
+      if (credits > 0) this.showBanner(`+${credits} cr`, `${name} destroyed`, 1.6);
+    });
+    this._missileWarn = false;
+    game.events.on('missile:incoming', () => {
+      this._missileWarn = true;
+      game.audio?.playTone?.({ type: 'square', freq: 880, freqEnd: 880, duration: 0.12, gain: 0.16 });
+    });
+    game.events.on('missile:cleared', () => { this._missileWarn = false; });
+    game.events.on('missile:destroyed', () => {
+      this.showBanner('Missile Intercepted', '', 1.2);
+    });
     game.events.on('onfoot:prompt', (text) => this.setPrompt(text));
     game.events.on('onfoot:entered', (planet) => {
       this.showBanner('Disembarked', `Exploring ${planet.descriptor.name} on foot`, 2.5);
@@ -204,9 +216,13 @@ export class HUD {
     }
     this._setText('contacts', contacts > 0 ? `▲ ${contacts} hostile${contacts > 1 ? 's' : ''}` : '');
 
-    // Alerts, most urgent first: terrain, hull, shields.
+    // Alerts, most urgent first: missiles, terrain, hull, shields.
     let alert = '';
-    if (near && near.planet && player.alive && near.altitude < 380) {
+    const incoming = this.game.weapons?.incoming?.length || 0;
+    if (this._missileWarn && incoming > 0 && player.alive) {
+      alert = incoming > 1 ? `⚠ ${incoming} Missiles — press C` : '⚠ Missile Incoming — press C';
+    }
+    if (!alert && near && near.planet && player.alive && near.altitude < 380) {
       this._radial.copy(player.position).sub(near.planet.group.position).normalize();
       if (player.velocity.dot(this._radial) < -70) alert = 'Terrain — Pull Up';
     }

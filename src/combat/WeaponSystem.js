@@ -27,6 +27,11 @@ const HEAT_COOL_RATE = 26;
 const OVERHEAT_LOCK_UNTIL = 30;
 const NEAR_MISS_DIST = 20;
 
+const MISSILE_SPEED = 300;
+const MISSILE_LIFETIME = 6;
+const MISSILE_TURN_RATE = 1.6; // rad/s homing agility (dodgeable)
+const MISSILE_HIT_RADIUS = 6; // proximity fuse
+
 export class WeaponSystem {
   /** @param {import('../core/Game.js').Game} game */
   constructor(game) {
@@ -37,15 +42,21 @@ export class WeaponSystem {
     const playerMat = boltMaterial(new THREE.Color(0.5, 2.2, 3.2));
     const enemyMat = boltMaterial(new THREE.Color(4.0, 0.35, 0.28)); // hostile red
 
+    // Missile visual: a stubby glowing warhead (long axis +Y, like bolts).
+    const missileGeom = buildMissileGeometry();
+    const missileMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(5.0, 1.6, 0.5) });
+
     /**
-     * Pool entries: { mesh, velocity, life, damage, fromPlayer, source,
-     * prevPos } — mesh carries current position.
+     * Pool entries carry a bolt mesh (player/enemy laser) AND a missile mesh;
+     * `mesh` is whichever is active this shot. Homing missiles set `homing`,
+     * `target`, `turnRate` and `isMissile`.
      */
     this.pool = new ObjectPool(
       () => ({
-        mesh: null, // assigned per-acquire (player/enemy material)
+        mesh: null, // assigned per-acquire
         playerMesh: new THREE.Mesh(geometry, playerMat),
         enemyMesh: new THREE.Mesh(geometry, enemyMat),
+        missileMesh: new THREE.Mesh(missileGeom, missileMat),
         velocity: new THREE.Vector3(),
         prevPos: new THREE.Vector3(),
         life: 0,
@@ -53,6 +64,11 @@ export class WeaponSystem {
         fromPlayer: false,
         source: null,
         nearMissDone: false,
+        homing: false,
+        isMissile: false,
+        target: null,
+        turnRate: 0,
+        speed: 0,
       }),
       (bolt) => {
         if (bolt.mesh) bolt.mesh.visible = false;
@@ -61,6 +77,9 @@ export class WeaponSystem {
     );
     // Attach all pooled meshes once.
     this.pool.free.forEach((bolt) => this._attachBolt(bolt));
+
+    /** Live homing missiles bearing on the player (read by HUD/overlay). */
+    this.incoming = [];
 
     // Player fire state.
     this.playerCooldown = 0;
@@ -91,7 +110,8 @@ export class WeaponSystem {
   _attachBolt(bolt) {
     bolt.playerMesh.visible = false;
     bolt.enemyMesh.visible = false;
-    this.game.engine.scene.add(bolt.playerMesh, bolt.enemyMesh);
+    bolt.missileMesh.visible = false;
+    this.game.engine.scene.add(bolt.playerMesh, bolt.enemyMesh, bolt.missileMesh);
   }
 
   get playerHeat01() {
@@ -104,23 +124,31 @@ export class WeaponSystem {
    * @param {THREE.Vector3} direction normalized firing direction
    * @param {object} opts { fromPlayer, damage, speed, source, inheritVel }
    */
-  fire(origin, direction, { fromPlayer, damage, speed, source, inheritVel = null }) {
+  fire(origin, direction, {
+    fromPlayer, damage, speed, source, inheritVel = null,
+    missile = false, target = null, life = null,
+  }) {
     const bolt = this.pool.acquire();
     if (!bolt.playerMesh.parent) this._attachBolt(bolt);
 
-    bolt.mesh = fromPlayer ? bolt.playerMesh : bolt.enemyMesh;
+    bolt.isMissile = missile;
+    bolt.homing = missile && !!target;
+    bolt.target = target;
+    bolt.turnRate = missile ? MISSILE_TURN_RATE : 0;
+    bolt.mesh = missile ? bolt.missileMesh : (fromPlayer ? bolt.playerMesh : bolt.enemyMesh);
     bolt.mesh.visible = true;
     bolt.mesh.position.copy(origin);
     bolt.prevPos.copy(origin);
     bolt.velocity.copy(direction).multiplyScalar(speed);
     if (inheritVel) bolt.velocity.add(inheritVel);
-    bolt.life = BOLT_LIFETIME;
+    bolt.speed = speed;
+    bolt.life = life ?? BOLT_LIFETIME;
     bolt.damage = damage;
     bolt.fromPlayer = fromPlayer;
     bolt.source = source;
     bolt.nearMissDone = false;
 
-    // Orient the bolt's long axis (+Y) along its travel direction.
+    // Orient the mesh's long axis (+Y) along its travel direction.
     bolt.mesh.quaternion.setFromUnitVectors(UP, this._dir.copy(bolt.velocity).normalize());
   }
 
@@ -129,6 +157,46 @@ export class WeaponSystem {
     this._updatePlayerFire(dt);
     this._updateEnemyFire(dt);
     this._updateBolts(dt);
+    this._trackIncoming();
+    if (this.game.input.consumeCounter()) this._fireCountermeasure();
+  }
+
+  /** Refresh the list of live homing missiles bearing on the player. */
+  _trackIncoming() {
+    const player = this.game.player;
+    const prevCount = this.incoming.length;
+    this.incoming.length = 0;
+    if (!player || !player.alive) return;
+    this.pool.forEachActive((bolt) => {
+      if (bolt.isMissile && !bolt.fromPlayer && bolt.target === player) {
+        this.incoming.push(bolt);
+      }
+    });
+    // Announce the first missile of a fresh wave (HUD warning + alarm).
+    if (this.incoming.length > prevCount && prevCount === 0) {
+      this.game.events.emit('missile:incoming', { count: this.incoming.length });
+    } else if (this.incoming.length === 0 && prevCount > 0) {
+      this.game.events.emit('missile:cleared');
+    }
+  }
+
+  /** Point-defense: destroy the nearest incoming missile. */
+  _fireCountermeasure() {
+    const player = this.game.player;
+    if (!player || this.incoming.length === 0) return;
+    let nearest = null;
+    let nearestSq = Infinity;
+    for (const m of this.incoming) {
+      const d = m.mesh.position.distanceToSquared(player.position);
+      if (d < nearestSq) { nearestSq = d; nearest = m; }
+    }
+    if (!nearest) return;
+    if (this.game.explosions) this.game.explosions.spawn(nearest.mesh.position, 0.6);
+    this.game.audio?.playNoise?.({ duration: 0.25, gain: 0.4, filterFreq: 2200, filterEnd: 300 });
+    this.game.events.emit('missile:destroyed');
+    this.pool.release(nearest);
+    const i = this.incoming.indexOf(nearest);
+    if (i !== -1) this.incoming.splice(i, 1);
   }
 
   // ------------------------------------------------------------------
@@ -189,22 +257,41 @@ export class WeaponSystem {
 
       enemy.fireCooldown = enemy.stats.fireInterval * (0.85 + Math.random() * 0.3);
 
-      // Fire from alternating hardpoints toward the player with lead + jitter.
       const hardpoint = enemy.hardpoints[Math.floor(Math.random() * enemy.hardpoints.length)];
       this._muzzle.copy(hardpoint).applyQuaternion(enemy.quaternion).add(enemy.position);
-
-      // Aim at a lead point so bolts are dangerous but dodgeable.
       const dist = this._toTarget.copy(player.position).sub(this._muzzle).length();
+
+      if (enemy.stats.weapon === 'missile') {
+        // Launch a homing missile roughly toward the player; it does the
+        // tracking. Fired forward-ish so it clears the hull, then homes.
+        enemy.getForward(this._dir);
+        this._toTarget.copy(player.position).sub(this._muzzle).normalize();
+        this._dir.lerp(this._toTarget, 0.5).normalize();
+        this.fire(this._muzzle, this._dir, {
+          fromPlayer: false,
+          damage: enemy.stats.damage,
+          speed: MISSILE_SPEED,
+          source: enemy,
+          inheritVel: enemy.velocity,
+          missile: true,
+          target: player,
+          life: MISSILE_LIFETIME,
+        });
+        this.game.audio?.playTone?.({ type: 'sawtooth', freq: 260, freqEnd: 520, duration: 0.3, gain: 0.16 });
+        continue;
+      }
+
+      // Lasers: aim at a lead point with per-class-accuracy jitter.
       const leadTime = dist / ENEMY_BOLT_SPEED;
       this._toTarget.copy(player.position)
-        .addScaledVector(player.velocity, leadTime * 0.85)
+        .addScaledVector(player.velocity, leadTime * 1.0)
         .sub(this._muzzle)
         .normalize();
 
-      // Angular jitter (~1.5°) keeps enemy fire fair.
+      const jitter = (1 - (enemy.stats.accuracy ?? 0.7)) * 0.06;
       this._jitterEuler.set(
-        (Math.random() - 0.5) * 0.05,
-        (Math.random() - 0.5) * 0.05,
+        (Math.random() - 0.5) * jitter,
+        (Math.random() - 0.5) * jitter,
         0,
       );
       this._jitterQuat.setFromEuler(this._jitterEuler);
@@ -240,6 +327,27 @@ export class WeaponSystem {
       if (bolt.life <= 0) {
         this.pool.release(bolt);
         return;
+      }
+
+      // Homing missiles bend their velocity toward the target, capped by a
+      // turn rate so a jinking player can shake or outrun them.
+      if (bolt.homing && bolt.target && bolt.target.alive) {
+        this._toTarget.copy(bolt.target.position).sub(bolt.mesh.position);
+        const dist = this._toTarget.length();
+        if (dist > 1e-3) {
+          this._toTarget.divideScalar(dist);
+          this._dir.copy(bolt.velocity).normalize();
+          const maxCos = Math.cos(bolt.turnRate * dt);
+          const dot = clamp(this._dir.dot(this._toTarget), -1, 1);
+          if (dot < maxCos) {
+            // Rotate _dir toward target by the turn-rate step (slerp-ish).
+            this._dir.lerp(this._toTarget, 1 - Math.cos(bolt.turnRate * dt)).normalize();
+          } else {
+            this._dir.copy(this._toTarget);
+          }
+          bolt.velocity.copy(this._dir).multiplyScalar(bolt.speed);
+          bolt.mesh.quaternion.setFromUnitVectors(UP, this._dir);
+        }
       }
 
       bolt.prevPos.copy(bolt.mesh.position);
@@ -283,7 +391,9 @@ export class WeaponSystem {
         const distSq = this._segmentPointDistanceSq(
           bolt.prevPos, bolt.mesh.position, player.position,
         );
-        if (distSq < player.radius * player.radius) {
+        // Missiles carry a proximity fuse (larger detonation radius).
+        const hitR = bolt.isMissile ? MISSILE_HIT_RADIUS : player.radius;
+        if (distSq < hitR * hitR) {
           this._applyHit(bolt, player, false);
           return true;
         }
@@ -325,6 +435,11 @@ export class WeaponSystem {
   _applyHit(bolt, target, targetIsEnemy) {
     const game = this.game;
     const result = target.applyDamage(bolt.damage);
+
+    // Missiles detonate with a visible blast on impact.
+    if (bolt.isMissile && game.explosions) {
+      game.explosions.spawn(bolt.mesh.position, 0.7);
+    }
 
     // Shield flash at the impact point.
     if (result.shieldAbsorbed > 0 && target.shieldFx) {
@@ -412,4 +527,13 @@ function boltMaterial(color) {
     depthWrite: false,
     side: THREE.DoubleSide,
   });
+}
+
+/** A small warhead: a cone body (tip along -Y so +Y is travel/back). */
+function buildMissileGeometry() {
+  const g = new THREE.ConeGeometry(0.45, 2.4, 6);
+  // Cone tip points +Y by default; travel orientation aligns +Y to velocity,
+  // so flip it so the pointed nose leads.
+  g.rotateX(Math.PI);
+  return g;
 }

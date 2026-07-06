@@ -54,6 +54,9 @@ export class Input {
     /** Edge-triggered "hail the outpost / open trade" press. */
     this.tradeQueued = false;
 
+    /** Edge-triggered anti-missile countermeasure press. */
+    this.counterQueued = false;
+
     /** Keys currently held, by KeyboardEvent.code. */
     this.keys = new Set();
 
@@ -116,6 +119,8 @@ export class Input {
     if (e.code === 'KeyE' && !e.repeat) this.interactQueued = true;
     // Hail the outpost exchange (open the shop).
     if (e.code === 'KeyT' && !e.repeat) this.tradeQueued = true;
+    // Anti-missile countermeasure.
+    if (e.code === 'KeyC' && !e.repeat) this.counterQueued = true;
   }
 
   _onKeyUp(e) {
@@ -167,6 +172,13 @@ export class Input {
   consumeTrade() {
     const v = this.tradeQueued;
     this.tradeQueued = false;
+    return v;
+  }
+
+  /** Consume the edge-triggered countermeasure press (true once per press). */
+  consumeCounter() {
+    const v = this.counterQueued;
+    this.counterQueued = false;
     return v;
   }
 
