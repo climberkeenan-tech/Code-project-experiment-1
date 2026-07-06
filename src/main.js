@@ -3,6 +3,7 @@ import './ui/hud.css';
 import { Game } from './core/Game.js';
 import { PLAYER_SPAWN, SUN_POSITION } from './world/constants.js';
 import { PlayerShip } from './ship/PlayerShip.js';
+import { loadModelShips } from './ship/ModelShips.js';
 import { EnemyManager } from './ai/EnemyManager.js';
 import { EncounterDirector } from './ai/EncounterDirector.js';
 import { WeaponSystem } from './combat/WeaponSystem.js';
@@ -154,6 +155,11 @@ const save = new SaveGame(game);
 save.load();
 // Bake restored upgrade multipliers into stat caps (shield capacity/regen).
 player.applyUpgrades();
+
+// Hand-modeled ships load async; hot-swap the hull if we're flying one.
+loadModelShips().then((proto) => {
+  if (proto && player.ships.active === 'explorer') player.refreshShip();
+});
 
 game.start();
 

@@ -232,6 +232,16 @@ export class PlayerShip extends ShipBase {
   }
 
   /**
+   * Rebuild the current hull in place (used when an async ship model
+   * finishes loading after the rig was built with the procedural fallback).
+   */
+  refreshShip() {
+    const id = this.ships.active;
+    this.ships.active = null; // defeat the same-id guard
+    this.setShip(id);
+  }
+
+  /**
    * Switch the active ship: swap the procedural hull, FX anchors, radius and
    * stat multipliers in place. The transform/velocity are untouched, so a
    * swap at the Exchange is seamless.

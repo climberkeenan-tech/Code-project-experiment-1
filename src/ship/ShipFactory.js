@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { Rng } from '../core/math/rng.js';
+import { getGunshipProto } from './ModelShips.js';
 
 /**
  * Procedural ship meshes.
@@ -208,8 +210,10 @@ export const PLAYER_SHIPS = [
   { id: 'starter', name: 'SF-10 Sparrow', level: 10, cost: 0,
     hull: 1, shield: 1, engine: 1, crew: 2,
     scale: 1, hullColor: 0xb9c6d6, accentColor: 0x24303f, glow: [0.9, 2.6, 5.2] },
-  { id: 'explorer', name: 'SF-20 Wayfarer', level: 20, cost: 600,
-    hull: 1.25, shield: 1.2, engine: 1.08, crew: 3,
+  // The second ship: a hand-modeled gunship (player-supplied Meshy asset,
+  // loaded async from /models/gunship.fbx — procedural fallback until ready).
+  { id: 'explorer', name: 'SF-20 Nebula Gunship', level: 20, cost: 600,
+    hull: 1.25, shield: 1.2, engine: 1.08, crew: 3, model: 'gunship',
     scale: 1.08, hullColor: 0xc9d4c8, accentColor: 0x2e4034, glow: [0.8, 3.2, 3.4] },
   { id: 'interceptor', name: 'SF-30 Kestrel', level: 30, cost: 1500,
     hull: 1.5, shield: 1.45, engine: 1.18, crew: 3,
@@ -249,6 +253,13 @@ export function createPlayerShip(variantId = 'starter') {
     accentColor: v.accentColor,
     glowColor,
   });
+
+  // Hand-modeled hulls (clone the loaded prototype; procedural fallback
+  // below keeps working until the async load lands).
+  if (v.model === 'gunship') {
+    const rig = buildGunshipRig(glowColor);
+    if (rig) return rig;
+  }
 
   // Capitals get dedicated silhouettes instead of the scaled fighter recipe.
   if (v.capital) {
@@ -313,6 +324,31 @@ function addPods(group, material, { x, y, z, w, h, l }) {
     anchors.push(new THREE.Vector3(side * x, y, z - l / 2 - 0.1));
   }
   return anchors;
+}
+
+/**
+ * Rig built from the loaded gunship model prototype. Geometry and textures
+ * are shared across clones (player hull + escort copies). Returns null while
+ * the model is still loading so the procedural recipe stays in charge.
+ * @returns {ShipRig|null}
+ */
+function buildGunshipRig(glowColor) {
+  const proto = getGunshipProto();
+  if (!proto) return null;
+  const group = proto.clone(true);
+  const b = proto.userData.shipBounds;
+
+  // Gameplay anchors derived from the normalized bounds: engine nozzles at
+  // the stern, cannon muzzles ahead of the wing tips.
+  const engines = [
+    new THREE.Vector3(-b.width * 0.16, 0, b.rearZ * 0.92),
+    new THREE.Vector3(b.width * 0.16, 0, b.rearZ * 0.92),
+  ];
+  const hardpoints = [
+    new THREE.Vector3(-b.width * 0.34, 0, b.noseZ * 0.45),
+    new THREE.Vector3(b.width * 0.34, 0, b.noseZ * 0.45),
+  ];
+  return { group, engines, hardpoints, radius: b.length / 2.6, glowColor };
 }
 
 /**
