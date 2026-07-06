@@ -56,6 +56,12 @@ export class ChaseCamera {
     const player = this.game.player;
     if (!player) return;
 
+    // On foot, the first-person camera owns game.engine.camera.
+    if (this.game.mode === 'onfoot') {
+      this.initialized = false; // re-seat smoothly when we re-board
+      return;
+    }
+
     if (!this.initialized) {
       this.smoothedQuat.copy(player.quaternion);
       this.smoothedPos.copy(player.position);

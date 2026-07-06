@@ -26,8 +26,14 @@ export class TouchControls {
       <div class="touch-stick" data-stick="thrust"><div class="knob"></div></div>
       <button class="touch-btn fire" data-btn="fire">Fire</button>
       <button class="touch-btn boost" data-btn="boost">Boost</button>
+      <button class="touch-btn interact" data-btn="interact">Use</button>
+      <button class="touch-btn jump" data-btn="jump">Jump</button>
     `;
     root.appendChild(this.layer);
+
+    // Switch the touch layer between flight and on-foot button sets.
+    game.events.on('onfoot:entered', () => this.layer.classList.add('foot'));
+    game.events.on('onfoot:left', () => this.layer.classList.remove('foot'));
 
     this.sticks = {
       steer: {
@@ -67,7 +73,8 @@ export class TouchControls {
       stick.zone.addEventListener('pointercancel', (e) => this._stickUp(name, e));
     }
 
-    for (const btnName of ['fire', 'boost']) {
+    // Held buttons (flight: fire/boost; foot: jump) toggle a virtual flag.
+    for (const btnName of ['fire', 'boost', 'jump']) {
       const btn = this.layer.querySelector(`[data-btn="${btnName}"]`);
       const set = (value) => {
         this.input.virtual[btnName] = value;
@@ -82,6 +89,18 @@ export class TouchControls {
       btn.addEventListener('pointercancel', () => set(false));
       btn.addEventListener('contextmenu', (e) => e.preventDefault());
     }
+
+    // Interact is edge-triggered (mine / board / disembark).
+    const interactBtn = this.layer.querySelector('[data-btn="interact"]');
+    interactBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.input.interactQueued = true;
+      interactBtn.classList.add('held');
+    });
+    const releaseInteract = () => interactBtn.classList.remove('held');
+    interactBtn.addEventListener('pointerup', releaseInteract);
+    interactBtn.addEventListener('pointercancel', releaseInteract);
+    interactBtn.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
   _stickDown(name, e) {
@@ -124,10 +143,23 @@ export class TouchControls {
 
   _applyStick(name, x, y) {
     const v = this.input.virtual;
+    const foot = this.game.mode === 'onfoot';
     if (name === 'steer') {
-      v.steer.x = x;
-      v.steer.y = y;
-      v.steer.active = true;
+      if (foot) {
+        // Left stick = walk (x strafe, y forward/back).
+        v.walk.x = x;
+        v.walk.y = y;
+        v.walk.active = true;
+      } else {
+        v.steer.x = x;
+        v.steer.y = y;
+        v.steer.active = true;
+      }
+    } else if (foot) {
+      // Right stick = look (yaw/pitch).
+      v.look.x = x;
+      v.look.y = y;
+      v.look.active = true;
     } else {
       v.throttle.value = -y; // drag up = thrust forward
       v.throttle.active = true;
@@ -142,11 +174,17 @@ export class TouchControls {
       v.steer.x = 0;
       v.steer.y = 0;
       v.steer.active = false;
+      v.walk.x = 0;
+      v.walk.y = 0;
+      v.walk.active = false;
     } else {
       v.throttle.value = 0;
       v.throttle.active = false;
       v.roll.value = 0;
       v.roll.active = false;
+      v.look.x = 0;
+      v.look.y = 0;
+      v.look.active = false;
     }
   }
 }

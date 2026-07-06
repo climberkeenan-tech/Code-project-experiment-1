@@ -34,7 +34,9 @@ export class HUD {
       <div class="hud-location">
         <div class="place" data-el="place">Deep Space</div>
         <div class="sub" data-el="placeSub"></div>
+        <div class="credits">&#9672; <span data-el="credits">0</span> cr</div>
         <div class="resources">&#9671; <span data-el="resources">0</span></div>
+        <div class="cargo" data-el="cargo"></div>
         <div class="contacts" data-el="contacts"></div>
       </div>
 
@@ -64,6 +66,7 @@ export class HUD {
         <div class="subtitle" data-el="bannerSub"></div>
       </div>
       <div class="hud-alert" data-el="alert"></div>
+      <div class="hud-prompt" data-el="prompt"></div>
 
       <canvas class="hud-radar" data-el="radar" width="236" height="236"></canvas>
 
@@ -97,6 +100,14 @@ export class HUD {
     });
     game.events.on('combat:contact', ({ count }) => {
       this.showBanner('Hostile Contacts', `${count} signatures approaching`, 3);
+    });
+    game.events.on('onfoot:prompt', (text) => this.setPrompt(text));
+    game.events.on('onfoot:entered', (planet) => {
+      this.showBanner('Disembarked', `Exploring ${planet.descriptor.name} on foot`, 2.5);
+    });
+    game.events.on('onfoot:left', () => {
+      this.setPrompt('');
+      this.showBanner('Aboard', 'Systems nominal', 1.8);
     });
   }
 
@@ -139,6 +150,14 @@ export class HUD {
     this.refs.alert.classList.toggle('active', text.length > 0);
   }
 
+  /** Show/hide the contextual interaction prompt (empty string hides). */
+  setPrompt(text) {
+    if (this._last.promptText === text) return;
+    this._last.promptText = text;
+    this.refs.prompt.textContent = text;
+    this.refs.prompt.classList.toggle('visible', text.length > 0);
+  }
+
   update(dt) {
     const player = this.game.player;
     if (!player) return;
@@ -147,6 +166,11 @@ export class HUD {
     this._setText('hullText', String(Math.ceil(player.hull)));
     this._setText('shieldText', String(Math.ceil(player.shield)));
     this._setText('resources', String(player.resources));
+    this._setText('credits', String(player.credits));
+    // Cargo (mined rocks) — only shown while there's something to carry.
+    const onfoot = this.game.mode === 'onfoot';
+    const cargo = this.game.onfoot ? this.game.onfoot.carrying : 0;
+    this._setText('cargo', cargo > 0 ? `▰ ${cargo} ore` : '');
     this._setBar('hullBar', player.hull01);
     this._setBar('shieldBar', player.shield01);
     this._setBar('boostBar', player.boost01);
@@ -157,7 +181,11 @@ export class HUD {
     // Location + altitude are supplied by the universe system when present.
     const uni = this.game.universe;
     const near = uni?.playerContext;
-    if (near && near.planet) {
+    if (onfoot && this.game.onfoot?.planet) {
+      this._setText('place', this.game.onfoot.planet.descriptor.name);
+      this._setText('placeSub', 'On Foot');
+      this._setText('alt', '');
+    } else if (near && near.planet) {
       this._setText('place', near.planet.descriptor.name);
       this._setText('placeSub', near.inAtmosphere ? 'Atmosphere' : 'Orbital Space');
       this._setText('alt', `ALT ${formatDistance(near.altitude)}`);

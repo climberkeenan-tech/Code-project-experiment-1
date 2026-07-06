@@ -64,10 +64,20 @@ export class PlayerShip extends ShipBase {
     /** Set by the universe system each frame (gravity, atmosphere etc). */
     this.gravity = new THREE.Vector3();
 
-    /** Resources collected from wrecks and discoveries. */
+    /** Resources collected from wrecks and discoveries (legacy soft counter). */
     this.resources = 0;
 
-    /** Permanent upgrade multipliers, improved by exploration finds. */
+    /** Universal currency: earned from kills + selling mined rocks. */
+    this.credits = 0;
+
+    /**
+     * Mined-rock inventory, keyed by rarity id → count. Filled on foot while
+     * mining, emptied when sold at a shop. Lost with the ship on death.
+     * @type {Record<string, number>}
+     */
+    this.inventory = {};
+
+    /** Permanent upgrade multipliers, improved by exploration finds + shop. */
     this.upgrades = { engine: 1, shield: 1, weapon: 1 };
 
     this.glow = new EngineGlow(this.visual, this.engines, this.glowColor);
@@ -91,6 +101,16 @@ export class PlayerShip extends ShipBase {
   update(dt, elapsed) {
     this.shieldFx.update(dt);
     if (!this.alive) return;
+
+    // Parked while the player is walking around on foot: hold station, bleed
+    // any residual drift, and skip the flight model entirely.
+    if (this.game.mode === 'onfoot') {
+      this.velocity.multiplyScalar(Math.exp(-6 * dt));
+      this.position.addScaledVector(this.velocity, dt);
+      this.updateDefense(dt);
+      return;
+    }
+
     const input = this.game.input.state;
 
     // --- Boost energy management (with engage hysteresis) ---

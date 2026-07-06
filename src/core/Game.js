@@ -66,6 +66,21 @@ export class Game {
     /** True while the start screen / death screen is up. */
     this.paused = true;
 
+    /**
+     * Control context: 'flight' (piloting the ship) or 'onfoot' (walking in
+     * first person on a surface / inside an outpost). Systems that only apply
+     * to one context early-return on the other. Set by the on-foot controller.
+     */
+    this.mode = 'flight';
+
+    /**
+     * The world-position the floating origin rebases around. Defaults to the
+     * player ship; the on-foot controller points it at the avatar so the
+     * world stays centered on whoever the camera is following.
+     * @type {import('three').Vector3 | null}
+     */
+    this.rebaseAnchor = null;
+
     this.engine.onUpdate((dt, elapsed) => this._update(dt, elapsed));
   }
 
@@ -86,9 +101,11 @@ export class Game {
       for (const { system } of this.systems) {
         if (system.update) system.update(dt, elapsed);
       }
-      // Rebase the world around the player after all movement settles.
-      if (this.player) {
-        this.origin.update(this.player.position);
+      // Rebase the world around the active anchor (player ship, or the
+      // on-foot avatar) after all movement settles.
+      const anchor = this.rebaseAnchor || (this.player && this.player.position);
+      if (anchor) {
+        this.origin.update(anchor);
       }
     }
 

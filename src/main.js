@@ -17,6 +17,7 @@ import { SpaceDust } from './environment/SpaceDust.js';
 import { createSpaceEnvironment } from './environment/SpaceEnvMap.js';
 import { Universe } from './world/Universe.js';
 import { generateUniverse } from './world/UniverseGenerator.js';
+import { OnFootController } from './onfoot/OnFootController.js';
 import { POISystem } from './exploration/POISystem.js';
 import { SaveGame } from './core/SaveGame.js';
 import { ShipSounds } from './audio/ShipSounds.js';
@@ -59,6 +60,9 @@ const universe = new Universe(game);
 game.universe = universe;
 generateUniverse(game, universe);
 game.addSystem('universe', universe);
+
+// --- On-foot: disembark, walk a planet surface in first person, mine ---
+game.addSystem('onfoot', new OnFootController(game));
 
 // --- Exploration: discoverable sites + persistence ---
 const poi = new POISystem(game);

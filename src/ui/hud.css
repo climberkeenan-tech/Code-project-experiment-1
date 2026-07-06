@@ -117,11 +117,25 @@
   margin-top: 2px;
   font-family: var(--hud-mono);
 }
-.hud-location .resources {
+.hud-location .credits {
   margin-top: 5px;
   font-size: 12px;
   font-family: var(--hud-mono);
-  color: var(--hud-boost);
+  color: #ffd479;
+  text-shadow: 0 0 8px rgba(255, 212, 121, 0.35);
+}
+.hud-location .resources {
+  margin-top: 3px;
+  font-size: 11px;
+  font-family: var(--hud-mono);
+  opacity: 0.75;
+  color: var(--hud-accent);
+}
+.hud-location .cargo {
+  margin-top: 3px;
+  font-size: 11px;
+  font-family: var(--hud-mono);
+  color: #8fe1b0;
 }
 .hud-location .contacts {
   margin-top: 4px;
@@ -280,6 +294,28 @@
 @keyframes alert-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
 .hud-alert.active { animation: alert-blink 0.9s linear infinite; }
 
+/* ---------- contextual interaction prompt (on foot) ---------- */
+
+.hud-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: calc(120px + var(--safe-b));
+  transform: translateX(-50%);
+  padding: 7px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--hud-accent-dim);
+  background: var(--hud-glass);
+  color: var(--hud-accent);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-shadow: 0 0 8px var(--hud-accent-faint);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  white-space: nowrap;
+}
+.hud-prompt.visible { opacity: 1; }
+
 /* ---------- radar (bottom-right) ---------- */
 
 .hud-radar {
@@ -386,6 +422,24 @@
   border-color: rgba(255, 212, 121, 0.4);
 }
 .touch-btn.boost:active, .touch-btn.boost.held { background: rgba(255, 212, 121, 0.2); }
+
+/* On-foot buttons: hidden in flight, shown when the layer is in foot mode. */
+.touch-btn.interact, .touch-btn.jump { display: none; }
+.touch-btn.interact {
+  right: calc(146px + var(--safe-r));
+  bottom: calc(46px + var(--safe-b));
+  width: 74px;
+  height: 74px;
+  color: #8fe1b0;
+  border-color: rgba(143, 225, 176, 0.4);
+}
+.touch-btn.interact:active, .touch-btn.interact.held { background: rgba(143, 225, 176, 0.2); }
+.touch-btn.jump {
+  right: calc(238px + var(--safe-r));
+  bottom: calc(30px + var(--safe-b));
+}
+.touch-layer.foot .fire, .touch-layer.foot .boost { display: none; }
+.touch-layer.foot .interact, .touch-layer.foot .jump { display: flex; }
 
 /* ---------- screens (start / death) ---------- */
 

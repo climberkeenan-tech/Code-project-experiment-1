@@ -30,6 +30,10 @@ export class Universe {
       altitude: Infinity,
       inAtmosphere: false,
       density: 0,
+      /** True when the ship is resting on a surface, slow enough to disembark. */
+      grounded: false,
+      /** The planet the ship is grounded on (for on-foot spawning). */
+      groundedPlanet: null,
     };
 
     this._gravity = new THREE.Vector3();
@@ -137,6 +141,17 @@ export class Universe {
     // --- Terrain collision ---
     if (altitude < player.radius && player.alive) {
       this._resolveGroundHit(player, planet, altitude, true);
+    }
+
+    // --- Landed check: resting on a surface, slow enough to step out ---
+    const grounded = context.inAtmosphere
+      && altitude < player.radius + 8
+      && player.speed < 32
+      && player.alive;
+    if (grounded !== context.grounded) {
+      context.grounded = grounded;
+      context.groundedPlanet = grounded ? planet : null;
+      game.events.emit(grounded ? 'player:can-disembark' : 'player:cannot-disembark', planet);
     }
   }
 
