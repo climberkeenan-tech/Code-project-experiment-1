@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { clamp } from '../core/math/noise.js';
 import { PLAYER_SPAWN } from '../world/constants.js';
+import { PLAYER_SHIP_BY_ID } from '../ship/ShipFactory.js';
 
 /**
  * Combat orchestration: death handling, ship-vs-ship ramming, respawn.
@@ -54,11 +55,18 @@ export class CombatSystem {
     const game = this.game;
     const player = game.player;
 
-    // Death economy: the ship and its hold are lost — mined ore (and, later,
-    // onboard crew) go down with it — but credits are banked ("in the cloud")
-    // and carry over. Legacy salvage counter still takes a tax.
+    // Death economy: the ACTIVE ship, its hold (mined ore) and onboard crew
+    // are lost; stored ships and banked credits survive. Legacy salvage
+    // counter still takes a tax.
     player.inventory = {};
     player.resources = Math.floor(player.resources * 0.7);
+    const lost = player.ships.active;
+    const i = player.ships.owned.indexOf(lost);
+    if (i !== -1) player.ships.owned.splice(i, 1);
+    if (player.ships.owned.length === 0) player.ships.owned.push('starter');
+    const cheapest = [...player.ships.owned]
+      .sort((a, b) => (PLAYER_SHIP_BY_ID[a]?.cost ?? 0) - (PLAYER_SHIP_BY_ID[b]?.cost ?? 0))[0];
+    if (cheapest !== lost) player.setShip(cheapest);
 
     // Respawn at the universe spawn anchor, expressed in current render
     // space (absolute = render + origin offset).

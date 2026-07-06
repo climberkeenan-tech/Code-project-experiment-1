@@ -1,4 +1,5 @@
 import { RARITY_IDS } from '../economy/Rarity.js';
+import { PLAYER_SHIP_BY_ID } from '../ship/ShipFactory.js';
 
 /**
  * Progression persistence.
@@ -86,6 +87,16 @@ export class SaveGame {
 
     if (Array.isArray(data.crew) && this.game.crew) this.game.crew.restore(data.crew);
 
+    // Ship collection (validate every id against the live catalog).
+    if (data.ships && Array.isArray(data.ships.owned)) {
+      const owned = data.ships.owned.filter((id) => PLAYER_SHIP_BY_ID[id]);
+      player.ships.owned = owned.length ? owned : ['starter'];
+      const active = PLAYER_SHIP_BY_ID[data.ships.active]
+        && player.ships.owned.includes(data.ships.active)
+        ? data.ships.active : player.ships.owned[0];
+      player.setShip(active);
+    }
+
     // Accept both the legacy `discovered` and the v2 `discoveredSites`.
     const sites = Array.isArray(data.discoveredSites) ? data.discoveredSites
       : Array.isArray(data.discovered) ? data.discovered : null;
@@ -106,6 +117,7 @@ export class SaveGame {
       crew: this.game.crew
         ? this.game.crew.roster.map((c) => ({ role: c.role, name: c.name, stars: c.stars }))
         : [],
+      ships: { owned: [...player.ships.owned], active: player.ships.active },
       discoveredSites: this.game.poi
         ? this.game.poi.sites.filter((s) => s.discovered).map((s) => s.id)
         : [],

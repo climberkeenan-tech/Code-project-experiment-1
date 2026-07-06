@@ -1,5 +1,6 @@
 import { RARITIES, rarityValue } from '../economy/Rarity.js';
 import { CrewManager, crewCost } from '../crew/CrewManager.js';
+import { PLAYER_SHIPS } from '../ship/ShipFactory.js';
 
 /**
  * Outpost Exchange — the economy sink.
@@ -54,6 +55,7 @@ export class Shop {
         <div class="shop-tabs">
           <button class="shop-tab" data-tab="sell">Sell Ore</button>
           <button class="shop-tab" data-tab="upgrades">Upgrades</button>
+          <button class="shop-tab" data-tab="ships">Ships</button>
           <button class="shop-tab" data-tab="crew">Crew</button>
           <button class="shop-tab" data-tab="repair">Repair</button>
         </div>
@@ -133,8 +135,27 @@ export class Shop {
     }
     if (this.tab === 'sell') this.refs.shopBody.innerHTML = this._renderSell();
     else if (this.tab === 'upgrades') this.refs.shopBody.innerHTML = this._renderUpgrades();
+    else if (this.tab === 'ships') this.refs.shopBody.innerHTML = this._renderShips();
     else if (this.tab === 'crew') this.refs.shopBody.innerHTML = this._renderCrew();
     else this.refs.shopBody.innerHTML = this._renderRepair();
+  }
+
+  _renderShips() {
+    const player = this.game.player;
+    return PLAYER_SHIPS.map((s) => {
+      const owned = player.ships.owned.includes(s.id);
+      const active = player.ships.active === s.id;
+      const afford = player.credits >= s.cost;
+      const btn = active ? `<button class="shop-btn disabled">Active</button>`
+        : owned ? `<button class="shop-btn" data-action="selectShip" data-arg="${s.id}">Select</button>`
+          : `<button class="shop-btn ${afford ? 'primary' : 'disabled'}" data-action="buyShip" data-arg="${s.id}">Buy · ${s.cost} cr</button>`;
+      return `
+        <div class="shop-row">
+          <span class="shop-row-name">${s.name} <small>Lv ${s.level}</small></span>
+          <span class="shop-row-meta">hull ×${s.hull} · shd ×${s.shield} · eng ×${s.engine} · crew ${s.crew}</span>
+          ${btn}
+        </div>`;
+    }).join('');
   }
 
   _renderSell() {
@@ -248,7 +269,29 @@ export class Shop {
     else if (action === 'repair') this._repair();
     else if (action === 'hireCrew') this._hireCrew(Number(arg));
     else if (action === 'fireCrew') this._fireCrew(Number(arg));
+    else if (action === 'buyShip') this._buyShip(arg);
+    else if (action === 'selectShip') this._selectShip(arg);
     this._render();
+  }
+
+  _buyShip(id) {
+    const player = this.game.player;
+    const variant = PLAYER_SHIPS.find((s) => s.id === id);
+    if (!variant || player.ships.owned.includes(id)) return;
+    if (player.credits < variant.cost) { this._deny(); return; }
+    player.credits -= variant.cost;
+    player.ships.owned.push(id);
+    player.setShip(id); // new purchase becomes the active ship
+    this._chime();
+    this.game.events.emit('shop:purchase');
+  }
+
+  _selectShip(id) {
+    const player = this.game.player;
+    if (!player.ships.owned.includes(id)) { this._deny(); return; }
+    player.setShip(id);
+    this._chime();
+    this.game.events.emit('shop:purchase');
   }
 
   _hireCrew(index) {

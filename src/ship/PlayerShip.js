@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ShipBase } from './ShipBase.js';
-import { createPlayerShip } from './ShipFactory.js';
+import { createPlayerShip, PLAYER_SHIP_BY_ID } from './ShipFactory.js';
 import { EngineGlow } from '../fx/EngineGlow.js';
 import { ShieldEffect } from '../fx/ShieldEffect.js';
 import { damp, clamp, lerp } from '../core/math/noise.js';
@@ -83,6 +83,13 @@ export class PlayerShip extends ShipBase {
     /** Permanent upgrade multipliers, improved by exploration finds + shop. */
     this.upgrades = { engine: 1, shield: 1, weapon: 1 };
 
+    /**
+     * Ship collection (bible: bought ships are kept; the active one is lost
+     * on destruction). `statMult` mirrors the active catalog entry.
+     */
+    this.ships = { owned: ['starter'], active: 'starter' };
+    this.statMult = PLAYER_SHIP_BY_ID.starter;
+
     this.glow = new EngineGlow(this.visual, this.engines, this.glowColor);
     this.shieldFx = new ShieldEffect(this.object3D, this.radius * 1.4);
 
@@ -160,7 +167,7 @@ export class PlayerShip extends ShipBase {
 
     if (!warping) {
       // --- Thrust ---
-      const engineMult = this.upgrades.engine;
+      const engineMult = this.upgrades.engine * (this.statMult.engine ?? 1);
       const boostAccel = this.boostActive ? TUNING.boostAccelMult : 1;
       const forwardAccel = input.throttle >= 0
         ? input.throttle * TUNING.accelForward
@@ -180,7 +187,7 @@ export class PlayerShip extends ShipBase {
       const dampingRate = input.brake ? TUNING.brakeDamping : TUNING.damping;
       this.velocity.multiplyScalar(Math.exp(-dampingRate * dt));
 
-      const maxSpeed = TUNING.baseMaxSpeed * this.envSpeedScale * this.upgrades.engine
+      const maxSpeed = TUNING.baseMaxSpeed * this.envSpeedScale * engineMult
         * (this.boostActive ? TUNING.boostMaxMult : 1);
       const speed = this.velocity.length();
       if (speed > maxSpeed) {
@@ -207,18 +214,54 @@ export class PlayerShip extends ShipBase {
   }
 
   /**
-   * Re-derive stat caps from the current upgrade multipliers. Engine/weapon
-   * multipliers are read live each frame, but shield capacity/regen must be
-   * baked into the defense model here. Call after load and after any purchase.
+   * Re-derive stat caps from upgrade multipliers × the active ship's catalog
+   * multipliers. Call after load, after any purchase, and after a ship swap.
    */
   applyUpgrades() {
-    const shieldMult = this.upgrades.shield;
-    const prevMax = this.shieldMax;
-    this.shieldMax = Math.round(100 * shieldMult);
-    this.shieldRegenRate = 10 * shieldMult;
-    // Top up proportionally so an upgrade never leaves the bar over-full.
-    if (this.shieldMax > prevMax) this.shield += this.shieldMax - prevMax;
+    const v = this.statMult;
+    const prevShieldMax = this.shieldMax;
+    const prevHullMax = this.hullMax;
+    this.shieldMax = Math.round(100 * this.upgrades.shield * v.shield);
+    this.shieldRegenRate = 10 * this.upgrades.shield;
+    this.hullMax = Math.round(100 * v.hull);
+    // Top up by the capacity gained so an upgrade never leaves bars over-full.
+    if (this.shieldMax > prevShieldMax) this.shield += this.shieldMax - prevShieldMax;
+    if (this.hullMax > prevHullMax) this.hull += this.hullMax - prevHullMax;
     this.shield = Math.min(this.shield, this.shieldMax);
+    this.hull = Math.min(this.hull, this.hullMax);
+  }
+
+  /**
+   * Switch the active ship: swap the procedural hull, FX anchors, radius and
+   * stat multipliers in place. The transform/velocity are untouched, so a
+   * swap at the Exchange is seamless.
+   * @param {string} id catalog id (must be owned; ownership enforced by shop)
+   */
+  setShip(id) {
+    const v = PLAYER_SHIP_BY_ID[id];
+    if (!v || this.ships.active === id) return;
+    this.ships.active = id;
+    this.statMult = v;
+
+    // Swap the visual rig (old glow sprites live inside the old visual group).
+    this.object3D.remove(this.visual);
+    this.object3D.remove(this.shieldFx.mesh);
+    this.shieldFx.dispose();
+
+    const rig = createPlayerShip(id);
+    this.visual = rig.group;
+    this.object3D.add(this.visual);
+    this.radius = rig.radius;
+    this.engines = rig.engines;
+    this.hardpoints = rig.hardpoints;
+    this.glowColor = rig.glowColor;
+    this.glow = new EngineGlow(this.visual, this.engines, this.glowColor);
+    this.shieldFx = new ShieldEffect(this.object3D, this.radius * 1.4);
+
+    this.applyUpgrades();
+    this.hull = this.hullMax;
+    this.shield = this.shieldMax;
+    this.game.events.emit('ship:changed', v);
   }
 
   /** Fraction accessors for the HUD. */

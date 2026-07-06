@@ -198,15 +198,47 @@ function buildMaterials({ hullColor, accentColor, glowColor }) {
 }
 
 /**
- * The player's ship: a sleek twin-engine interceptor.
+ * Player ship catalog — the bible's ship-progression ladder (levels 10→100).
+ * Owned ships form a collection; the active one is lost on destruction while
+ * stored ones survive. Stat multipliers scale hull/shield/engine off the
+ * baseline; `crew` is the roster capacity; visuals escalate via scale, an
+ * extra engine pair, twin fins, and a per-tier livery.
+ */
+export const PLAYER_SHIPS = [
+  { id: 'starter', name: 'SF-10 Sparrow', level: 10, cost: 0,
+    hull: 1, shield: 1, engine: 1, crew: 2,
+    scale: 1, hullColor: 0xb9c6d6, accentColor: 0x24303f, glow: [0.9, 2.6, 5.2] },
+  { id: 'explorer', name: 'SF-20 Wayfarer', level: 20, cost: 600,
+    hull: 1.25, shield: 1.2, engine: 1.08, crew: 3,
+    scale: 1.08, hullColor: 0xc9d4c8, accentColor: 0x2e4034, glow: [0.8, 3.2, 3.4] },
+  { id: 'interceptor', name: 'SF-30 Kestrel', level: 30, cost: 1500,
+    hull: 1.5, shield: 1.45, engine: 1.18, crew: 3,
+    scale: 1.14, hullColor: 0xd6c9b9, accentColor: 0x4a3524, glow: [3.6, 2.2, 0.7] },
+  { id: 'frigate', name: 'SF-50 Aegis', level: 50, cost: 4200,
+    hull: 2.2, shield: 2.1, engine: 1.28, crew: 4, twinFin: true,
+    scale: 1.26, hullColor: 0xaebfd4, accentColor: 0x22344d, glow: [1.2, 2.2, 5.4] },
+  { id: 'battlecruiser', name: 'SF-70 Bastion', level: 70, cost: 12500,
+    hull: 3.4, shield: 3.1, engine: 1.38, crew: 5, twinFin: true, quadEngines: true,
+    scale: 1.42, hullColor: 0x9aa8bd, accentColor: 0x40274d, glow: [3.2, 1.2, 5.2] },
+  { id: 'sovereign', name: 'SF-100 Sovereign', level: 100, cost: 42000,
+    hull: 5.2, shield: 4.6, engine: 1.5, crew: 7, twinFin: true, quadEngines: true,
+    scale: 1.62, hullColor: 0xd8dde6, accentColor: 0x9a7b2e, glow: [4.6, 3.4, 1.0] },
+];
+
+export const PLAYER_SHIP_BY_ID = Object.fromEntries(PLAYER_SHIPS.map((s) => [s.id, s]));
+
+/**
+ * The player's ship, built from a catalog variant (default: the starter).
+ * @param {string} [variantId]
  * @returns {ShipRig}
  */
-export function createPlayerShip() {
+export function createPlayerShip(variantId = 'starter') {
+  const v = PLAYER_SHIP_BY_ID[variantId] ?? PLAYER_SHIPS[0];
   const group = new THREE.Group();
-  const glowColor = new THREE.Color(0.9, 2.6, 5.2); // hot blue, HDR
+  const glowColor = new THREE.Color(...v.glow);
   const mats = createMaterials({
-    hullColor: 0xb9c6d6,
-    accentColor: 0x24303f,
+    hullColor: v.hullColor,
+    accentColor: v.accentColor,
     glowColor,
   });
 
@@ -218,18 +250,34 @@ export function createPlayerShip() {
     span: 2.9, rootChordZ0: -0.5, rootChordZ1: 1.7, tipChordZ0: 1.15, tipChordZ1: 1.85,
     thickness: 0.09, y: -0.1,
   });
-  addFin(group, mats.accent, { height: 0.95, rootLength: 1.15, rake: 0.55, z: 2.25 });
+  if (v.twinFin) {
+    addFin(group, mats.accent, { height: 0.95, rootLength: 1.15, rake: 0.55, z: 2.25, x: 0.5 });
+    addFin(group, mats.accent, { height: 0.95, rootLength: 1.15, rake: 0.55, z: 2.25, x: -0.57 });
+  } else {
+    addFin(group, mats.accent, { height: 0.95, rootLength: 1.15, rake: 0.55, z: 2.25 });
+  }
   const engines = addNacelles(group, mats.hull, mats.glow, {
     x: 0.78, y: -0.02, z: 1.55, radius: 0.34, length: 1.7,
   });
+  if (v.quadEngines) {
+    engines.push(...addNacelles(group, mats.hull, mats.glow, {
+      x: 1.35, y: 0.05, z: 1.65, radius: 0.26, length: 1.4,
+    }));
+  }
   const hardpoints = addCannons(group, mats.accent, { x: 2.75, y: -0.06, z: 1.0, length: 1.3 });
+
+  const k = v.scale;
+  if (k !== 1) {
+    group.scale.setScalar(k);
+    for (const hp of hardpoints) hp.multiplyScalar(k);
+  }
 
   for (const child of group.children) {
     child.castShadow = true;
     child.receiveShadow = true;
   }
 
-  return { group, engines, hardpoints, radius: 3.2, glowColor };
+  return { group, engines, hardpoints, radius: 3.2 * k, glowColor };
 }
 
 /** A boxy weapon/sensor pod, mirrored on both sides. Returns its anchors. */

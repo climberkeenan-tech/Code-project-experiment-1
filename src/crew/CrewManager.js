@@ -31,8 +31,6 @@ export class CrewManager {
     this.game = game;
     /** @type {Array<{id:number, role:string, name:string, stars:number}>} */
     this.roster = [];
-    /** Max simultaneous crew (grows with bigger ships later). */
-    this.capacity = 3;
 
     this._gunnerCooldown = 0;
     this._muzzle = new THREE.Vector3();
@@ -49,6 +47,11 @@ export class CrewManager {
 
   get engineer() { return this.roster.find((c) => c.role === 'engineer') || null; }
   get gunner() { return this.roster.find((c) => c.role === 'gunner') || null; }
+
+  /** Roster capacity follows the active ship (bigger ships, bigger crews). */
+  get capacity() {
+    return this.game.player?.statMult?.crew ?? 3;
+  }
 
   hire(recruit) {
     if (this.roster.length >= this.capacity) return false;
