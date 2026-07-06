@@ -13,6 +13,9 @@
     "three": "^0.170.0"
   },
   "devDependencies": {
+    "@gltf-transform/cli": "^4.4.1",
+    "@gltf-transform/extensions": "^4.4.1",
+    "fbx2gltf": "^0.9.7-p1",
     "playwright-core": "^1.61.1",
     "vite": "^6.0.0"
   }

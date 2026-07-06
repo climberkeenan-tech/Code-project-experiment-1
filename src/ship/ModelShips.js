@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
 /**
  * Hand-authored ship models (player-supplied Meshy assets).
@@ -20,14 +21,14 @@ import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 const MODELS = {
   // "Nebula Sentinel" — the starter ship (design 1 of 4 in the progression).
   starter: {
-    url: 'models/starter.fbx',
+    url: 'models-glb/starter.glb',
     targetLength: 9,
     yaw: -Math.PI / 2, // Meshy convention: authored nose along -X
     pitch: 0,
   },
   // "Nebula Vanguard" gunship — the second ship in the progression.
   gunship: {
-    url: 'models/gunship.fbx',
+    url: 'models-glb/gunship.glb',
     targetLength: 11,
     yaw: -Math.PI / 2, // authored nose along -X → rotate onto -Z
     pitch: 0,
@@ -36,14 +37,14 @@ const MODELS = {
   // Big, but deliberately in the MIDDLE: it dwarfs the fighters yet is
   // clearly outclassed by the flagship parked next to it.
   dreadnought: {
-    url: 'models/dreadnought.fbx',
+    url: 'models-glb/dreadnought.glb',
     targetLength: 32,
     yaw: -Math.PI / 2, // Meshy convention: authored nose along -X
     pitch: 0,
   },
   // "Imperial Star Destroyer"-style flagship — the fleet carrier.
   flagship: {
-    url: 'models/flagship.fbx',
+    url: 'models-glb/flagship.glb',
     targetLength: 60, // vast: ~7x a fighter, dwarfs everything it stores
     yaw: -Math.PI / 2, // Meshy convention (verified on the turntable)
     pitch: 0,
@@ -104,14 +105,15 @@ export function getEnemyModelProto(id) {
 /** Kick off (or join) loading of all registered models. */
 export function loadModelShips() {
   if (loadPromise) return loadPromise;
-  const loader = new FBXLoader();
+  const loader = new GLTFLoader();
+  loader.setMeshoptDecoder(MeshoptDecoder);
   loadPromise = Promise.all(Object.entries(MODELS).map(([id, spec]) =>
     new Promise((resolve) => {
       loader.load(
         spec.url,
-        (obj) => {
+        (gltf) => {
           try {
-            protos[id] = normalize(obj, spec);
+            protos[id] = normalize(gltf.scene, spec);
             for (const cb of loadListeners) cb(id);
           } catch (err) {
             console.warn(`[models] ${id} normalize failed:`, err);
