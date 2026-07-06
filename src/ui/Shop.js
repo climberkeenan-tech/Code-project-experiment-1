@@ -1,4 +1,5 @@
 import { RARITIES, rarityValue } from '../economy/Rarity.js';
+import { CrewManager, crewCost } from '../crew/CrewManager.js';
 
 /**
  * Outpost Exchange — the economy sink.
@@ -27,6 +28,8 @@ export class Shop {
     this.game = game;
     this.isOpen = false;
     this.tab = 'sell';
+    /** Rotating recruit pool for the Crew tab. */
+    this.recruits = [];
 
     const root = document.getElementById('ui-root');
 
@@ -51,6 +54,7 @@ export class Shop {
         <div class="shop-tabs">
           <button class="shop-tab" data-tab="sell">Sell Ore</button>
           <button class="shop-tab" data-tab="upgrades">Upgrades</button>
+          <button class="shop-tab" data-tab="crew">Crew</button>
           <button class="shop-tab" data-tab="repair">Repair</button>
         </div>
         <div class="shop-body" data-el="shopBody"></div>
@@ -94,6 +98,7 @@ export class Shop {
 
   open() {
     if (this.isOpen || this.game.paused) return; // never over start/death screens
+    if (this.recruits.length === 0) this._refillRecruits();
     this.isOpen = true;
     this.game.paused = true;
     this._setFab(false);
@@ -128,6 +133,7 @@ export class Shop {
     }
     if (this.tab === 'sell') this.refs.shopBody.innerHTML = this._renderSell();
     else if (this.tab === 'upgrades') this.refs.shopBody.innerHTML = this._renderUpgrades();
+    else if (this.tab === 'crew') this.refs.shopBody.innerHTML = this._renderCrew();
     else this.refs.shopBody.innerHTML = this._renderRepair();
   }
 
@@ -172,6 +178,46 @@ export class Shop {
     }).join('');
   }
 
+  _refillRecruits() {
+    this.recruits = Array.from({ length: 4 }, () => CrewManager.makeRecruit());
+  }
+
+  _stars(n) {
+    return '★'.repeat(n) + '<span style="opacity:.3">' + '★'.repeat(5 - n) + '</span>';
+  }
+
+  _renderCrew() {
+    const crew = this.game.crew;
+    const roster = crew ? crew.roster : [];
+    const cap = crew ? crew.capacity : 0;
+
+    const hired = roster.length
+      ? roster.map((c) => `
+        <div class="shop-row">
+          <span class="shop-row-name">${cap ? '' : ''}${cname(c.role)} <small>${c.name}</small></span>
+          <span class="shop-row-meta">${this._stars(c.stars)}</span>
+          <button class="shop-btn" data-action="fireCrew" data-arg="${c.id}">Dismiss</button>
+        </div>`).join('')
+      : `<div class="shop-empty">No crew aboard. Hire an Engineer to auto-repair, or a Gunner to auto-fire.</div>`;
+
+    const full = roster.length >= cap;
+    const recruits = this.recruits.map((r, i) => {
+      const cost = crewCost(r.stars);
+      const afford = this.game.player.credits >= cost && !full;
+      return `
+        <div class="shop-row">
+          <span class="shop-row-name">${cname(r.role)} <small>${r.name}</small></span>
+          <span class="shop-row-meta">${this._stars(r.stars)}</span>
+          <button class="shop-btn ${afford ? '' : 'disabled'}" data-action="hireCrew" data-arg="${i}">
+            ${full ? 'Full' : `Hire · ${cost} cr`}
+          </button>
+        </div>`;
+    }).join('');
+
+    return `<div class="shop-section">Aboard (${roster.length}/${cap})</div>${hired}
+      <div class="shop-section">Available Recruits</div>${recruits}`;
+  }
+
   _renderRepair() {
     const player = this.game.player;
     const missing = Math.ceil(player.hullMax - player.hull);
@@ -200,7 +246,30 @@ export class Shop {
     else if (action === 'sellAll') this._sellAll();
     else if (action === 'upgrade') this._upgrade(arg);
     else if (action === 'repair') this._repair();
+    else if (action === 'hireCrew') this._hireCrew(Number(arg));
+    else if (action === 'fireCrew') this._fireCrew(Number(arg));
     this._render();
+  }
+
+  _hireCrew(index) {
+    const crew = this.game.crew;
+    const recruit = this.recruits[index];
+    if (!crew || !recruit) return;
+    const cost = crewCost(recruit.stars);
+    if (this.game.player.credits < cost || crew.roster.length >= crew.capacity) { this._deny(); return; }
+    if (!crew.hire(recruit)) { this._deny(); return; }
+    this.game.player.credits -= cost;
+    this.recruits.splice(index, 1);
+    if (this.recruits.length < 2) this._refillRecruits();
+    this._chime();
+    this.game.events.emit('shop:purchase');
+  }
+
+  _fireCrew(id) {
+    if (!this.game.crew) return;
+    this.game.crew.fire(id);
+    this._chime();
+    this.game.events.emit('crew:changed');
   }
 
   _sell(rarityId) {
@@ -258,4 +327,9 @@ export class Shop {
   _deny() {
     this.game.audio?.playTone?.({ type: 'square', freq: 180, freqEnd: 120, duration: 0.16, gain: 0.12 });
   }
+}
+
+/** Display name for a crew role. */
+function cname(role) {
+  return role === 'engineer' ? 'Engineer' : role === 'gunner' ? 'Gunner' : role;
 }

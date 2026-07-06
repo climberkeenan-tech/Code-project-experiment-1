@@ -84,6 +84,8 @@ export class SaveGame {
       }
     }
 
+    if (Array.isArray(data.crew) && this.game.crew) this.game.crew.restore(data.crew);
+
     // Accept both the legacy `discovered` and the v2 `discoveredSites`.
     const sites = Array.isArray(data.discoveredSites) ? data.discoveredSites
       : Array.isArray(data.discovered) ? data.discovered : null;
@@ -101,6 +103,9 @@ export class SaveGame {
       credits: player.credits,
       inventory: { ...player.inventory },
       upgrades: player.upgrades,
+      crew: this.game.crew
+        ? this.game.crew.roster.map((c) => ({ role: c.role, name: c.name, stars: c.stars }))
+        : [],
       discoveredSites: this.game.poi
         ? this.game.poi.sites.filter((s) => s.discovered).map((s) => s.id)
         : [],

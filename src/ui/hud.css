@@ -663,6 +663,14 @@
 .shop-total { border-top: 1px solid var(--hud-accent-dim); margin-top: 6px; border-bottom: none; }
 .ore-dot { width: 12px; height: 12px; border-radius: 3px; box-shadow: 0 0 8px currentColor; }
 .shop-empty { padding: 26px 8px; text-align: center; font-size: 12px; opacity: 0.6; line-height: 1.6; }
+.shop-section {
+  margin: 12px 2px 4px;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+.shop-section:first-child { margin-top: 2px; }
 
 .shop-btn {
   min-width: 118px;

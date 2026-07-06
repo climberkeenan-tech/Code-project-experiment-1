@@ -7,6 +7,7 @@ import { EnemyManager } from './ai/EnemyManager.js';
 import { EncounterDirector } from './ai/EncounterDirector.js';
 import { WeaponSystem } from './combat/WeaponSystem.js';
 import { CombatSystem } from './combat/CombatSystem.js';
+import { CrewManager } from './crew/CrewManager.js';
 import { Pickups } from './combat/Pickups.js';
 import { Explosions } from './fx/Explosions.js';
 import { ChaseCamera } from './camera/ChaseCamera.js';
@@ -87,6 +88,9 @@ game.weapons = weapons;
 game.addSystem('weapons', weapons);
 
 game.addSystem('combat', new CombatSystem(game));
+
+// --- Crew: engineer repairs, gunner auto-fires (fires pooled bolts) ---
+game.addSystem('crew', new CrewManager(game));
 
 const explosions = new Explosions(game);
 game.explosions = explosions;
