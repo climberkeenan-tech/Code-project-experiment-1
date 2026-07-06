@@ -246,6 +246,15 @@ function addPods(group, material, { x, y, z, w, h, l }) {
 }
 
 /**
+ * Playtest fix: enemies read too small at combat distance. Each class gets a
+ * uniform scale-up applied to the whole rig — the group is scaled (cached
+ * geometry untouched), the hardpoints are scaled to match (they're used in
+ * world-space math without the group transform), and the collision radius
+ * grows with it, making ships both more visible and easier to hit.
+ */
+const ENEMY_SCALE = { scout: 1.6, fighter: 1.5, heavy: 1.4, cruiser: 1.35, destroyer: 1.0 };
+
+/**
  * Enemy ship classes. Each has a distinct silhouette and threat color so
  * players can read the danger level at a glance. Assembled by a per-type
  * builder map (keys match ENEMY_TYPES) so adding a class is one entry.
@@ -256,6 +265,12 @@ function addPods(group, material, { x, y, z, w, h, l }) {
 export function createEnemyShip(type) {
   const build = ENEMY_BUILDERS[type] || ENEMY_BUILDERS.fighter;
   const rig = build();
+  const k = ENEMY_SCALE[type] ?? 1.4;
+  if (k !== 1) {
+    rig.group.scale.setScalar(k);
+    for (const hp of rig.hardpoints) hp.multiplyScalar(k);
+    rig.radius *= k;
+  }
   for (const child of rig.group.children) {
     child.castShadow = true;
     child.receiveShadow = true;
@@ -268,7 +283,7 @@ const ENEMY_BUILDERS = {
   scout() {
     const group = new THREE.Group();
     const glowColor = new THREE.Color(5.0, 1.4, 0.5); // hot orange
-    const mats = createMaterials({ hullColor: 0x6e7787, accentColor: 0x3d2f2a, glowColor });
+    const mats = createMaterials({ hullColor: 0x97a3b8, accentColor: 0x9a4b2e, glowColor });
     addFuselage(group, mats.hull, {
       length: 3.6, rearRadius: 0.5, noseRadius: 0.18, flatten: 0.66, noseLength: 1.6,
     });
@@ -288,7 +303,7 @@ const ENEMY_BUILDERS = {
   fighter() {
     const group = new THREE.Group();
     const glowColor = new THREE.Color(4.6, 1.1, 0.4); // amber
-    const mats = createMaterials({ hullColor: 0x596273, accentColor: 0x2f2721, glowColor });
+    const mats = createMaterials({ hullColor: 0x8792ab, accentColor: 0xa35a2a, glowColor });
     addFuselage(group, mats.hull, {
       length: 4.6, rearRadius: 0.62, noseRadius: 0.26, flatten: 0.62, noseLength: 1.6,
     });
@@ -309,7 +324,7 @@ const ENEMY_BUILDERS = {
   heavy() {
     const group = new THREE.Group();
     const glowColor = new THREE.Color(5.2, 0.7, 0.9); // menacing red
-    const mats = createMaterials({ hullColor: 0x4c5361, accentColor: 0x27221f, glowColor });
+    const mats = createMaterials({ hullColor: 0x7d8798, accentColor: 0x8f3b2b, glowColor });
     addFuselage(group, mats.hull, {
       length: 6.6, rearRadius: 1.15, noseRadius: 0.58, flatten: 0.55, noseLength: 2.0,
     });
@@ -334,7 +349,7 @@ const ENEMY_BUILDERS = {
   cruiser() {
     const group = new THREE.Group();
     const glowColor = new THREE.Color(3.4, 0.8, 5.0); // cold violet
-    const mats = createMaterials({ hullColor: 0x4a4658, accentColor: 0x241f30, glowColor });
+    const mats = createMaterials({ hullColor: 0x837b9c, accentColor: 0x6a4fae, glowColor });
     addFuselage(group, mats.hull, {
       length: 8.4, rearRadius: 1.35, noseRadius: 0.7, flatten: 0.7, noseLength: 2.2,
     });
@@ -357,7 +372,7 @@ const ENEMY_BUILDERS = {
   destroyer() {
     const group = new THREE.Group();
     const glowColor = new THREE.Color(6.0, 0.5, 0.4); // deep angry red
-    const mats = createMaterials({ hullColor: 0x3a3f4a, accentColor: 0x1c1815, glowColor });
+    const mats = createMaterials({ hullColor: 0x6b7382, accentColor: 0x66302a, glowColor });
     // Long central spine assembled from stacked fuselage segments.
     addFuselage(group, mats.hull, {
       length: 26, rearRadius: 3.4, noseRadius: 1.4, flatten: 0.62, noseLength: 6,

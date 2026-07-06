@@ -52,15 +52,32 @@ export class TargetOverlay {
     const focal = (this.h / 2) / Math.tan((cam.fov * Math.PI / 180) / 2);
 
     // --- Hostiles ---
+    const assist = game.weapons?.assistTarget ?? null;
     for (const enemy of game.enemies?.enemies ?? []) {
+      if (enemy.hitFlash > 0) enemy.hitFlash -= dt;
       const dist = enemy.position.distanceTo(cam.position);
       if (dist > MAX_RANGE) continue;
       const p = this._screen(enemy.position, cam);
       if (p.onScreen) {
-        this._drawBox(ctx, p.x, p.y, enemy, dist, focal, elapsed);
+        this._drawBox(ctx, p.x, p.y, enemy, dist, focal, elapsed, enemy === assist);
       } else {
         this._drawArrow(ctx, p.x, p.y, 'rgba(255,90,105,0.9)');
       }
+    }
+
+    // --- Aim reticle: follows the cursor so "shoot where I point" is visible ---
+    const mouse = game.input.mouse;
+    if (mouse.active && !game.input.touchActive) {
+      const style = assist ? 'rgba(255,120,130,0.95)' : 'rgba(134,231,255,0.85)';
+      ctx.strokeStyle = style;
+      ctx.fillStyle = style;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(mouse.px, mouse.py, assist ? 11 : 8, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(mouse.px, mouse.py, 1.6, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     // --- Incoming missiles ---
@@ -118,12 +135,16 @@ export class TargetOverlay {
     return { onScreen: false, x: (x * 0.5 + 0.5) * this.w, y: (-y * 0.5 + 0.5) * this.h };
   }
 
-  _drawBox(ctx, sx, sy, enemy, dist, focal, elapsed) {
-    const pixR = Math.max(10, Math.min(240, (enemy.radius / dist) * focal * 1.7));
+  _drawBox(ctx, sx, sy, enemy, dist, focal, elapsed, locked = false) {
+    const pixR = Math.max(14, Math.min(240, (enemy.radius / dist) * focal * 1.7));
     const isBoss = enemy.type === 'destroyer';
     const pulse = isBoss ? 0.6 + 0.4 * Math.sin(elapsed * 6) : 1;
-    ctx.strokeStyle = `rgba(255,90,105,${(0.9 * pulse).toFixed(2)})`;
-    ctx.lineWidth = isBoss ? 2.4 : 1.6;
+    // White-hot flash on a confirmed hit; bright solid when aim-locked.
+    const flashing = (enemy.hitFlash ?? 0) > 0;
+    ctx.strokeStyle = flashing ? 'rgba(255,245,235,1)'
+      : locked ? 'rgba(255,150,160,1)'
+        : `rgba(255,90,105,${(0.9 * pulse).toFixed(2)})`;
+    ctx.lineWidth = flashing ? 3.2 : locked ? 2.6 : isBoss ? 2.4 : 1.6;
 
     // Corner brackets.
     const c = pixR * 0.4;
@@ -172,9 +193,9 @@ export class TargetOverlay {
     ctx.rotate(ang);
     ctx.fillStyle = style;
     ctx.beginPath();
-    ctx.moveTo(10, 0);
-    ctx.lineTo(-6, -6);
-    ctx.lineTo(-6, 6);
+    ctx.moveTo(14, 0);
+    ctx.lineTo(-9, -8);
+    ctx.lineTo(-9, 8);
     ctx.closePath();
     ctx.fill();
     ctx.restore();

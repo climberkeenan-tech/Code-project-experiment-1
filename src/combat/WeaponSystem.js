@@ -19,9 +19,14 @@ import { clamp } from '../core/math/noise.js';
 
 const BOLT_LIFETIME = 1.6;
 const PLAYER_BOLT_SPEED = 950;
-const ENEMY_BOLT_SPEED = 620;
+const ENEMY_BOLT_SPEED = 480; // slow enough to read and dodge
 const PLAYER_FIRE_INTERVAL = 0.13;
-const PLAYER_DAMAGE = 9;
+const PLAYER_DAMAGE = 13;
+/** Player-bolt hit forgiveness: enemies are easier to hit than their mesh. */
+const HIT_FORGIVENESS = 1.35;
+/** Aim-assist cone half-angle (radians) and range. */
+const ASSIST_CONE = 0.12;
+const ASSIST_RANGE = 1600;
 const HEAT_PER_SHOT = 5.5;
 const HEAT_COOL_RATE = 26;
 const OVERHEAT_LOCK_UNTIL = 30;
@@ -86,6 +91,12 @@ export class WeaponSystem {
     this.playerHeat = 0;
     this.overheated = false;
     this._muzzleIndex = 0;
+
+    /** Enemy currently captured by aim assist (drawn highlighted by the overlay). */
+    this.assistTarget = null;
+    this._aimRay = new THREE.Vector3();
+    this._aimPoint = new THREE.Vector3();
+    this._lead = new THREE.Vector3();
 
     // Sound rate limiting: at most N zaps per short window.
     this._soundBudget = 0;
@@ -214,14 +225,57 @@ export class WeaponSystem {
       this.game.audio.playTone({ type: 'sine', freq: 660, freqEnd: 880, duration: 0.12, gain: 0.12 });
     }
 
-    if (!player || !player.alive) return;
-    if (!this.game.input.state.fire || this.playerCooldown > 0 || this.overheated) return;
+    if (!player || !player.alive) { this.assistTarget = null; return; }
 
-    // Alternate wingtip cannons for the classic strobe effect.
+    // --- Aim: cursor-directed with magnetic assist (playtest fix) ---
+    // Desktop: bolts fly toward the point under the mouse cursor, so aiming
+    // is "point and shoot" rather than "align the whole ship". Touch: fire
+    // straight ahead (steering IS the aim on mobile). Either way, if a
+    // hostile sits within a small cone of the aim line, snap to a
+    // lead-predicted intercept so landing hits feels responsive, not lucky.
     this._muzzleIndex = (this._muzzleIndex + 1) % player.hardpoints.length;
     const hardpoint = player.hardpoints[this._muzzleIndex];
     this._muzzle.copy(hardpoint).applyQuaternion(player.quaternion).add(player.position);
-    player.getForward(this._dir);
+
+    const input = this.game.input;
+    const cam = this.game.engine.camera;
+    if (input.mouse.active && !input.touchActive && this.game.mode === 'flight') {
+      const ndcX = (input.mouse.px / window.innerWidth) * 2 - 1;
+      const ndcY = -(input.mouse.py / window.innerHeight) * 2 + 1;
+      this._aimRay.set(ndcX, ndcY, 0.5).unproject(cam).sub(cam.position).normalize();
+      this._aimPoint.copy(cam.position).addScaledVector(this._aimRay, 1400);
+      this._dir.copy(this._aimPoint).sub(this._muzzle).normalize();
+    } else {
+      player.getForward(this._dir);
+    }
+
+    // Magnetic assist: pick the hostile closest to the aim line inside the cone.
+    this.assistTarget = null;
+    const enemies = this.game.enemies?.enemies;
+    if (enemies) {
+      let bestDot = Math.cos(ASSIST_CONE);
+      for (const enemy of enemies) {
+        if (!enemy.alive) continue;
+        this._toTarget.copy(enemy.position).sub(this._muzzle);
+        const dist = this._toTarget.length();
+        if (dist > ASSIST_RANGE || dist < 1e-3) continue;
+        const dot = this._toTarget.divideScalar(dist).dot(this._dir);
+        if (dot > bestDot) { bestDot = dot; this.assistTarget = enemy; }
+      }
+      if (this.assistTarget) {
+        // Lead with relative velocity (bolts inherit the player's velocity).
+        const dist = this.assistTarget.position.distanceTo(this._muzzle);
+        const t = dist / PLAYER_BOLT_SPEED;
+        this._lead.copy(this.assistTarget.velocity).sub(player.velocity);
+        this._toTarget.copy(this.assistTarget.position)
+          .addScaledVector(this._lead, t)
+          .sub(this._muzzle)
+          .normalize();
+        this._dir.copy(this._toTarget);
+      }
+    }
+
+    if (!this.game.input.state.fire || this.playerCooldown > 0 || this.overheated) return;
 
     this.fire(this._muzzle, this._dir, {
       fromPlayer: true,
@@ -374,7 +428,8 @@ export class WeaponSystem {
           const distSq = this._segmentPointDistanceSq(
             bolt.prevPos, bolt.mesh.position, enemy.position,
           );
-          const hitRadius = enemy.radius;
+          // Forgiving hitbox: near-misses on the silhouette still count.
+          const hitRadius = enemy.radius * HIT_FORGIVENESS;
           if (distSq < hitRadius * hitRadius) {
             this._applyHit(bolt, enemy, true);
             return true;
@@ -448,6 +503,8 @@ export class WeaponSystem {
 
     if (targetIsEnemy) {
       target.notifyHit();
+      // Hit feedback: the target overlay flashes this ship's bracket white-hot.
+      target.hitFlash = 0.18;
       game.events.emit('combat:hit-confirmed', { target, killed: result.destroyed });
       if (this._soundBudget >= 0.5) {
         this._soundBudget -= 0.5;

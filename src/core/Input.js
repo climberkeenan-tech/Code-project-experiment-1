@@ -64,8 +64,11 @@ export class Input {
     /** Keys currently held, by KeyboardEvent.code. */
     this.keys = new Set();
 
-    /** Mouse steering vector, normalized to [-1, 1] from screen center. */
-    this.mouse = { x: 0, y: 0, active: false, buttons: 0 };
+    /**
+     * Mouse steering vector, normalized to [-1, 1] from screen center, plus
+     * the raw pixel position (px/py) for cursor-aimed weapons.
+     */
+    this.mouse = { x: 0, y: 0, px: 0, py: 0, active: false, buttons: 0 };
 
     /**
      * Virtual axes written by the touch UI. When a virtual source is active
@@ -141,6 +144,8 @@ export class Input {
     const radius = Math.min(window.innerWidth, window.innerHeight) * 0.42;
     this.mouse.x = clampAxis((e.clientX - cx) / radius);
     this.mouse.y = clampAxis((e.clientY - cy) / radius);
+    this.mouse.px = e.clientX;
+    this.mouse.py = e.clientY;
     this.mouse.active = true;
   }
 

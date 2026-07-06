@@ -24,8 +24,8 @@ import { UNIVERSE_SEED } from '../world/constants.js';
  */
 
 const GLOBAL_CAP = 10;
-const SPAWN_MIN = 1600;
-const SPAWN_MAX = 2400;
+const SPAWN_MIN = 1000; // close enough that contacts appear on the overlay fast
+const SPAWN_MAX = 1700;
 const DESPAWN_RANGE = 14000;
 const CHECK_INTERVAL = 2;
 
