@@ -21,6 +21,7 @@ import { generateUniverse } from './world/UniverseGenerator.js';
 import { OnFootController } from './onfoot/OnFootController.js';
 import { WarpSystem } from './warp/WarpSystem.js';
 import { LandingSystem } from './ship/LandingSystem.js';
+import { ApproachScatter } from './world/ApproachScatter.js';
 import { POISystem } from './exploration/POISystem.js';
 import { SaveGame } from './core/SaveGame.js';
 import { ShipSounds } from './audio/ShipSounds.js';
@@ -74,6 +75,9 @@ game.addSystem('warp', new WarpSystem(game));
 
 // --- Auto-landing: L guides the ship down to a soft touchdown ---
 game.addSystem('landing', new LandingSystem(game));
+
+// --- Low-altitude vegetation: forests appear under the ship in flight ---
+game.addSystem('approach', new ApproachScatter(game));
 
 // --- Exploration: discoverable sites + persistence ---
 const poi = new POISystem(game);

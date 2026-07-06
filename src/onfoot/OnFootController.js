@@ -132,7 +132,10 @@ export class OnFootController {
     a.grounded = true;
 
     this.planet = planet;
-    this.scatter = new SurfaceScatter(game, planet, a.position);
+    // Adopt the flight-time vegetation patch when we land inside one (no
+    // double forests, no pop); otherwise build fresh around the landing site.
+    const adopted = game.approach?.adopt?.() ?? null;
+    this.scatter = adopted || new SurfaceScatter(game, planet, a.position);
 
     this._active = true;
     game.mode = 'onfoot';

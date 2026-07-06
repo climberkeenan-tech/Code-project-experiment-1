@@ -13,10 +13,10 @@ import { RARITIES, RARITY_COLOR, rollRarity } from '../economy/Rarity.js';
  * exists at a time (mobile-friendly).
  */
 
-const SCATTER_RADIUS = 260; // how far props spread around the landing point
-const ROCK_COUNT = 46;
-const TREE_COUNT = 140;
-const GRASS_COUNT = 340;
+const SCATTER_RADIUS = 420; // how far props spread around the landing point
+const ROCK_COUNT = 60;
+const TREE_COUNT = 420; // dense enough to read as a real forest (playtest)
+const GRASS_COUNT = 800;
 
 export class SurfaceScatter {
   /**
