@@ -1,32 +1,49 @@
 import * as THREE from 'three';
-import { clamp } from '../core/math/noise.js';
+import { clamp, damp, lerp } from '../core/math/noise.js';
 
 /**
- * Warp / light-speed travel — the fix for "planets are too far away."
+ * Hyperdrive — true directional light-speed travel (playtest rework).
  *
- * The player locks a destination planet (cycle with B / a touch button), then
- * engages warp (J / button): a brief charge, a jump that relocates the ship to
- * just outside the target's atmosphere, then a smooth arrival. The jump simply
- * sets player.position in render space; the floating-origin rebase that runs
- * after all systems re-centers the world, so a 150k-unit hop is free and never
- * shows the GPU large coordinates (same mechanism respawn uses).
+ * The old system teleported to a locked planet, which read as "a short burst
+ * that sends me somewhere I wasn't looking." Now the hyperdrive is a flight
+ * mode: press J → short charge → the ship accelerates to tens of thousands of
+ * units/second ALONG ITS NOSE. You steer it (gently) the whole time, so where
+ * the camera points is exactly where you travel. Approaching any planet
+ * automatically drops you out of hyperdrive just outside its influence, so
+ * "fly at the planet, arrive at the planet" always holds. Press J again to
+ * drop manually.
  *
- * Guardrails: no warping from inside an atmosphere, while grounded, or on foot.
+ * The B key still cycles a locked destination — that drives the cyan HUD
+ * marker/arrow you can align with, and while cruising the drive gently bends
+ * your track onto the lock when you're pointing near it (soft nav assist).
+ *
+ * While engaged, the PlayerShip skips its own thrust/damping/speed-cap and
+ * this system owns the velocity vector — floating origin handles the huge
+ * per-frame displacements exactly as designed.
  */
 
-const CHARGE_TIME = 1.4;
-const ARRIVE_TIME = 0.6;
+const CHARGE_TIME = 0.9;
+const MAX_CRUISE = 42000; // u/s — crosses the whole system in ~6s
+const RAMP = 1.1; // exponential ramp rate toward max speed
+const DROP_SPEED = 520; // exit velocity, safely below entry-heat range
+const ASSIST_CONE = 0.985; // dot: ~10° — lock assist engages when aimed near it
 
 export class WarpSystem {
   /** @param {import('../core/Game.js').Game} game */
   constructor(game) {
     this.game = game;
-    this.state = 'idle'; // idle | charging | arriving
+    this.state = 'idle'; // idle | charging | cruise
     this.timer = 0;
+    this.cruiseSpeed = 0;
     this.targetIndex = 0;
-    this._arrival = new THREE.Vector3();
-    this._dir = new THREE.Vector3();
+    this._fwd = new THREE.Vector3();
+    this._toPlanet = new THREE.Vector3();
     game.warp = this;
+  }
+
+  /** True while the drive owns the ship's velocity. */
+  get engaged() {
+    return this.state === 'cruise';
   }
 
   /** @returns {import('../world/Planet.js').Planet|null} */
@@ -48,13 +65,12 @@ export class WarpSystem {
     return this.state === 'charging' ? 1 - this.timer / CHARGE_TIME : 0;
   }
 
-  /** True when warp is currently allowed. */
-  canWarp() {
+  canEngage() {
     const g = this.game;
-    if (g.mode !== 'flight' || !g.player?.alive) return false;
+    if (g.mode !== 'flight' || !g.player?.alive || g.player.autolanding) return false;
     const ctx = g.universe?.playerContext;
     if (ctx && (ctx.inAtmosphere || ctx.grounded)) return false;
-    return !!this.target;
+    return true;
   }
 
   cycleTarget() {
@@ -65,63 +81,102 @@ export class WarpSystem {
     this.game.audio?.playTone?.({ type: 'sine', freq: 700, freqEnd: 900, duration: 0.08, gain: 0.1 });
   }
 
-  engage() {
-    if (this.state !== 'idle' || !this.canWarp()) {
-      if (this.state === 'idle') this.game.audio?.playTone?.({ type: 'square', freq: 160, freqEnd: 110, duration: 0.16, gain: 0.1 });
-      return;
+  toggle() {
+    if (this.state === 'idle') {
+      if (!this.canEngage()) {
+        this.game.audio?.playTone?.({ type: 'square', freq: 160, freqEnd: 110, duration: 0.16, gain: 0.1 });
+        return;
+      }
+      this.state = 'charging';
+      this.timer = CHARGE_TIME;
+      this.game.events.emit('warp:charging');
+      this.game.audio?.playTone?.({ type: 'sawtooth', freq: 120, freqEnd: 900, duration: CHARGE_TIME, gain: 0.14 });
+    } else {
+      this._drop('manual');
     }
-    this.state = 'charging';
-    this.timer = CHARGE_TIME;
-    this.game.events.emit('warp:charging', this.target);
-    this.game.audio?.playTone?.({ type: 'sawtooth', freq: 120, freqEnd: 900, duration: CHARGE_TIME, gain: 0.14 });
   }
 
   update(dt) {
     const game = this.game;
-    // Input (flight only).
+    const player = game.player;
+
     if (game.mode === 'flight') {
       if (game.input.consumeWarpCycle()) this.cycleTarget();
-      if (game.input.consumeWarp()) this.engage();
+      if (game.input.consumeWarp()) this.toggle();
     }
 
     if (this.state === 'charging') {
       this.timer -= dt;
       game.events.emit('camera:shake', 0.03);
-      // Abort if the player enters an atmosphere mid-charge.
-      if (!this.canWarp()) { this.state = 'idle'; game.events.emit('warp:aborted'); return; }
-      if (this.timer <= 0) this._jump();
-    } else if (this.state === 'arriving') {
-      this.timer -= dt;
-      if (this.timer <= 0) this.state = 'idle';
+      if (!this.canEngage()) { this.state = 'idle'; game.events.emit('warp:aborted'); return; }
+      if (this.timer <= 0) {
+        this.state = 'cruise';
+        this.cruiseSpeed = Math.max(player.speed, 900);
+        game.events.emit('warp:engaged');
+        game.events.emit('camera:shake', 0.35);
+        game.audio?.playTone?.({ type: 'sine', freq: 300, freqEnd: 1400, duration: 0.5, gain: 0.2 });
+      }
+      return;
     }
+
+    if (this.state !== 'cruise') return;
+
+    // Safety drops.
+    if (!player.alive || game.mode !== 'flight') { this._drop('state'); return; }
+    const ctx = game.universe?.playerContext;
+    if (ctx && ctx.inAtmosphere) { this._drop('atmosphere'); return; }
+
+    // Ramp speed toward max, exponentially — feels like punching through.
+    this.cruiseSpeed = lerp(this.cruiseSpeed, MAX_CRUISE, 1 - Math.exp(-RAMP * dt));
+
+    player.getForward(this._fwd);
+
+    // Soft nav assist: if the locked planet is within ~10° of the nose, bend
+    // the track onto it so "aim at the marker, arrive at the planet" is easy.
+    const target = this.target;
+    if (target) {
+      this._toPlanet.copy(target.group.position).sub(player.position).normalize();
+      if (this._fwd.dot(this._toPlanet) > ASSIST_CONE) {
+        this._fwd.lerp(this._toPlanet, damp(2.5, dt)).normalize();
+        // Nudge the ship's actual orientation along too, so the camera agrees.
+        const q = _tmpQuat.setFromUnitVectors(_FORWARD, this._fwd);
+        player.quaternion.slerp(q, damp(1.5, dt));
+      }
+    }
+
+    // The drive owns the velocity: full speed along the nose, every frame.
+    player.velocity.copy(this._fwd).multiplyScalar(this.cruiseSpeed);
+
+    // Auto-drop when a planet looms AHEAD — arrive where you were looking.
+    // The cone is tight (~26°): a planet beside or behind you (e.g. the one
+    // you just left) must never yank you out of hyperdrive — that was the
+    // playtest "sends me back to the same planet" bug.
+    for (const planet of game.universe?.planets ?? []) {
+      this._toPlanet.copy(planet.group.position).sub(player.position);
+      const dist = this._toPlanet.length();
+      const dropRadius = planet.influenceRadius * 1.6 + this.cruiseSpeed * 0.22;
+      if (dist < dropRadius && this._toPlanet.normalize().dot(this._fwd) > 0.9) {
+        this._drop('arrival', planet);
+        return;
+      }
+    }
+
+    // Subtle continuous rumble sells the speed.
+    game.events.emit('camera:shake', 0.012);
   }
 
-  _jump() {
+  _drop(reason, planet = null) {
     const game = this.game;
     const player = game.player;
-    const target = this.target;
-    if (!target) { this.state = 'idle'; return; }
-
-    // Arrive just outside the target's influence, on the side we came from.
-    this._dir.copy(player.position).sub(target.group.position);
-    if (this._dir.lengthSq() < 1) this._dir.set(1, 0.15, 0);
-    this._dir.normalize();
-    const standoff = target.influenceRadius * 1.15;
-    this._arrival.copy(target.group.position).addScaledVector(this._dir, standoff);
-
-    player.position.copy(this._arrival);
-    // Face the planet, kill velocity so we don't slam the atmosphere.
-    this._dir.copy(target.group.position).sub(player.position).normalize();
-    player.quaternion.setFromUnitVectors(FORWARD, this._dir);
-    player.velocity.set(0, 0, 0);
-    player.boostActive = false;
-
-    this.state = 'arriving';
-    this.timer = ARRIVE_TIME;
-    game.events.emit('camera:shake', 0.5);
-    game.events.emit('warp:arrived', target);
-    game.audio?.playTone?.({ type: 'sine', freq: 1200, freqEnd: 300, duration: 0.5, gain: 0.2 });
+    this.state = 'idle';
+    this.cruiseSpeed = 0;
+    player.getForward(this._fwd);
+    player.velocity.copy(this._fwd).multiplyScalar(DROP_SPEED);
+    game.events.emit('warp:dropped', { reason, planet });
+    game.events.emit('camera:shake', 0.4);
+    game.audio?.playTone?.({ type: 'sine', freq: 1200, freqEnd: 260, duration: 0.5, gain: 0.2 });
   }
 }
 
-const FORWARD = new THREE.Vector3(0, 0, -1);
+const _FORWARD = new THREE.Vector3(0, 0, -1);
+const _tmpQuat = new THREE.Quaternion();

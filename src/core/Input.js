@@ -61,6 +61,9 @@ export class Input {
     this.warpQueued = false;
     this.warpCycleQueued = false;
 
+    /** Edge-triggered auto-land toggle press. */
+    this.landQueued = false;
+
     /** Keys currently held, by KeyboardEvent.code. */
     this.keys = new Set();
 
@@ -131,6 +134,8 @@ export class Input {
     // Warp: engage (J) + cycle destination (B).
     if (e.code === 'KeyJ' && !e.repeat) this.warpQueued = true;
     if (e.code === 'KeyB' && !e.repeat) this.warpCycleQueued = true;
+    // Auto-land toggle.
+    if (e.code === 'KeyL' && !e.repeat) this.landQueued = true;
   }
 
   _onKeyUp(e) {
@@ -205,6 +210,13 @@ export class Input {
   consumeWarpCycle() {
     const v = this.warpCycleQueued;
     this.warpCycleQueued = false;
+    return v;
+  }
+
+  /** Consume the edge-triggered auto-land press. */
+  consumeLand() {
+    const v = this.landQueued;
+    this.landQueued = false;
     return v;
   }
 

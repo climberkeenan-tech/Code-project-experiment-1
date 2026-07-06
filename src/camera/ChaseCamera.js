@@ -103,9 +103,10 @@ export class ChaseCamera {
       this.trauma = Math.max(0, this.trauma - dt * 1.4);
     }
 
-    // --- Dynamic FOV: widen under boost and at cruise speed ---
+    // --- Dynamic FOV: widen under boost, cruise speed, and hyperdrive ---
     const targetFov = this.baseFov
       + (player.boostActive ? 9 : 0)
+      + (this.game.warp?.engaged ? 22 : 0) // light-speed stretch
       + speed01 * 5;
     this._fovCurrent = lerp(this._fovCurrent, targetFov, damp(4.5, dt));
     if (Math.abs(this._fovCurrent - this.camera.fov) > 0.01) {

@@ -64,6 +64,9 @@ export class PlayerShip extends ShipBase {
     /** Set by the universe system each frame (gravity, atmosphere etc). */
     this.gravity = new THREE.Vector3();
 
+    /** True while the auto-landing system is flying the ship. */
+    this.autolanding = false;
+
     /** Resources collected from wrecks and discoveries (legacy soft counter). */
     this.resources = 0;
 
@@ -111,10 +114,24 @@ export class PlayerShip extends ShipBase {
       return;
     }
 
+    // Auto-landing: the landing system owns velocity + orientation; just
+    // integrate position and keep the defense model ticking.
+    if (this.autolanding) {
+      this.angularRates.set(0, 0, 0);
+      this.position.addScaledVector(this.velocity, dt);
+      this.updateDefense(dt);
+      this.glow.update(0.35, 0, elapsed);
+      return;
+    }
+
     const input = this.game.input.state;
 
+    // Hyperdrive cruise: the warp system owns the velocity vector; the pilot
+    // keeps damped steering authority so travel direction = look direction.
+    const warping = !!(this.game.warp && this.game.warp.engaged);
+
     // --- Boost energy management (with engage hysteresis) ---
-    const wantBoost = input.boost && input.throttle > 0;
+    const wantBoost = !warping && input.boost && input.throttle > 0;
     if (wantBoost && !this.boostActive && this.boostEnergy > TUNING.boostMinEngage) {
       this.boostActive = true;
       this.game.events.emit('player:boost-start');
@@ -135,40 +152,43 @@ export class PlayerShip extends ShipBase {
     }
 
     // --- Rotation: smoothed angular rates chasing stick deflection ---
+    const steer = warping ? 0.45 : 1; // heavier hands at light speed
     const response = damp(TUNING.angularResponse, dt);
-    this.angularRates.x = lerp(this.angularRates.x, input.pitch * TUNING.pitchRate, response);
-    this.angularRates.y = lerp(this.angularRates.y, -input.yaw * TUNING.yawRate, response);
-    this.angularRates.z = lerp(this.angularRates.z, -input.roll * TUNING.rollRate, response);
+    this.angularRates.x = lerp(this.angularRates.x, input.pitch * TUNING.pitchRate * steer, response);
+    this.angularRates.y = lerp(this.angularRates.y, -input.yaw * TUNING.yawRate * steer, response);
+    this.angularRates.z = lerp(this.angularRates.z, -input.roll * TUNING.rollRate * steer, response);
 
-    // --- Thrust ---
-    const engineMult = this.upgrades.engine;
-    const boostAccel = this.boostActive ? TUNING.boostAccelMult : 1;
-    const forwardAccel = input.throttle >= 0
-      ? input.throttle * TUNING.accelForward
-      : input.throttle * TUNING.accelReverse;
-    this._thrust.set(
-      input.strafeX * TUNING.accelStrafe,
-      input.strafeY * TUNING.accelStrafe,
-      -forwardAccel, // ship forward is -Z
-    ).multiplyScalar(boostAccel * engineMult);
-    this._thrust.applyQuaternion(this.quaternion);
-    this.velocity.addScaledVector(this._thrust, dt);
+    if (!warping) {
+      // --- Thrust ---
+      const engineMult = this.upgrades.engine;
+      const boostAccel = this.boostActive ? TUNING.boostAccelMult : 1;
+      const forwardAccel = input.throttle >= 0
+        ? input.throttle * TUNING.accelForward
+        : input.throttle * TUNING.accelReverse;
+      this._thrust.set(
+        input.strafeX * TUNING.accelStrafe,
+        input.strafeY * TUNING.accelStrafe,
+        -forwardAccel, // ship forward is -Z
+      ).multiplyScalar(boostAccel * engineMult);
+      this._thrust.applyQuaternion(this.quaternion);
+      this.velocity.addScaledVector(this._thrust, dt);
 
-    // Gravity from the universe system (zero in deep space).
-    this.velocity.addScaledVector(this.gravity, dt);
+      // Gravity from the universe system (zero in deep space).
+      this.velocity.addScaledVector(this.gravity, dt);
 
-    // --- Damping & soft speed limit ---
-    const dampingRate = input.brake ? TUNING.brakeDamping : TUNING.damping;
-    this.velocity.multiplyScalar(Math.exp(-dampingRate * dt));
+      // --- Damping & soft speed limit ---
+      const dampingRate = input.brake ? TUNING.brakeDamping : TUNING.damping;
+      this.velocity.multiplyScalar(Math.exp(-dampingRate * dt));
 
-    const maxSpeed = TUNING.baseMaxSpeed * this.envSpeedScale * engineMult
-      * (this.boostActive ? TUNING.boostMaxMult : 1);
-    const speed = this.velocity.length();
-    if (speed > maxSpeed) {
-      // Soft limit: squash the excess quickly but continuously, so crossing
-      // the boundary (e.g. leaving boost) never snaps the camera.
-      const over = speed / maxSpeed;
-      this.velocity.multiplyScalar(Math.pow(over, -Math.min(1, 6 * dt)));
+      const maxSpeed = TUNING.baseMaxSpeed * this.envSpeedScale * this.upgrades.engine
+        * (this.boostActive ? TUNING.boostMaxMult : 1);
+      const speed = this.velocity.length();
+      if (speed > maxSpeed) {
+        // Soft limit: squash the excess quickly but continuously, so crossing
+        // the boundary (e.g. leaving boost) never snaps the camera.
+        const over = speed / maxSpeed;
+        this.velocity.multiplyScalar(Math.pow(over, -Math.min(1, 6 * dt)));
+      }
     }
 
     this.integrate(dt);

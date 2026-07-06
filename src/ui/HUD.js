@@ -68,6 +68,7 @@ export class HUD {
       <div class="hud-alert" data-el="alert"></div>
       <div class="hud-prompt" data-el="prompt"></div>
       <div class="hud-warp" data-el="warp"></div>
+      <div class="hud-landhint" data-el="landHint"></div>
 
       <canvas class="hud-radar" data-el="radar" width="236" height="236"></canvas>
 
@@ -115,6 +116,18 @@ export class HUD {
       this.showBanner('Missile Intercepted', '', 1.2);
     });
     game.events.on('onfoot:prompt', (text) => this.setPrompt(text));
+    game.events.on('landing:hint', (text) => {
+      this.refs.landHint.textContent = text;
+      this.refs.landHint.classList.toggle('visible', text.length > 0);
+    });
+    game.events.on('player:autolanded', (planet) => {
+      this.showBanner('Touchdown', `${planet.descriptor.name} — press E to disembark`, 2.5);
+    });
+    game.events.on('warp:dropped', ({ reason, planet }) => {
+      if (reason === 'arrival' && planet) {
+        this.showBanner('Hyperdrive Drop', `Arriving at ${planet.descriptor.name}`, 2);
+      }
+    });
     game.events.on('onfoot:entered', (planet) => {
       this.showBanner('Disembarked', `Exploring ${planet.descriptor.name} on foot`, 2.5);
     });
@@ -232,15 +245,17 @@ export class HUD {
     }
     this.setAlert(alert);
 
-    // Warp target readout (flight only).
+    // Hyperdrive readout (flight only).
     const warp = this.game.warp;
     if (!onfoot && warp && warp.target) {
       const name = warp.target.descriptor.name;
       if (warp.state === 'charging') {
-        this._setText('warp', `⟢ WARP CHARGING → ${name} ${Math.round(warp.charge01 * 100)}%`);
+        this._setText('warp', `⟢ HYPERDRIVE CHARGING ${Math.round(warp.charge01 * 100)}%`);
+      } else if (warp.engaged) {
+        this._setText('warp', `⟢ HYPERDRIVE ${(player.speed / 1000).toFixed(1)} km/s — steer with the nose · [J] drop`);
       } else {
         const d = Math.max(0, warp.targetDistance);
-        this._setText('warp', `◎ ${name} · ${formatDistance(d)} · [J] warp · [B] cycle`);
+        this._setText('warp', `◎ ${name} · ${formatDistance(d)} · [J] hyperdrive · [B] next planet`);
       }
     } else {
       this._setText('warp', '');

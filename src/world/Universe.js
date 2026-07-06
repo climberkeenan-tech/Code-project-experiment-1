@@ -144,7 +144,8 @@ export class Universe {
     }
 
     // --- Landed check: resting on a surface, slow enough to step out ---
-    const grounded = context.inAtmosphere
+    // (No atmosphere requirement: airless worlds are walkable too.)
+    const grounded = context.planet !== null
       && altitude < player.radius + 8
       && player.speed < 32
       && player.alive;
@@ -169,6 +170,9 @@ export class Universe {
       // Reflect the inward component with a little restitution; the
       // tangential component survives → ships skim and slide.
       ship.velocity.addScaledVector(this._normal, -into * 1.3);
+
+      // Autopilot touchdowns are always damage-free (playtest fix).
+      if (isPlayer && ship.autolanding) return;
 
       const impact = -into;
       if (impact > 26) {
