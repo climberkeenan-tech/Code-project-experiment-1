@@ -1,6 +1,17 @@
 # Netlify build settings — lets the site deploy straight from the GitHub
-# repo (no drag-and-drop needed): connect the repo, pick the default
-# branch, and Netlify builds the game with these settings automatically.
+# repo (no drag-and-drop needed): connect the repo, pick a branch, and
+# Netlify builds the game with these settings automatically.
+#
+# Verified: `npm run build` on Node 22 produces a 4.5 MB dist/ with the four
+# ship GLBs under dist/models-glb/. The Node pin below matches that verified
+# build so the Netlify image can't silently use an incompatible version.
 [build]
   command = "npm run build"
   publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+  # Vite is a devDependency and is required to build. This forces npm to
+  # install devDependencies even if the build image sets NODE_ENV=production
+  # (the classic "vite: not found" Netlify failure). Harmless otherwise.
+  NPM_FLAGS = "--include=dev"

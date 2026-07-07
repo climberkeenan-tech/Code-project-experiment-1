@@ -78,9 +78,12 @@ Design decisions worth knowing before hacking:
 - **One terrain sampler per planet** (`world/terrainHeight.js`) feeds the
   mesher, the collision system and the AI — what you see is exactly what
   you hit.
-- **Everything procedural.** Ship meshes, planet surfaces, nebulas, the
-  entire soundscape (WebAudio synthesis — engines, lasers, wind, music)
-  are generated at runtime. The bundle ships no binary assets.
+- **Procedural-first, with four hand-modeled hulls.** Planet surfaces,
+  nebulas, FX textures and the entire soundscape (WebAudio synthesis —
+  engines, lasers, wind, music) are generated at runtime. The only binary
+  assets are the four hand-authored ship models in `public/models-glb/`
+  (`starter`, `gunship`, `dreadnought`, `flagship` — meshopt-compressed GLB,
+  ~3.7 MB total) that hot-swap in over procedural stand-ins as they load.
 - **Mobile budget.** Pooled projectiles/explosions/patches, instanced
   asteroids, patch builds time-boxed per frame, dynamic resolution scaling
   driven by measured frame time, one shadow-casting light with a tight
