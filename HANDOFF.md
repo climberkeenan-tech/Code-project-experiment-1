@@ -699,7 +699,7 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   Jump). Revealed on first touch; swaps flight↔foot button sets on mode change.
 - **Screens** (`ui/Screens.js`): start (audio unlock + **BUILD stamp**) and death/respawn.
   ⚠️ **The build stamp is a hand-edited string at `Screens.js:37`** —
-  `'BUILD 9 — fast-loading ships (compressed models)'` — no build-time injection; bump it
+  `'BUILD 10 — pricier ships + 70-dmg enemy lasers'` — no build-time injection; bump it
   manually per playtest.
 - **Shop** (`ui/Shop.js`): pause-the-game modal, hailed with **`T`** (interim — no physical
   station yet). Tabs: **Sell Ore** (per-tier, Sell All), **Upgrades** (engine/weapon/shield,
@@ -758,8 +758,8 @@ means editing those strings too.
 - **Models are served from `public/`** (static copy, not bundled) via relative URLs — works
   because `base:'./'`. Renaming/moving a GLB breaks at **runtime**, not build time.
 - **Netlify** (`netlify.toml`): `command = "npm run build"`, `publish = "dist"`. Alternative:
-  drag `builds/starfall-frontier-build9.zip` into Netlify Drop.
-- **`builds/starfall-frontier-build9.zip`** (3.6 MB): a committed ready-to-serve `dist`
+  drag `builds/starfall-frontier-build10.zip` into Netlify Drop.
+- **`builds/starfall-frontier-build10.zip`** (3.6 MB): a committed ready-to-serve `dist`
   (index.html + JS/CSS + the 4 GLBs). Convention: one zip per published build, old one
   deleted. **Don't gitignore `builds/` or `public/models-glb/`.**
 - **Harness** (`tools/screenshot.mjs`): `node tools/screenshot.mjs <url> <out.png> <waitMs>

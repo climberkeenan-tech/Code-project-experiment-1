@@ -214,20 +214,20 @@ export const PLAYER_SHIPS = [
     scale: 1, hullColor: 0xb9c6d6, accentColor: 0x24303f, glow: [0.9, 2.6, 5.2] },
   // The second ship: a hand-modeled gunship (player-supplied Meshy asset,
   // loaded async from /models/gunship.fbx — procedural fallback until ready).
-  { id: 'explorer', name: 'SF-20 Nebula Gunship', level: 20, cost: 200,
+  { id: 'explorer', name: 'SF-20 Nebula Gunship', level: 20, cost: 320,
     hull: 1.25, shield: 1.2, engine: 1.08, crew: 3, model: 'gunship',
     scale: 1.08, hullColor: 0xc9d4c8, accentColor: 0x2e4034, glow: [0.8, 3.2, 3.4] },
   // Design 2 covers the 20–40 band: the Kestrel is an up-armored gunship.
-  { id: 'interceptor', name: 'SF-30 Kestrel', level: 30, cost: 500,
+  { id: 'interceptor', name: 'SF-30 Kestrel', level: 30, cost: 800,
     hull: 1.5, shield: 1.45, engine: 1.18, crew: 3, model: 'gunship', modelScale: 1.18,
     scale: 1.14, hullColor: 0xd6c9b9, accentColor: 0x4a3524, glow: [3.6, 2.2, 0.7] },
-  { id: 'frigate', name: 'SF-50 Aegis', level: 50, cost: 1300,
+  { id: 'frigate', name: 'SF-50 Aegis', level: 50, cost: 2080,
     hull: 2.2, shield: 2.1, engine: 1.28, crew: 4, twinFin: true,
     scale: 1.26, hullColor: 0xaebfd4, accentColor: 0x22344d, glow: [1.2, 2.2, 5.4] },
-  { id: 'battlecruiser', name: 'SF-70 Bastion', level: 70, cost: 4000,
+  { id: 'battlecruiser', name: 'SF-70 Bastion', level: 70, cost: 6400,
     hull: 3.4, shield: 3.1, engine: 1.38, crew: 5, twinFin: true, quadEngines: true,
     scale: 1.42, hullColor: 0x9aa8bd, accentColor: 0x40274d, glow: [3.2, 1.2, 5.2] },
-  { id: 'sovereign', name: 'SF-100 Sovereign', level: 100, cost: 13000,
+  { id: 'sovereign', name: 'SF-100 Sovereign', level: 100, cost: 20800,
     hull: 5.2, shield: 4.6, engine: 1.5, crew: 7, twinFin: true, quadEngines: true,
     scale: 1.62, hullColor: 0xd8dde6, accentColor: 0x9a7b2e, glow: [4.6, 3.4, 1.0] },
   // --- Capitals: slow, strategic, crewed. The battleship is a pure gun
@@ -236,14 +236,14 @@ export const PLAYER_SHIPS = [
   // Design 3: the hand-modeled "Obsidian Dreadnought" — the mid capital
   // that bridges the 50→100 gap. Launches a small wing (3) alongside its
   // gunner turrets; big, but visibly a class below the flagship.
-  { id: 'battleship', name: 'SF-85 Obsidian Dreadnought', level: 85, cost: 8000,
+  { id: 'battleship', name: 'SF-85 Obsidian Dreadnought', level: 85, cost: 12800,
     hull: 7, shield: 5.5, engine: 1.05, crew: 6, turrets: 4, hangar: 3, capital: 'battleship',
     model: 'dreadnought',
     scale: 1, hullColor: 0x8d97a8, accentColor: 0x33475f, glow: [1.0, 2.0, 5.0] },
   // The flagship: a hand-modeled star-destroyer-class carrier. VASTLY larger
   // than everything else (it stores whole ships in its side hangars) — and
   // far too large to land: switch to a smaller ship for planetfall.
-  { id: 'carrier', name: 'SF-110 Vanguard', level: 110, cost: 25000,
+  { id: 'carrier', name: 'SF-110 Vanguard', level: 110, cost: 40000,
     hull: 11, shield: 8, engine: 0.85, crew: 8, turrets: 2, hangar: 8, capital: 'carrier',
     model: 'flagship', noLanding: true,
     scale: 1, hullColor: 0xaab4c6, accentColor: 0x2a5246, glow: [0.8, 3.0, 4.6] },
