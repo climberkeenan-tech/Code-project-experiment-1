@@ -90,7 +90,7 @@ export class PlayerShip extends ShipBase {
     this.ships = { owned: ['starter'], active: 'starter' };
     this.statMult = PLAYER_SHIP_BY_ID.starter;
 
-    this.glow = new EngineGlow(this.visual, this.engines, this.glowColor);
+    this.glow = new EngineGlow(this.visual, this.engines, this.glowColor, this.engineScale);
     this.shieldFx = new ShieldEffect(this.object3D, this.radius * 1.4);
 
     this._throttleSmooth = 0;
@@ -265,7 +265,8 @@ export class PlayerShip extends ShipBase {
     this.engines = rig.engines;
     this.hardpoints = rig.hardpoints;
     this.glowColor = rig.glowColor;
-    this.glow = new EngineGlow(this.visual, this.engines, this.glowColor);
+    this.engineScale = rig.engineScale ?? 1;
+    this.glow = new EngineGlow(this.visual, this.engines, this.glowColor, this.engineScale);
     this.shieldFx = new ShieldEffect(this.object3D, this.radius * 1.4);
 
     this.applyUpgrades();

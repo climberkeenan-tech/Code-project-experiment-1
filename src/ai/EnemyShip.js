@@ -148,7 +148,7 @@ export class EnemyShip extends ShipBase {
     /** Encounter-director region this ship belongs to (null = scripted). */
     this.region = null;
 
-    this.glow = new EngineGlow(this.visual, this.engines, this.glowColor);
+    this.glow = new EngineGlow(this.visual, this.engines, this.glowColor, this.engineScale);
     this.shieldFx = new ShieldEffect(
       this.object3D, this.radius * 1.35, new THREE.Color(1.6, 0.8, 0.4),
     );
@@ -180,8 +180,9 @@ export class EnemyShip extends ShipBase {
     this.engines = rig.engines;
     this.hardpoints = rig.hardpoints;
     this.glowColor = rig.glowColor;
+    this.engineScale = rig.engineScale ?? 1;
     this.rigModeled = true;
-    this.glow = new EngineGlow(this.visual, this.engines, this.glowColor);
+    this.glow = new EngineGlow(this.visual, this.engines, this.glowColor, this.engineScale);
     this.shieldFx = new ShieldEffect(
       this.object3D, this.radius * 1.35, new THREE.Color(1.6, 0.8, 0.4),
     );

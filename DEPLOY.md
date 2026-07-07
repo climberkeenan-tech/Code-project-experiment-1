@@ -59,7 +59,7 @@ a generated fighter shape instead of a GLB. See `HANDOFF.md` §1.5 and §2.
 
 If the Git build ever gives you trouble and you just want it live:
 
-1. Download **`builds/starfall-frontier-build10.zip`** from the repo (it is a
+1. Download **`builds/starfall-frontier-build11.zip`** from the repo (it is a
    ready-made, verified `dist/` — `index.html` + assets + all four GLBs).
 2. Unzip it locally.
 3. Go to <https://app.netlify.com/drop> and drag the **unzipped folder** (the

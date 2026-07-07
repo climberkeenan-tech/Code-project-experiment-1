@@ -58,8 +58,10 @@ export class EngineGlow {
    * @param {THREE.Group} shipGroup group to attach to (ship space)
    * @param {THREE.Vector3[]} anchors nozzle positions in ship space
    * @param {THREE.Color} color HDR glow color
+   * @param {number} [sizeScale] flame size multiplier (≈ hull length / fighter),
+   *   so a capital's exhaust reads as big as its hull instead of a fighter's dot.
    */
-  constructor(shipGroup, anchors, color) {
+  constructor(shipGroup, anchors, color, sizeScale = 1) {
     this.units = [];
 
     const { sprite: spriteMat, plume: plumeMat } = getExhaustMaterials(color);
@@ -68,6 +70,7 @@ export class EngineGlow {
     for (const anchor of anchors) {
       const unit = new THREE.Group();
       unit.position.copy(anchor);
+      unit.scale.setScalar(sizeScale); // whole exhaust (sprite + plume) scales with the hull
 
       const sprite = new THREE.Sprite(spriteMat);
       sprite.scale.setScalar(1.4);

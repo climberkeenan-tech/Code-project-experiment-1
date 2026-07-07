@@ -92,7 +92,7 @@ The `MODELS` registry (`ModelShips.js:21-52`), verbatim:
 | `starter` | `models-glb/starter.glb` | 9 | `-Math.PI/2` | 0 | Nebula Sentinel |
 | `gunship` | `models-glb/gunship.glb` | 11 | `-Math.PI/2` | 0 | Nebula Vanguard |
 | `dreadnought` | `models-glb/dreadnought.glb` | 32 | `-Math.PI/2` | 0 | Obsidian Dreadnought (mid capital) |
-| `flagship` | `models-glb/flagship.glb` | 60 | `-Math.PI/2` | 0 | Star-Destroyer carrier ("vast, ~7× a fighter") |
+| `flagship` | `models-glb/flagship.glb` | 100 | `-Math.PI/2` | 0 | Star-Destroyer carrier ("vast, ~11× a fighter") |
 
 - **`yaw: -Math.PI/2` for all four**: Meshy authors the nose along **`-X`**; the yaw
   rotates it onto game-forward **`-Z`**. Every new model authored the same way uses the
@@ -136,13 +136,15 @@ Eight entries, in catalog order. `PLAYER_SHIP_BY_ID` is `Object.fromEntries(...)
 | id | name | Lv | cost (cr) | hull | shield | engine | crew | model / capital | flags |
 |----|------|---:|----------:|-----:|-------:|-------:|-----:|-----------------|-------|
 | `starter` | SF-10 Sentinel | 10 | 0 | 1 | 1 | 1 | 2 | model `starter` | — |
-| `explorer` | SF-20 Nebula Gunship | 20 | 200 | 1.25 | 1.2 | 1.08 | 3 | model `gunship` | — |
-| `interceptor` | SF-30 Kestrel | 30 | 500 | 1.5 | 1.45 | 1.18 | 3 | model `gunship`, **`modelScale 1.18`** | — |
-| `frigate` | SF-50 Aegis | 50 | 1300 | 2.2 | 2.1 | 1.28 | 4 | **procedural** | `twinFin` |
-| `battlecruiser` | SF-70 Bastion | 70 | 4000 | 3.4 | 3.1 | 1.38 | 5 | **procedural** | `twinFin`, `quadEngines` |
-| `sovereign` | SF-100 Sovereign | 100 | 13000 | 5.2 | 4.6 | 1.5 | 7 | **procedural** | `twinFin`, `quadEngines` |
-| `battleship` | SF-85 Obsidian Dreadnought | 85 | 8000 | 7 | 5.5 | 1.05 | 6 | model `dreadnought`, `capital 'battleship'` | `turrets 4`, `hangar 3` |
-| `carrier` | SF-110 Vanguard | 110 | 25000 | 11 | 8 | 0.85 | 8 | model `flagship`, `capital 'carrier'` | `turrets 2`, `hangar 8`, **`noLanding`** |
+| `explorer` | SF-20 Nebula Gunship | 20 | 320 | 1.25 | 1.2 | 1.08 | 3 | model `gunship` | — |
+| `interceptor` | SF-30 Kestrel | 30 | 800 | 1.5 | 1.45 | 1.18 | 3 | model `gunship`, **`modelScale 1.18`** | — |
+| `frigate` | SF-50 Aegis | 50 | 2080 | 2.2 | 2.1 | 1.28 | 4 | **procedural** | `twinFin` |
+| `battlecruiser` | SF-70 Bastion | 70 | 6400 | 3.4 | 3.1 | 1.38 | 5 | **procedural** | `twinFin`, `quadEngines` |
+| `sovereign` | SF-100 Sovereign | 100 | 20800 | 5.2 | 4.6 | 1.5 | 7 | **procedural** | `twinFin`, `quadEngines` |
+| `battleship` | SF-85 Obsidian Dreadnought | 85 | 12800 | 7 | 5.5 | 1.05 | 6 | model `dreadnought`, `capital 'battleship'` | `turrets 4`, **`hangar 4`** |
+| `carrier` | SF-110 Vanguard | 110 | 40000 | 11 | 8 | 0.85 | 8 | model `flagship`, `capital 'carrier'` | `turrets 2`, **`hangar 15`**, **`noLanding`** |
+
+_Prices are ×1.6 from launch, and hangars now launch generic **attack fighters** (§11 Fleet), not owned ships._
 
 Every entry also carries `scale` (procedural-fallback size only), `hullColor`,
 `accentColor` (fallback-only), and `glow: [r,g,b]` (an HDR triple — **used by EngineGlow
@@ -228,7 +230,7 @@ is the list to check when reorganizing:
 | `EncounterDirector` | difficulty tiers from `PLAYER_SHIP_BY_ID[active].level` | `ai/EncounterDirector.js:206` |
 | `Reinforcements` | same `level`-based veteran scaling | `ai/Reinforcements.js:81` |
 | `LandingSystem` | `statMult.noLanding` blocks landing (`tooLarge`) | `ship/LandingSystem.js:40` |
-| `FleetSystem` | `statMult.hangar` gates launch; wing = `owned` minus `active` | `fleet/FleetSystem.js` |
+| `FleetSystem` | `statMult.hangar` gates launch; wing = N generic attack fighters | `fleet/FleetSystem.js` |
 | `EscortShip` | `createPlayerShip(variantId)`, `PLAYER_SHIP_BY_ID[variantId] ?? starter` | `fleet/EscortShip.js:36` |
 | `CrewManager` | `statMult.crew` (capacity), `statMult.turrets` (gunner stations); fires from `player.hardpoints` | `crew/CrewManager.js` |
 | `ChaseCamera` | leash `hullScale = max(1, radius/3.2)` — capitals get a longer boom | `camera/ChaseCamera.js:79` |
@@ -659,12 +661,13 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   (stars-1)*70)` → 20/90/160/230/300 (the "20→500" JSDoc is **stale**). Capacity
   `statMult.crew ?? 3`. **Roster wiped on `player:respawned`** (crew die with the ship);
   persisted otherwise.
-- **Fleet** (`fleet/FleetSystem.js` + `EscortShip.js`, `game.fleet`): on a carrier,
-  **`G`** launches stored ships (`owned` minus `active`, up to `statMult.hangar`) as AI
-  escorts in formation; **`V`** issues focus-fire (aim-assist lock else nearest ≤3000 u);
-  `G` again recalls (dock → repaired). Auto-recall on atmosphere/death/foot. **Escort death
-  is PERMANENT** — `onEscortDestroyed` splices the id out of `owned` and emits `ship:changed`
-  (autosaves the loss). No undo.
+- **Fleet** (`fleet/FleetSystem.js` + `EscortShip.js`, `game.fleet`): on a capital hull,
+  **`G`** / the **Deploy** button launches a fresh wing of generic AI **attack fighters**
+  (`ATTACK_FIGHTER = 'starter'`), up to `statMult.hangar` (**battleship 4, carrier 15**), in
+  formation; **`V`** / **Focus** issues focus-fire (aim-assist lock else nearest ≤3000 u);
+  `G` again recalls (fly home → dock). Auto-recall on atmosphere/death/foot. Hangar fighters
+  are **expendable** — `onEscortDestroyed` just removes the craft (no owned-collection loss).
+  Non-capital hulls (`hangar 0`) emit `fleet:denied`.
 - **POIs** (`exploration/POISystem.js` + `POIFactory.js`, `game.poi`): 2 stations, 3
   wrecks, ≤4 satellites, 3 anomalies, caches in outer asteroid fields. Signal ping (6000 u)
   → build (12000) → discovery (300). Anomalies grant **permanent** `+0.12` to an
@@ -699,7 +702,7 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   Jump). Revealed on first touch; swaps flight↔foot button sets on mode change.
 - **Screens** (`ui/Screens.js`): start (audio unlock + **BUILD stamp**) and death/respawn.
   ⚠️ **The build stamp is a hand-edited string at `Screens.js:37`** —
-  `'BUILD 10 — pricier ships + 70-dmg enemy lasers'` — no build-time injection; bump it
+  `'BUILD 11 — bigger flagship · deploy attack ships · scaled engine flames'` — no build-time injection; bump it
   manually per playtest.
 - **Shop** (`ui/Shop.js`): pause-the-game modal, hailed with **`T`** (interim — no physical
   station yet). Tabs: **Sell Ore** (per-tier, Sell All), **Upgrades** (engine/weapon/shield,
@@ -758,8 +761,8 @@ means editing those strings too.
 - **Models are served from `public/`** (static copy, not bundled) via relative URLs — works
   because `base:'./'`. Renaming/moving a GLB breaks at **runtime**, not build time.
 - **Netlify** (`netlify.toml`): `command = "npm run build"`, `publish = "dist"`. Alternative:
-  drag `builds/starfall-frontier-build10.zip` into Netlify Drop.
-- **`builds/starfall-frontier-build10.zip`** (3.6 MB): a committed ready-to-serve `dist`
+  drag `builds/starfall-frontier-build11.zip` into Netlify Drop.
+- **`builds/starfall-frontier-build11.zip`** (3.6 MB): a committed ready-to-serve `dist`
   (index.html + JS/CSS + the 4 GLBs). Convention: one zip per published build, old one
   deleted. **Don't gitignore `builds/` or `public/models-glb/`.**
 - **Harness** (`tools/screenshot.mjs`): `node tools/screenshot.mjs <url> <out.png> <waitMs>

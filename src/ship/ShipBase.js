@@ -27,6 +27,8 @@ export class ShipBase {
     this.engines = rig.engines;
     this.hardpoints = rig.hardpoints;
     this.glowColor = rig.glowColor;
+    /** Exhaust size multiplier so capitals get big flames (default 1 = fighter). */
+    this.engineScale = rig.engineScale ?? 1;
     /** False = procedural stand-in for a model that hasn't streamed in yet. */
     this.rigModeled = rig.modeled !== false;
 

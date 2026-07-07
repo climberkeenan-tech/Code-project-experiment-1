@@ -237,14 +237,14 @@ export const PLAYER_SHIPS = [
   // that bridges the 50→100 gap. Launches a small wing (3) alongside its
   // gunner turrets; big, but visibly a class below the flagship.
   { id: 'battleship', name: 'SF-85 Obsidian Dreadnought', level: 85, cost: 12800,
-    hull: 7, shield: 5.5, engine: 1.05, crew: 6, turrets: 4, hangar: 3, capital: 'battleship',
+    hull: 7, shield: 5.5, engine: 1.05, crew: 6, turrets: 4, hangar: 4, capital: 'battleship',
     model: 'dreadnought',
     scale: 1, hullColor: 0x8d97a8, accentColor: 0x33475f, glow: [1.0, 2.0, 5.0] },
   // The flagship: a hand-modeled star-destroyer-class carrier. VASTLY larger
   // than everything else (it stores whole ships in its side hangars) — and
   // far too large to land: switch to a smaller ship for planetfall.
   { id: 'carrier', name: 'SF-110 Vanguard', level: 110, cost: 40000,
-    hull: 11, shield: 8, engine: 0.85, crew: 8, turrets: 2, hangar: 8, capital: 'carrier',
+    hull: 11, shield: 8, engine: 0.85, crew: 8, turrets: 2, hangar: 15, capital: 'carrier',
     model: 'flagship', noLanding: true,
     scale: 1, hullColor: 0xaab4c6, accentColor: 0x2a5246, glow: [0.8, 3.0, 4.6] },
 ];
@@ -352,16 +352,28 @@ function buildModelRig(modelId, glowColor, scale = 1) {
   const W = b.width * scale;
 
   // Gameplay anchors derived from the normalized bounds: engine nozzles at
-  // the stern, cannon muzzles ahead of the wing tips.
+  // the stern, cannon muzzles ahead of the wing tips. Per-model `nozzles`
+  // (set from the MODELS registry) tune where the exhaust actually sits:
+  // x = spread (× full width), y = height offset (× full height), z = how far
+  // back (× stern Z). Defaults match the old bounds-only guess.
+  const nz = proto.userData.nozzles ?? {};
+  const nx = nz.x ?? 0.16, ny = nz.y ?? 0, nzk = nz.z ?? 0.92;
   const engines = [
-    new THREE.Vector3(-W * 0.16, 0, b.rearZ * scale * 0.92),
-    new THREE.Vector3(W * 0.16, 0, b.rearZ * scale * 0.92),
+    new THREE.Vector3(-W * nx, b.height * scale * ny, b.rearZ * scale * nzk),
+    new THREE.Vector3(W * nx, b.height * scale * ny, b.rearZ * scale * nzk),
   ];
   const hardpoints = [
     new THREE.Vector3(-W * 0.34, 0, b.noseZ * scale * 0.45),
     new THREE.Vector3(W * 0.34, 0, b.noseZ * scale * 0.45),
   ];
-  return { group, engines, hardpoints, radius: (b.length * scale) / 2.6, glowColor };
+  return {
+    group, engines, hardpoints,
+    radius: (b.length * scale) / 2.6,
+    glowColor,
+    // Flame grows with hull length (fighter ≈ 1, capitals many×) so the
+    // exhaust never looks like a tiny dot on a big ship.
+    engineScale: Math.max(1, (b.length * scale) / 10),
+  };
 }
 
 /**
@@ -480,9 +492,11 @@ export function createEnemyShip(type) {
       group.scale.multiplyScalar(mm.scale);
       const b = proto.userData.shipBounds;
       const W = b.width * mm.scale;
+      const nz = proto.userData.nozzles ?? {};
+      const nx = nz.x ?? 0.16, ny = nz.y ?? 0, nzk = nz.z ?? 0.92;
       const engines = [
-        new THREE.Vector3(-W * 0.16, 0, b.rearZ * mm.scale * 0.92),
-        new THREE.Vector3(W * 0.16, 0, b.rearZ * mm.scale * 0.92),
+        new THREE.Vector3(-W * nx, b.height * mm.scale * ny, b.rearZ * mm.scale * nzk),
+        new THREE.Vector3(W * nx, b.height * mm.scale * ny, b.rearZ * mm.scale * nzk),
       ];
       const hardpoints = [
         new THREE.Vector3(-W * 0.3, 0, b.noseZ * mm.scale * 0.45),
@@ -492,6 +506,7 @@ export function createEnemyShip(type) {
         group, engines, hardpoints,
         radius: (b.length * mm.scale) / 2.6,
         glowColor: new THREE.Color(5.4, 0.6, 0.5),
+        engineScale: Math.max(1, (b.length * mm.scale) / 10),
         modeled: true,
       };
     }

@@ -45,10 +45,23 @@ const MODELS = {
   // "Imperial Star Destroyer"-style flagship — the fleet carrier.
   flagship: {
     url: 'models-glb/flagship.glb',
-    targetLength: 60, // vast: ~7x a fighter, dwarfs everything it stores
+    targetLength: 100, // vast: ~11x a fighter, dwarfs everything it stores
     yaw: -Math.PI / 2, // Meshy convention (verified on the turntable)
     pitch: 0,
   },
+};
+
+/**
+ * Optional per-model exhaust-nozzle tuning (fractions), applied on top of the
+ * bounds-based default in ShipFactory. x = spread (× full width), y = height
+ * offset (× full height, + is up), z = how far back (× stern Z). Tuned by eye
+ * against a rear render of each hull so the blue flame sits on the thrusters.
+ */
+const NOZZLES = {
+  starter: { x: 0.16, y: 0.02, z: 0.9 },
+  gunship: { x: 0.28, y: 0.0, z: 0.86 },
+  dreadnought: { x: 0.2, y: 0.05, z: 0.92 },
+  flagship: { x: 0.22, y: 0.04, z: 0.94 },
 };
 
 const protos = {};
@@ -114,6 +127,7 @@ export function loadModelShips() {
         (gltf) => {
           try {
             protos[id] = normalize(gltf.scene, spec);
+            if (NOZZLES[id]) protos[id].userData.nozzles = NOZZLES[id];
             for (const cb of loadListeners) cb(id);
           } catch (err) {
             console.warn(`[models] ${id} normalize failed:`, err);

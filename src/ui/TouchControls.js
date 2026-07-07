@@ -30,8 +30,8 @@ export class TouchControls {
       <button class="touch-btn navcycle" data-btn="navcycle">Nav ▸</button>
       <button class="touch-btn warp" data-btn="warp">Warp</button>
       <button class="touch-btn land" data-btn="land">Land</button>
-      <button class="touch-btn fleet" data-btn="fleet">Fleet</button>
-      <button class="touch-btn focus" data-btn="focus">Attack</button>
+      <button class="touch-btn fleet" data-btn="fleet">Deploy</button>
+      <button class="touch-btn focus" data-btn="focus">Focus</button>
       <button class="touch-btn interact" data-btn="interact">Use</button>
       <button class="touch-btn jump" data-btn="jump">Jump</button>
     `;

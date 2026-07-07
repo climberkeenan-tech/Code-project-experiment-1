@@ -1,19 +1,20 @@
 import { EscortShip } from './EscortShip.js';
 
 /**
- * Fleet command (bible endgame): when flying a carrier, the ships stored in
- * your collection can be LAUNCHED as AI escorts — press G (or the FLEET
- * button) to deploy the wing, press again to recall. Escorts hold formation,
- * engage hostiles with turret fire credited to you, and dock (despawn, fully
- * repaired) when they return to the carrier. A destroyed escort is removed
- * from the collection permanently — fleet combat has real stakes.
+ * Fleet command (bible endgame): capital ships carry a hangar of AI attack
+ * fighters. Press G (or the DEPLOY button) to launch the wing, press again to
+ * recall it. Fighters fan out, engage hostiles with fire credited to you, and
+ * dock (despawn) when they return. They are hangar craft — NOT the player's
+ * owned ships — so a lost fighter costs nothing from the collection.
  *
  * Deployment rules:
- *  - only the active ship's hangar capacity can be launched (carrier: 4)
- *  - stored ships (owned minus active) fill the wing in catalog order
+ *  - only capital hulls with a hangar can launch (battleship: 4, carrier: 15)
+ *  - the wing is spawned fresh each launch, up to the hangar capacity
  *  - auto-recall on atmosphere entry, death, or going on foot
  */
 
+/** Hull the hangar-launched attack fighters fly (a light, expendable craft). */
+const ATTACK_FIGHTER = 'starter';
 const DOCK_RANGE = 45;
 
 export class FleetSystem {
@@ -98,21 +99,19 @@ export class FleetSystem {
       game.events.emit('fleet:denied');
       return;
     }
-    const wing = this.stored.slice(0, hangar);
-    if (wing.length === 0) {
-      game.audio?.playTone?.({ type: 'square', freq: 160, freqEnd: 110, duration: 0.14, gain: 0.1 });
-      game.events.emit('fleet:empty');
-      return;
-    }
-    wing.forEach((id, i) => {
-      const esc = new EscortShip(game, id, i);
-      // Launch from alongside the carrier deck.
+    // Spawn a fresh wing of attack fighters, up to the hangar capacity, fanned
+    // out around the launching capital's deck.
+    for (let i = 0; i < hangar; i++) {
+      const esc = new EscortShip(game, ATTACK_FIGHTER, i);
+      const side = i % 2 === 0 ? -1 : 1;
+      const rank = Math.floor(i / 2);
       esc.position.copy(game.player.position);
-      esc.position.x += (i % 2 === 0 ? -1 : 1) * (game.player.radius + 8);
+      esc.position.x += side * (game.player.radius + 8 + rank * 6);
+      esc.position.y += (i % 3) * 4;
       esc.velocity.copy(game.player.velocity);
       this.escorts.push(esc);
-    });
-    game.events.emit('fleet:launched', wing.length);
+    }
+    game.events.emit('fleet:launched', hangar);
     game.audio?.playTone?.({ type: 'sine', freq: 500, freqEnd: 840, duration: 0.3, gain: 0.16 });
   }
 
@@ -172,16 +171,12 @@ export class FleetSystem {
     }
   }
 
-  /** A wingman went down: the ship is permanently lost from the collection. */
+  /** A wingman went down. Hangar fighters are expendable — no collection loss. */
   onEscortDestroyed(esc) {
     const i = this.escorts.indexOf(esc);
     if (i !== -1) this.escorts.splice(i, 1);
-    const owned = this.game.player.ships.owned;
-    const j = owned.indexOf(esc.variantId);
-    if (j !== -1) owned.splice(j, 1);
     esc.dispose();
     this.game.events.emit('fleet:ship-lost', esc.variantId);
-    this.game.events.emit('ship:changed'); // autosave the loss
   }
 
   _despawnAll() {

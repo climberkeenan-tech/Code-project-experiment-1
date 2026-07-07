@@ -6,12 +6,11 @@ import { ShieldEffect } from '../fx/ShieldEffect.js';
 import { clamp, damp } from '../core/math/noise.js';
 
 /**
- * A deployed friendly ship — one of the player's OWN stored ships, launched
- * from the carrier and flown by an AI wingman. It holds a formation slot
- * beside the flagship and pours turret fire into any hostile in range
- * (fromPlayer bolts, so kill credits flow to the player). If it's destroyed,
- * that ship is permanently gone from the collection — deploying your fleet
- * has real stakes, exactly like the bible's death rules.
+ * A deployed friendly attack fighter — a light hangar craft launched from a
+ * capital ship and flown by an AI wingman. It holds a formation slot beside
+ * the flagship and pours fire into any hostile in range (fromPlayer bolts, so
+ * kill credits flow to the player). Hangar fighters are expendable: losing one
+ * costs nothing from the player's owned-ship collection.
  */
 
 const ENGAGE_RANGE = 1300;
@@ -39,7 +38,7 @@ export class EscortShip extends ShipBase {
     this.shieldRegenRate = 8;
     this.shieldRegenDelay = 4;
 
-    this.glow = new EngineGlow(this.visual, this.engines, this.glowColor);
+    this.glow = new EngineGlow(this.visual, this.engines, this.glowColor, this.engineScale);
     this.shieldFx = new ShieldEffect(this.object3D, this.radius * 1.4);
 
     this._fireCooldown = Math.random() * FIRE_INTERVAL;

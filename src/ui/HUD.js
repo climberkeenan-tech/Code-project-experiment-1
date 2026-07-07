@@ -116,14 +116,14 @@ export class HUD {
     game.events.on('missile:destroyed', () => {
       this.showBanner('Missile Intercepted', '', 1.2);
     });
-    game.events.on('fleet:launched', (n) => this.showBanner('Fleet Launched', `${n} ships deployed — V directs fire · G recalls`, 2.8));
+    game.events.on('fleet:launched', (n) => this.showBanner('Attack Ships Deployed', `${n} fighters launched — Deploy/G again to recall · Focus/V directs fire`, 2.8));
     game.events.on('fleet:focus', (t) => this.showBanner('Fleet: Focus Fire', `wing attacking Lv${t.stats?.level ?? '?'} ${t.stats?.displayName ?? 'hostile'}`, 2.4));
     game.events.on('fleet:free', () => this.showBanner('Fleet: Free Engage', 'wing hunting on its own', 2));
-    game.events.on('fleet:no-wing', () => this.showBanner('No Wing Deployed', 'press G to launch your fleet first', 2.2));
-    game.events.on('fleet:recalled', () => this.showBanner('Fleet Docked', 'wing stored and repaired', 1.8));
-    game.events.on('fleet:ship-lost', (id) => this.showBanner('Wingman Down', `${id} destroyed — removed from your fleet`, 3));
-    game.events.on('fleet:denied', () => this.showBanner('No Hangar', 'a carrier-class ship is required to launch a fleet', 2.4));
-    game.events.on('fleet:empty', () => this.showBanner('Hangar Empty', 'buy more ships to fill the hangar', 2.4));
+    game.events.on('fleet:no-wing', () => this.showBanner('No Wing Deployed', 'press Deploy (G) to launch attack ships first', 2.2));
+    game.events.on('fleet:recalled', () => this.showBanner('Attack Ships Recalled', 'wing docked', 1.8));
+    game.events.on('fleet:ship-lost', () => this.showBanner('Attack Ship Down', 'a fighter was destroyed', 2));
+    game.events.on('fleet:denied', () => this.showBanner('No Hangar', 'only a Dreadnought or Carrier can deploy attack ships', 2.4));
+    game.events.on('fleet:empty', () => this.showBanner('Hangar Empty', 'no attack ships available', 2.4));
     game.events.on('onfoot:prompt', (text) => this.setPrompt(text));
     game.events.on('landing:hint', (text) => {
       this.refs.landHint.textContent = text;

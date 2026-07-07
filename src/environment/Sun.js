@@ -26,12 +26,14 @@ export class Sun {
     this.light.castShadow = true;
     this.light.shadow.mapSize.set(1024, 1024);
     const shadowCam = this.light.shadow.camera;
-    shadowCam.left = -60;
-    shadowCam.right = 60;
-    shadowCam.top = 60;
-    shadowCam.bottom = -60;
+    // Box widened to ±90 so the much larger flagship (≈100u) still casts and
+    // receives its own shadow without clipping at the frustum edge.
+    shadowCam.left = -90;
+    shadowCam.right = 90;
+    shadowCam.top = 90;
+    shadowCam.bottom = -90;
     shadowCam.near = 1;
-    shadowCam.far = 400;
+    shadowCam.far = 500;
     this.light.shadow.bias = -0.0006;
     this.light.shadow.normalBias = 0.5;
     game.engine.scene.add(this.light);
