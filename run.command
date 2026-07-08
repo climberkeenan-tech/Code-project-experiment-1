@@ -5,7 +5,10 @@
 # run it installs what it needs; after that it just starts. A browser tab opens
 # automatically. Nothing is deployed anywhere — this runs entirely on your Mac.
 #
-# (If macOS says the file "cannot be opened", right-click it → Open → Open.)
+# Best used when you got the code via `git clone` (a Download-ZIP copy loses the
+# runnable flag; use the Terminal `npm start` way in LOCAL_DEV.md instead).
+# If macOS blocks it ("unidentified developer"): macOS 15+ → System Settings →
+# Privacy & Security → "Open Anyway"; older macOS → right-click → Open → Open.
 
 cd "$(dirname "$0")" || exit 1
 
@@ -35,15 +38,15 @@ if [ ! -d node_modules ]; then
   fi
 fi
 
-# 3. Open the browser a couple of seconds after the server is up.
-( sleep 2 && open "http://localhost:5173" ) >/dev/null 2>&1 &
-
 echo
-echo "  Starting the game…  a browser tab will open at http://localhost:5173"
-echo "  To also play on your iPhone: on the same Wi-Fi, open the 'Network'"
-echo "  address printed below (looks like http://192.168.x.x:5173)."
+echo "  Starting the game…  your browser opens automatically once it's ready."
+echo "  To also play on your iPhone: on the same Wi-Fi, open a 'Network'"
+echo "  address printed below (usually http://192.168.x.x:5173)."
 echo "  Press Control-C in this window to stop the game."
 echo "──────────────────────────────────────────────────────────"
 echo
 
-npm run dev
+# `npm start` = `vite --open`: Vite opens the browser on the actual port it
+# bound (e.g. 5174 if 5173 was taken), and only after the server is ready —
+# no guessing the URL or racing a fixed timer.
+npm start
