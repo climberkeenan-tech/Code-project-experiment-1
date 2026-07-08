@@ -1,0 +1,55 @@
+name: Deploy game to GitHub Pages
+
+# Publishes the game to a free, public URL you can open in any browser
+# (https://climberkeenan-tech.github.io/Code-project-experiment-1/) — no
+# download, no Netlify. It deploys the already-built bundle committed under
+# builds/ (the latest starfall-frontier-build*.zip), so there is no npm build
+# in CI to fail. Runs on every push to the default branch.
+
+on:
+  push:
+    branches: ["claude/3d-space-exploration-game-ogrezx"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Stage the prebuilt game (latest build zip)
+        run: |
+          set -e
+          mkdir -p _site
+          zip="$(ls builds/starfall-frontier-build*.zip | sort -V | tail -1)"
+          echo "Deploying $zip"
+          unzip -o "$zip" -d _site
+          test -f _site/index.html
+          ls -R _site | head -40
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
