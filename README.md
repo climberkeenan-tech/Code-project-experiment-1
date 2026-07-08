@@ -9,9 +9,16 @@ screens, across a procedurally generated star system of nine unique worlds.
 
 ## Play
 
+**On a Mac, the easiest way is to double-click `run.command`** — it installs
+what's needed and opens the game in your browser, no deploy required. Full
+step-by-step (including testing on your iPhone over Wi-Fi) is in
+[`LOCAL_DEV.md`](LOCAL_DEV.md). To deploy to Netlify, see [`DEPLOY.md`](DEPLOY.md).
+
+Or from a terminal:
+
 ```bash
-npm install
-npm run dev        # local dev server (LAN-exposed for phone testing)
+npm install        # once
+npm start          # run locally + open the browser  (npm run dev = no auto-open)
 npm run build      # production bundle in dist/
 ```
 
