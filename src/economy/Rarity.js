@@ -28,10 +28,10 @@ export const RARITIES = [
   { id: 'gray',   name: 'Common Ore',   value: 1,   weight: 60,   color: 0x9aa3ab, emissive: 0.15 },
   { id: 'green',  name: 'Verdite',      value: 2,   weight: 30,   color: 0x4fd67a, emissive: 0.5 },
   { id: 'blue',   name: 'Cobalt Cryst', value: 10,  weight: 9,    color: 0x4aa8ff, emissive: 0.8 },
-  { id: 'red',    name: 'Pyronite',     value: 20,  weight: 4.2,  color: 0xff5a48, emissive: 1.0 },
-  { id: 'purple', name: 'Void Amethyst',value: 50,  weight: 1.6,  color: 0xb86cff, emissive: 1.3 },
-  { id: 'white',  name: 'Lumen Shard',  value: 100, weight: 0.55, color: 0xf2f6ff, emissive: 1.8 },
-  { id: 'gold',   name: 'Aurum Core',   value: 500, weight: 0.12, color: 0xffcf4a, emissive: 2.2 },
+  { id: 'red',    name: 'Pyronite',     value: 20,  weight: 5.5,  color: 0xff5a48, emissive: 1.0 },
+  { id: 'purple', name: 'Void Amethyst',value: 50,  weight: 3.0,  color: 0xb86cff, emissive: 1.3 },
+  { id: 'white',  name: 'Lumen Shard',  value: 100, weight: 1.4, color: 0xf2f6ff, emissive: 1.8 },
+  { id: 'gold',   name: 'Aurum Core',   value: 500, weight: 0.6,  color: 0xffcf4a, emissive: 2.2 }, // weight buffed: gold is findable now
 ];
 
 /** Fast lookup by id. */

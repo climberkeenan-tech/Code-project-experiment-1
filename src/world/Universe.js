@@ -143,12 +143,13 @@ export class Universe {
       this._resolveGroundHit(player, planet, altitude, true);
     }
 
-    // --- Landed check: resting on a surface, slow enough to step out ---
-    // (No atmosphere requirement: airless worlds are walkable too.)
+    // --- Landed check: resting on a surface at a COMPLETE stop ---
+    // (No atmosphere requirement: airless worlds are walkable too. You can't
+    // hop out of a ship that's still moving — per playtest.)
     const grounded = context.planet !== null
       && !player.statMult?.noLanding // the flagship never touches down
       && altitude < player.radius + 8
-      && player.speed < 32
+      && player.speed < 2
       && player.alive;
     if (grounded !== context.grounded) {
       context.grounded = grounded;
@@ -168,8 +169,15 @@ export class Universe {
 
     const into = ship.velocity.dot(this._normal);
     if (into < 0) {
-      // Reflect the inward component with a little restitution; the
-      // tangential component survives → ships skim and slide.
+      // Gentle touchdown → the ship SETTLES: velocity dies completely, no
+      // bounce, no sliding (playtest: "full stop when you land").
+      const tangential = Math.sqrt(Math.max(0, ship.velocity.lengthSq() - into * into));
+      if (isPlayer && -into < 14 && tangential < 24) {
+        ship.velocity.set(0, 0, 0);
+        return;
+      }
+      // Hard contact: reflect the inward component with a little restitution;
+      // the tangential component survives → fast ships skim and slide.
       ship.velocity.addScaledVector(this._normal, -into * 1.3);
 
       // Autopilot touchdowns are always damage-free (playtest fix).

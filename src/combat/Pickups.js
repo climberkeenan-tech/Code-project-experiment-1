@@ -21,8 +21,8 @@ export class Pickups {
 
     const geometry = new THREE.OctahedronGeometry(0.9, 0);
     const material = new THREE.MeshStandardMaterial({
-      color: 0x2a4a55,
-      emissive: new THREE.Color(0.35, 1.5, 1.2),
+      color: 0x4a3823,
+      emissive: new THREE.Color(1.7, 0.85, 0.28), // warm ember (was cyan)
       metalness: 0.4,
       roughness: 0.3,
       flatShading: true,

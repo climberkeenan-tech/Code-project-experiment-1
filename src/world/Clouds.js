@@ -113,7 +113,7 @@ const FRAG = /* glsl */ `
     float rim = abs(dot(viewDir, vWorldNormal));
     alpha *= smoothstep(0.06, 0.35, rim);
 
-    gl_FragColor = vec4(uColor * light, alpha * 0.88);
+    gl_FragColor = vec4(uColor * light * 0.85, alpha * 0.7); // softened per playtest
   }
 `;
 

@@ -80,8 +80,14 @@ export class PlayerShip extends ShipBase {
      */
     this.inventory = {};
 
-    /** Permanent upgrade multipliers, improved by exploration finds + shop. */
-    this.upgrades = { engine: 1, shield: 1, weapon: 1 };
+    /**
+     * Upgrade multipliers are PER SHIP: buying an upgrade (or finding an
+     * anomaly) improves only the hull you're flying. `upgrades` always
+     * aliases the ACTIVE ship's entry so every consumer reads the right one.
+     * @type {Record<string, {engine: number, shield: number, weapon: number}>}
+     */
+    this.upgradesByShip = {};
+    this.upgrades = this.upgradesFor('starter');
 
     /**
      * Ship collection (bible: bought ships are kept; the active one is lost
@@ -247,11 +253,21 @@ export class PlayerShip extends ShipBase {
    * swap at the Exchange is seamless.
    * @param {string} id catalog id (must be owned; ownership enforced by shop)
    */
+  /** The (created-on-demand) per-ship upgrade entry for a catalog id. */
+  upgradesFor(id) {
+    if (!this.upgradesByShip[id]) {
+      this.upgradesByShip[id] = { engine: 1, shield: 1, weapon: 1 };
+    }
+    return this.upgradesByShip[id];
+  }
+
   setShip(id) {
     const v = PLAYER_SHIP_BY_ID[id];
     if (!v || this.ships.active === id) return;
     this.ships.active = id;
     this.statMult = v;
+    // Upgrades are per-ship: re-point the live alias at this hull's entry.
+    this.upgrades = this.upgradesFor(id);
 
     // Swap the visual rig (old glow sprites live inside the old visual group).
     this.object3D.remove(this.visual);

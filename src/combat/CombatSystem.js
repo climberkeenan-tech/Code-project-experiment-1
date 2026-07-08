@@ -30,6 +30,9 @@ export class CombatSystem {
       } else if (ship.isEscort) {
         // A deployed wingman went down — the fleet handles the loss.
         game.fleet?.onEscortDestroyed(ship);
+      } else if (ship.isFriendly) {
+        // An allied traffic ship was shot down — no reward, no reinforcement.
+        game.traffic?.onTrafficDestroyed(ship);
       } else {
         // Kill reward: credits scaled by enemy class (level).
         if (byPlayer) {
@@ -66,6 +69,7 @@ export class CombatSystem {
     const lost = player.ships.active;
     const i = player.ships.owned.indexOf(lost);
     if (i !== -1) player.ships.owned.splice(i, 1);
+    delete player.upgradesByShip[lost]; // its upgrades die with the hull
     if (player.ships.owned.length === 0) player.ships.owned.push('starter');
     const cheapest = [...player.ships.owned]
       .sort((a, b) => (PLAYER_SHIP_BY_ID[a]?.cost ?? 0) - (PLAYER_SHIP_BY_ID[b]?.cost ?? 0))[0];

@@ -22,7 +22,6 @@ import { EscortShip } from './EscortShip.js';
 const ATTACK_FIGHTER = 'starter';
 /** Hull the heavier hangar-launched gunner ships fly (gunnerHangar craft). */
 const GUNNER_SHIP = 'frigate';
-const DOCK_RANGE = 45;
 /** Seconds between hangar-launch waves (two craft per wave). */
 const LAUNCH_INTERVAL = 0.32;
 
@@ -114,12 +113,11 @@ export class FleetSystem {
       }
     }
 
-    // Tick escorts; dock the ones that flew home to their bay slot (or close
-    // enough to the hull) while recalling.
+    // Tick escorts; dock ONLY the ones that actually reached their bay mouth
+    // (no mid-approach vanishing — the craft visibly flies into the hangar).
     for (const esc of [...this.escorts]) {
       esc.update(dt);
-      if (esc.recalling
-        && (esc.docked || esc.position.distanceTo(game.player.position) < DOCK_RANGE)) {
+      if (esc.recalling && esc.docked) {
         this._dock(esc);
       }
     }

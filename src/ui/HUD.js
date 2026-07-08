@@ -75,6 +75,8 @@ export class HUD {
 
       <div class="damage-vignette" data-el="vignette"></div>
       <div class="entry-glow" data-el="entryGlow"></div>
+      <div class="underwater" data-el="underwater"></div>
+      <div class="air-meter" data-el="airMeter"></div>
       <div class="hud-debug" data-el="debug"></div>
     `;
     root.appendChild(this.el);
@@ -117,6 +119,44 @@ export class HUD {
       this.showBanner('Missile Intercepted', '', 1.2);
     });
     game.events.on('fleet:launched', (n) => this.showBanner('Attack Ships Deployed', `${n} craft launched — Deploy/G again to recall · Focus/V directs fire`, 2.8));
+    // Teach the fleet key: whenever the player boards a carrier-class hull.
+    game.events.on('ship:changed', (v) => {
+      if ((v?.hangar ?? 0) > 0) {
+        this.showBanner('Fleet Ready', 'press G — your ships deploy as a protective fleet around you', 3.6);
+      }
+    });
+    game.events.on('game:started', () => {
+      if ((game.player?.statMult?.hangar ?? 0) > 0) {
+        this.showBanner('Fleet Ready', 'press G — your ships deploy as a protective fleet around you', 3.6);
+      }
+    });
+    game.events.on('nav:toggled', (hidden) => {
+      this.showBanner(hidden ? 'Navigation Markers Hidden' : 'Navigation Markers Shown', 'press N to toggle', 1.6);
+    });
+    // Underwater: blue wash + a breath meter of popping bubbles.
+    game.events.on('onfoot:air', ({ air01, under }) => {
+      this.refs.underwater.classList.toggle('visible', under);
+      const meter = this.refs.airMeter;
+      if (!under && air01 >= 1) {
+        meter.classList.remove('visible');
+      } else {
+        meter.classList.add('visible');
+        const total = 8;
+        const filled = Math.ceil(air01 * total);
+        let html = '';
+        for (let i = 0; i < total; i++) {
+          html += `<span class="bubble${i < filled ? ' full' : ''}"></span>`;
+        }
+        meter.innerHTML = html;
+      }
+    });
+    game.events.on('onfoot:drowned', () => {
+      this.showBanner('You Drowned', 'your ore floats where you sank — swim back for the amber marker', 4);
+    });
+    game.events.on('onfoot:left', () => {
+      this.refs.underwater.classList.remove('visible');
+      this.refs.airMeter.classList.remove('visible');
+    });
     game.events.on('fleet:focus', (t) => this.showBanner('Fleet: Focus Fire', `wing attacking Lv${t.stats?.level ?? '?'} ${t.stats?.displayName ?? 'hostile'}`, 2.4));
     game.events.on('fleet:free', () => this.showBanner('Fleet: Free Engage', 'wing hunting on its own', 2));
     game.events.on('fleet:no-wing', () => this.showBanner('No Wing Deployed', 'press Deploy (G) to launch attack ships first', 2.2));

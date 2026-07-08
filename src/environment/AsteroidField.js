@@ -89,9 +89,14 @@ export class AsteroidField {
       matrix.compose(position, quaternion, scaleVec);
 
       const mesh = this.meshes[i % this.meshes.length];
-      mesh.setMatrixAt(Math.floor(i / this.meshes.length), matrix);
+      const slot = Math.floor(i / this.meshes.length);
+      mesh.setMatrixAt(slot, matrix);
 
-      this.rocks.push({ x: position.x, y: position.y, z: position.z, r: scale * 1.05 });
+      this.rocks.push({
+        x: position.x, y: position.y, z: position.z, r: scale * 1.05,
+        hp: 55 + scale * 16, // shootable: a few bolts crack a small rock
+        mesh, slot, dead: false,
+      });
     }
     for (const mesh of this.meshes) {
       mesh.instanceMatrix.needsUpdate = true;
@@ -133,27 +138,71 @@ export class AsteroidField {
     this._local = new THREE.Vector3();
     this._normal = new THREE.Vector3();
     this._playerCooldown = 0;
+    this._zeroMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
+
+    // --- Drifters: a few free-roaming rocks that wander the field ---
+    // (playtest: "there should be asteroids that move around"). Individual
+    // meshes, so they can actually translate; shoot them to break them.
+    /** @type {Array<object>} local-space records, also probed by sphereHit */
+    this.drifters = [];
+    const driftCount = Math.min(6, Math.floor((this.rocks.length || 0) / 30));
+    for (let d = 0; d < driftCount; d++) {
+      const r = rng.range(6, 14);
+      const mesh = new THREE.Mesh(variants[d % variants.length], material);
+      mesh.scale.setScalar(r / 1.05);
+      const drifter = {
+        x: rng.gaussian() * radius * 0.3,
+        y: rng.gaussian() * radius * 0.15,
+        z: rng.gaussian() * radius * 0.3,
+        vx: rng.range(-7, 7), vy: rng.range(-3, 3), vz: rng.range(-7, 7),
+        rx: rng.range(-0.4, 0.4), ry: rng.range(-0.4, 0.4),
+        r, hp: 55 + r * 16, mesh, drifter: true, dead: false,
+      };
+      mesh.position.set(drifter.x, drifter.y, drifter.z);
+      this.group.add(mesh);
+      this.drifters.push(drifter);
+    }
   }
 
   /**
-   * Sphere query against the rocks.
+   * Sphere query against the rocks (static + drifting).
    * @param {THREE.Vector3} worldPos
    * @param {number} radius
-   * @returns {{x:number,y:number,z:number,r:number}|null} hit rock (local coords)
+   * @returns {object|null} hit rock record (local coords)
    */
   sphereHit(worldPos, radius) {
     this._local.copy(worldPos).sub(this.group.position);
     // Cheap reject: outside the field bounds entirely.
     if (this._local.lengthSq() > (this.radius + 200) ** 2) return null;
 
-    const gx = Math.floor(this._local.x / this.cellSize);
-    const gy = Math.floor(this._local.y / this.cellSize);
-    const gz = Math.floor(this._local.z / this.cellSize);
-    const bucket = this.grid.get(`${gx},${gy},${gz}`);
-    if (!bucket) return null;
-
-    for (const index of bucket) {
-      const rock = this.rocks[index];
+    // Query EVERY cell the sphere overlaps (a single-cell probe used to miss
+    // most contacts — big hulls plowed straight through rocks).
+    const minX = Math.floor((this._local.x - radius) / this.cellSize);
+    const maxX = Math.floor((this._local.x + radius) / this.cellSize);
+    const minY = Math.floor((this._local.y - radius) / this.cellSize);
+    const maxY = Math.floor((this._local.y + radius) / this.cellSize);
+    const minZ = Math.floor((this._local.z - radius) / this.cellSize);
+    const maxZ = Math.floor((this._local.z + radius) / this.cellSize);
+    for (let gx = minX; gx <= maxX; gx++) {
+      for (let gy = minY; gy <= maxY; gy++) {
+        for (let gz = minZ; gz <= maxZ; gz++) {
+          const bucket = this.grid.get(`${gx},${gy},${gz}`);
+          if (!bucket) continue;
+          for (const index of bucket) {
+            const rock = this.rocks[index];
+            if (rock.dead) continue;
+            const dx = this._local.x - rock.x;
+            const dy = this._local.y - rock.y;
+            const dz = this._local.z - rock.z;
+            const sum = rock.r + radius;
+            if (dx * dx + dy * dy + dz * dz < sum * sum) return rock;
+          }
+        }
+      }
+    }
+    // Drifters roam outside the hash — linear probe (there are ≤6).
+    for (const rock of this.drifters) {
+      if (rock.dead) continue;
       const dx = this._local.x - rock.x;
       const dy = this._local.y - rock.y;
       const dz = this._local.z - rock.z;
@@ -163,7 +212,45 @@ export class AsteroidField {
     return null;
   }
 
+  /**
+   * A weapon bolt struck a rock: spark, chip salvage, and — enough damage —
+   * BREAK it (the rock disappears in a burst; drifters stop being a threat).
+   */
+  damageRock(rock, damage, worldPos, fromPlayer) {
+    const game = this.game;
+    if (game.explosions) game.explosions.spawn(worldPos, 0.28);
+    if (fromPlayer && game.pickups && Math.random() < 0.14) {
+      game.pickups.spawnBurst(worldPos, 1);
+    }
+    rock.hp -= damage;
+    if (rock.hp > 0 || rock.dead) return;
+    rock.dead = true;
+    if (rock.drifter) {
+      this.group.remove(rock.mesh);
+    } else {
+      rock.mesh.setMatrixAt(rock.slot, this._zeroMatrix);
+      rock.mesh.instanceMatrix.needsUpdate = true;
+    }
+    if (game.explosions) game.explosions.spawn(worldPos, 0.9);
+    if (fromPlayer && game.pickups) {
+      game.pickups.spawnBurst(worldPos, 2 + Math.round(rock.r / 6));
+    }
+    game.audio?.playNoise?.({ duration: 0.4, gain: 0.3, filterFreq: 500, filterEnd: 70 });
+  }
+
   update(dt) {
+    // Drifters wander slowly, tumbling; they turn back at the field edge.
+    for (const d of this.drifters) {
+      if (d.dead) continue;
+      d.x += d.vx * dt; d.y += d.vy * dt; d.z += d.vz * dt;
+      if (d.x * d.x + d.y * d.y + d.z * d.z > this.radius * this.radius) {
+        d.vx = -d.vx; d.vy = -d.vy; d.vz = -d.vz;
+      }
+      d.mesh.position.set(d.x, d.y, d.z);
+      d.mesh.rotation.x += d.rx * dt;
+      d.mesh.rotation.y += d.ry * dt;
+    }
+
     // Player-vs-rock collision (with a short cooldown to avoid grinding).
     this._playerCooldown -= dt;
     const player = this.game.player;

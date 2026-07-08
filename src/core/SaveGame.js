@@ -16,7 +16,7 @@ import { PLAYER_SHIP_BY_ID } from '../ship/ShipFactory.js';
  */
 
 const KEY = 'starfall-frontier-save-v1';
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3; // v3: per-ship upgrades
 
 /** Default adapter: browser localStorage, no-op if blocked (private mode). */
 class LocalStorageAdapter {
@@ -77,14 +77,6 @@ export class SaveGame {
       }
     }
 
-    if (data.upgrades) {
-      for (const key of ['engine', 'shield', 'weapon']) {
-        if (typeof data.upgrades[key] === 'number') {
-          player.upgrades[key] = data.upgrades[key];
-        }
-      }
-    }
-
     if (Array.isArray(data.crew) && this.game.crew) this.game.crew.restore(data.crew);
 
     // Ship collection (validate every id against the live catalog).
@@ -95,6 +87,28 @@ export class SaveGame {
         && player.ships.owned.includes(data.ships.active)
         ? data.ships.active : player.ships.owned[0];
       player.setShip(active);
+    }
+
+    // Upgrades (per ship since v3; restored after ships so the active alias
+    // points at the right entry). Legacy saves stored one flat
+    // {engine, shield, weapon} — migrate it onto the active ship.
+    if (data.upgrades && typeof data.upgrades === 'object') {
+      const keys = ['engine', 'shield', 'weapon'];
+      if (typeof data.upgrades.engine === 'number') {
+        const mine = player.upgradesFor(player.ships.active);
+        for (const key of keys) {
+          if (typeof data.upgrades[key] === 'number') mine[key] = data.upgrades[key];
+        }
+      } else {
+        for (const [shipId, entry] of Object.entries(data.upgrades)) {
+          if (!PLAYER_SHIP_BY_ID[shipId] || !entry || typeof entry !== 'object') continue;
+          const mine = player.upgradesFor(shipId);
+          for (const key of keys) {
+            if (typeof entry[key] === 'number') mine[key] = entry[key];
+          }
+        }
+      }
+      player.upgrades = player.upgradesFor(player.ships.active);
     }
 
     // Accept both the legacy `discovered` and the v2 `discoveredSites`.
@@ -113,7 +127,7 @@ export class SaveGame {
       resources: player.resources,
       credits: player.credits,
       inventory: { ...player.inventory },
-      upgrades: player.upgrades,
+      upgrades: player.upgradesByShip, // per-ship since v3 (legacy flat shape migrated on load)
       crew: this.game.crew
         ? this.game.crew.roster.map((c) => ({ role: c.role, name: c.name, stars: c.stars }))
         : [],
@@ -141,6 +155,18 @@ export class SaveGame {
   _write() {
     const player = this.game.player;
     if (!player) return;
+    // Creative sessions are a sandbox: NOTHING they do is persisted, so free
+    // ships/credits can never leak into a survival save.
+    if (this.game.creative) return;
     this.adapter.write(KEY, JSON.stringify(this.serialize()));
+  }
+
+  /** Wipe the save entirely (the start screen's "Reset progress"). */
+  reset() {
+    if (this._pending) { clearTimeout(this._pending); this._pending = null; }
+    try {
+      this.adapter.write(KEY, '');
+      window.localStorage?.removeItem(KEY);
+    } catch { /* storage unavailable — nothing to wipe */ }
   }
 }

@@ -221,17 +221,16 @@ export const PLAYER_SHIPS = [
   { id: 'interceptor', name: 'SF-30 Kestrel', level: 30, cost: 800,
     hull: 1.5, shield: 1.45, engine: 1.18, crew: 3, model: 'gunship', modelScale: 1.18,
     scale: 1.14, hullColor: 0xd6c9b9, accentColor: 0x4a3524, glow: [3.6, 2.2, 0.7] },
-  // SF-50 / SF-70 are the "gunner ship" line. For now they fly the same
-  // Nebula gunship hull as the SF-20 / SF-30 (scaled up per tier) until their
-  // own models are authored, and carry a heavier gun (catalog `weapon` — a
-  // multiplier on the player's bolt damage). SF-50 = 1.5x, SF-70 = 2x.
+  // SF-50 / SF-70: the "gunner ship" line, each on its own player-authored
+  // hull, with a heavier gun (catalog `weapon` — a multiplier on the player's
+  // bolt damage). SF-50 = 1.5x, SF-70 = 2x.
   { id: 'frigate', name: 'SF-50 Aegis Gunner', level: 50, cost: 2080,
     hull: 2.2, shield: 2.1, engine: 1.28, crew: 4, weapon: 1.5,
-    model: 'gunship', modelScale: 1.4, twinFin: true,
+    model: 'aegis', twinFin: true,
     scale: 1.26, hullColor: 0xaebfd4, accentColor: 0x22344d, glow: [1.2, 2.2, 5.4] },
   { id: 'battlecruiser', name: 'SF-70 Bastion Gunner', level: 70, cost: 6400,
     hull: 3.4, shield: 3.1, engine: 1.38, crew: 5, weapon: 2.0,
-    model: 'gunship', modelScale: 1.7, twinFin: true, quadEngines: true,
+    model: 'bastion', twinFin: true, quadEngines: true,
     scale: 1.42, hullColor: 0x9aa8bd, accentColor: 0x40274d, glow: [3.2, 1.2, 5.2] },
   { id: 'sovereign', name: 'SF-100 Sovereign', level: 100, cost: 20800,
     hull: 5.2, shield: 4.6, engine: 1.5, crew: 7, twinFin: true, quadEngines: true,
@@ -364,30 +363,62 @@ function buildModelRig(modelId, glowColor, scale = 1) {
   const group = proto.clone(true);
   if (scale !== 1) group.scale.multiplyScalar(scale);
   const b = proto.userData.shipBounds;
-  const W = b.width * scale;
 
-  // Gameplay anchors derived from the normalized bounds: engine nozzles at
-  // the stern, cannon muzzles ahead of the wing tips. Per-model `nozzles`
-  // (set from the MODELS registry) tune where the exhaust actually sits:
-  // x = spread (× full width), y = height offset (× full height), z = how far
-  // back (× stern Z). Defaults match the old bounds-only guess.
-  const nz = proto.userData.nozzles ?? {};
-  const nx = nz.x ?? 0.16, ny = nz.y ?? 0, nzk = nz.z ?? 0.92;
-  const engines = [
-    new THREE.Vector3(-W * nx, b.height * scale * ny, b.rearZ * scale * nzk),
-    new THREE.Vector3(W * nx, b.height * scale * ny, b.rearZ * scale * nzk),
-  ];
+  // ENGINE anchors live in UNSCALED proto space: EngineGlow parents the flame
+  // units inside the (scaled) visual group, so the group transform already
+  // applies. Pre-multiplying by `scale` double-scales them — flames end up
+  // inside the hull on scaled-down ships and floating behind scaled-up ones.
+  // HARDPOINTS are the opposite: consumed in world-space math without the
+  // group transform, so they MUST be scaled here.
+  const eng = modelEngineAnchors(proto);
+  const W = b.width * scale;
   const hardpoints = [
     new THREE.Vector3(-W * 0.34, 0, b.noseZ * scale * 0.45),
     new THREE.Vector3(W * 0.34, 0, b.noseZ * scale * 0.45),
   ];
   return {
-    group, engines, hardpoints,
+    group, engines: eng.anchors, hardpoints,
     radius: (b.length * scale) / 2.6,
     glowColor,
-    // Flame grows with hull length (fighter ≈ 1, capitals many×) so the
-    // exhaust never looks like a tiny dot on a big ship.
-    engineScale: Math.max(1, (b.length * scale) / 10),
+    engineScale: eng.flameScale,
+  };
+}
+
+/**
+ * Engine-nozzle anchors for a model prototype, in UNSCALED proto space
+ * (the flame units sit inside the scaled visual, which applies the ship's
+ * scale on top — never pre-multiply). Prefers authored per-thruster anchors
+ * (`MODELS[id].anchors`, measured off the real geometry — any nozzle count);
+ * falls back to the two-point bounds formula tuned by `nozzles` fractions.
+ *
+ * `flameScale`: with authored anchors the flame is sized by the nozzle
+ * SPACING (each flame sits on its own bell, no blobbing); with the fallback
+ * it grows with hull length as before.
+ */
+function modelEngineAnchors(proto) {
+  const b = proto.userData.shipBounds;
+  const authored = proto.userData.nozzleAnchors;
+  if (authored?.length) {
+    const anchors = authored.map((a) => new THREE.Vector3(a[0], a[1], a[2]));
+    let minDist = Infinity;
+    for (let i = 0; i < anchors.length; i++) {
+      for (let j = i + 1; j < anchors.length; j++) {
+        minDist = Math.min(minDist, anchors[i].distanceTo(anchors[j]));
+      }
+    }
+    const flameScale = anchors.length > 1
+      ? Math.min(Math.max(1, minDist * 0.55), Math.max(1, b.length / 8))
+      : Math.max(1, b.length / 10);
+    return { anchors, flameScale };
+  }
+  const nz = proto.userData.nozzles ?? {};
+  const nx = nz.x ?? 0.16, ny = nz.y ?? 0, nzk = nz.z ?? 0.92;
+  return {
+    anchors: [
+      new THREE.Vector3(-b.width * nx, b.height * ny, b.rearZ * nzk),
+      new THREE.Vector3(b.width * nx, b.height * ny, b.rearZ * nzk),
+    ],
+    flameScale: Math.max(1, b.length / 10),
   };
 }
 
@@ -507,22 +538,19 @@ export function createEnemyShip(type) {
       const group = proto.clone(true); // shares the faction material set
       group.scale.multiplyScalar(mm.scale);
       const b = proto.userData.shipBounds;
+      // Engines UNSCALED (flame units live inside the scaled visual);
+      // hardpoints SCALED (world-space math). See buildModelRig.
+      const eng = modelEngineAnchors(proto);
       const W = b.width * mm.scale;
-      const nz = proto.userData.nozzles ?? {};
-      const nx = nz.x ?? 0.16, ny = nz.y ?? 0, nzk = nz.z ?? 0.92;
-      const engines = [
-        new THREE.Vector3(-W * nx, b.height * mm.scale * ny, b.rearZ * mm.scale * nzk),
-        new THREE.Vector3(W * nx, b.height * mm.scale * ny, b.rearZ * mm.scale * nzk),
-      ];
       const hardpoints = [
         new THREE.Vector3(-W * 0.3, 0, b.noseZ * mm.scale * 0.45),
         new THREE.Vector3(W * 0.3, 0, b.noseZ * mm.scale * 0.45),
       ];
       return {
-        group, engines, hardpoints,
+        group, engines: eng.anchors, hardpoints,
         radius: (b.length * mm.scale) / 2.6,
         glowColor: new THREE.Color(5.4, 0.6, 0.5),
-        engineScale: Math.max(1, (b.length * mm.scale) / 10),
+        engineScale: eng.flameScale,
         modeled: true,
       };
     }

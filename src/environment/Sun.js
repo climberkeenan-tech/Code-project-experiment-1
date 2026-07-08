@@ -46,7 +46,7 @@ export class Sun {
     // The disc: HDR emissive so tone mapping + bloom render a convincing star.
     this.disc = new THREE.Mesh(
       new THREE.SphereGeometry(SUN_RADIUS, 24, 16),
-      new THREE.MeshBasicMaterial({ color: new THREE.Color(14, 11, 7.5), fog: false }),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(8.5, 6.7, 4.6), fog: false }) // dimmed per playtest (glare),
     );
     this.disc.position.copy(this.position);
     game.engine.scene.add(this.disc);
@@ -55,7 +55,7 @@ export class Sun {
     const glowTex = getGlowTexture(256, 1.6);
     this.corona = new THREE.Sprite(new THREE.SpriteMaterial({
       map: glowTex,
-      color: new THREE.Color(0.9, 0.65, 0.35),
+      color: new THREE.Color(0.62, 0.45, 0.24), // dimmed per playtest
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
@@ -66,7 +66,7 @@ export class Sun {
 
     this.coronaInner = new THREE.Sprite(new THREE.SpriteMaterial({
       map: getGlowTexture(256, 3.2),
-      color: new THREE.Color(3.2, 2.4, 1.3),
+      color: new THREE.Color(2.1, 1.6, 0.85), // dimmed per playtest
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,

@@ -1,15 +1,20 @@
 import * as THREE from 'three';
 import { ShipBase } from '../ship/ShipBase.js';
-import { createPlayerShip } from '../ship/ShipFactory.js';
+import { createPlayerShip, PLAYER_SHIP_BY_ID } from '../ship/ShipFactory.js';
 import { EngineGlow } from '../fx/EngineGlow.js';
+import { ShieldEffect } from '../fx/ShieldEffect.js';
 import { clamp, damp } from '../core/math/noise.js';
 
 /**
  * Ambient friendly traffic: a handful of allied ships cruising around the
  * player's neighbourhood, the way pirates sometimes drift by — space feels
- * inhabited by more than hostiles. They are DECORATIVE: enemies ignore them,
- * weapons pass through them, and they never attack. They read as friendly via
- * blue HUD brackets (TargetOverlay), blue radar blips, and natural hulls.
+ * inhabited by more than hostiles. They read as friendly via blue HUD
+ * brackets (TargetOverlay), blue radar blips, and natural hulls.
+ *
+ * They are COMBATANTS on your side: when hostiles come near them or near the
+ * player, allies engage — lock-till-kill, fromPlayer bolts (kills credit the
+ * player) — and enemy fire can hurt and destroy them (WeaponSystem sweeps
+ * them; CombatSystem routes their deaths back here).
  *
  * Each ship wanders between waypoints picked near the player, so traffic
  * "hangs around" instead of drifting off; ships that fall far behind (warp,
@@ -21,6 +26,11 @@ const CHECK_INTERVAL = 3; // seconds between population checks
 const SPAWN_MIN = 2500;
 const SPAWN_MAX = 7000;
 const DESPAWN_RANGE = 16000;
+const ALLY_ENGAGE_SELF = 1600; // fight hostiles this close to the ally…
+const ALLY_DEFEND_PLAYER = 1300; // …or this close to the player ("protect me")
+const ALLY_LEASH = 4500; // give up a chase this far from the player
+const ALLY_FIRE_INTERVAL = 0.55;
+const ALLY_BASE_DAMAGE = 7; // lighter than wing craft — helpful, not a win button
 
 /** Friendly hulls seen in the wild — mostly small craft, capitals are rare. */
 const CIVILIAN_VARIANTS = ['starter', 'starter', 'explorer', 'explorer', 'interceptor', 'frigate'];
@@ -36,19 +46,37 @@ class TrafficShip extends ShipBase {
     this.isFriendly = true;
     this.callsign = callsign;
     this.cruise = 70 + Math.random() * 90; // leisurely, per-ship
+    this.combatSpeed = 260; // wakes up when defending
     this.waypoint = new THREE.Vector3();
+    /** The hostile this ally is locked onto — kept until it dies. */
+    this.target = null;
     this._retarget = 0;
     this._seed = Math.random() * 10;
+    this._fireCooldown = Math.random() * ALLY_FIRE_INTERVAL;
     this._desired = new THREE.Vector3();
     this._dir = new THREE.Vector3();
     this._away = new THREE.Vector3();
+    this._muzzle = new THREE.Vector3();
+    this._lead = new THREE.Vector3();
     this._q = new THREE.Quaternion();
+
+    const v = PLAYER_SHIP_BY_ID[variantId] ?? PLAYER_SHIP_BY_ID.starter;
+    this.hullMax = this.hull = Math.round(90 * v.hull);
+    this.shieldMax = this.shield = Math.round(90 * v.shield);
+    this.shieldRegenRate = 7;
+    this.shieldRegenDelay = 4.5;
+    this.fireDamage = ALLY_BASE_DAMAGE * (v.weapon ?? 1);
+
     this.glow = new EngineGlow(this.visual, this.engines, this.glowColor, this.engineScale);
+    this.shieldFx = new ShieldEffect(this.object3D, this.radius * 1.4);
     game.engine.scene.add(this.object3D);
   }
 
   update(dt) {
+    this.shieldFx.update(dt);
+    if (!this.alive) return;
     const game = this.game;
+    this._fireCooldown -= dt;
 
     // Re-pick a destination near the player so traffic loiters in the area.
     this._retarget -= dt;
@@ -60,10 +88,21 @@ class TrafficShip extends ShipBase {
         .add(game.player.position);
     }
 
-    // Cruise toward the waypoint, easing in/out.
-    this._desired.copy(this.waypoint).sub(this.position);
+    // --- Combat: allies defend themselves and the player ---
+    const engaged = this._acquire();
+    let goal = this.waypoint;
+    let topSpeed = this.cruise;
+    if (engaged) {
+      // Push to a standoff point near the target — a real dogfight approach.
+      this._desired.copy(this.position).sub(engaged.position).normalize();
+      goal = this._away.copy(engaged.position).addScaledVector(this._desired, 110 + this._seed * 8);
+      topSpeed = this.combatSpeed;
+    }
+
+    // Cruise toward the goal, easing in/out.
+    this._desired.copy(goal).sub(this.position);
     const dist = this._desired.length();
-    const speed = clamp(dist * 0.4, 30, this.cruise);
+    const speed = clamp(dist * (engaged ? 1.0 : 0.4), 30, topSpeed);
     if (dist > 1e-3) this._desired.divideScalar(dist).multiplyScalar(speed);
 
     // Stay out of planets/sun: soft push away from any obstacle sphere.
@@ -76,20 +115,74 @@ class TrafficShip extends ShipBase {
       }
     }
 
-    this.velocity.lerp(this._desired, 1 - Math.exp(-1.4 * dt));
+    this.velocity.lerp(this._desired, 1 - Math.exp(-(engaged ? 2.4 : 1.4) * dt));
     this.position.addScaledVector(this.velocity, dt);
 
-    // Face travel direction.
-    if (this.velocity.lengthSq() > 4) {
+    // Face the target while fighting, else the travel direction.
+    if (engaged) {
+      this._dir.copy(engaged.position).sub(this.position).normalize();
+      this._q.setFromUnitVectors(FORWARD, this._dir);
+      this.quaternion.slerp(this._q, damp(3.2, dt));
+    } else if (this.velocity.lengthSq() > 4) {
       this._dir.copy(this.velocity).normalize();
       this._q.setFromUnitVectors(FORWARD, this._dir);
       this.quaternion.slerp(this._q, damp(2.2, dt));
     }
 
-    this.glow.update(clamp(this.velocity.length() / this.cruise, 0.25, 1), 0, this._seed);
+    // Fire with velocity lead, like the wing craft.
+    if (engaged && this._fireCooldown <= 0) {
+      this._fireCooldown = ALLY_FIRE_INTERVAL;
+      const hp = this.hardpoints[Math.floor(Math.random() * this.hardpoints.length)];
+      this._muzzle.copy(hp).applyQuaternion(this.quaternion).add(this.position);
+      const d = this._lead.copy(engaged.position).sub(this._muzzle).length();
+      this._lead.copy(engaged.position)
+        .addScaledVector(engaged.velocity, d / 950)
+        .addScaledVector(this.velocity, -d / 950)
+        .sub(this._muzzle).normalize();
+      this._lead.x += (Math.random() - 0.5) * 0.025;
+      this._lead.y += (Math.random() - 0.5) * 0.025;
+      game.weapons.fire(this._muzzle, this._lead.normalize(), {
+        fromPlayer: true, // hits enemies; kills credit the player
+        damage: this.fireDamage,
+        speed: 950,
+        source: this,
+        inheritVel: this.velocity,
+      });
+    }
+
+    this.updateDefense(dt);
+    this.glow.update(clamp(this.velocity.length() / topSpeed, 0.25, 1), 0, this._seed);
+  }
+
+  /**
+   * Lock-till-kill: keep the current hostile until it dies (or the fight
+   * drifts too far from the player). Fresh picks take the nearest hostile
+   * threatening this ally or the player.
+   */
+  _acquire() {
+    const player = this.game.player;
+    if (this.target?.alive
+      && this.target.position.distanceToSquared(player.position) < ALLY_LEASH * ALLY_LEASH) {
+      return this.target;
+    }
+    this.target = null;
+    let best = null;
+    let bestSq = Infinity;
+    const selfSq = ALLY_ENGAGE_SELF * ALLY_ENGAGE_SELF;
+    const defendSq = ALLY_DEFEND_PLAYER * ALLY_DEFEND_PLAYER;
+    for (const enemy of this.game.enemies?.enemies ?? []) {
+      if (!enemy.alive) continue;
+      const dSelf = enemy.position.distanceToSquared(this.position);
+      const threat = dSelf < selfSq
+        || enemy.position.distanceToSquared(player.position) < defendSq;
+      if (threat && dSelf < bestSq) { bestSq = dSelf; best = enemy; }
+    }
+    this.target = best;
+    return best;
   }
 
   dispose() {
+    this.shieldFx.dispose();
     this.game.engine.scene.remove(this.object3D);
   }
 }
@@ -133,6 +226,13 @@ export class FriendlyTraffic {
 
     if (this.ships.length >= TRAFFIC_CAP) return;
     this._spawnOne();
+  }
+
+  /** An ally was shot down (routed here by CombatSystem). */
+  onTrafficDestroyed(ship) {
+    const i = this.ships.indexOf(ship);
+    if (i !== -1) this.ships.splice(i, 1);
+    ship.dispose();
   }
 
   _spawnOne() {

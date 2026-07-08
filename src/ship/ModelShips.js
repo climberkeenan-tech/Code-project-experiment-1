@@ -25,6 +25,8 @@ const MODELS = {
     targetLength: 9,
     yaw: -Math.PI / 2, // Meshy convention: authored nose along -X
     pitch: 0,
+    // Thruster anchors measured from the mesh (rear-facing vertex clusters).
+    anchors: [[-1.81, -0.66, 3.78], [1.81, -0.66, 3.78], [-1.25, -0.57, 3.84], [1.25, -0.57, 3.84], [-1.45, 0.54, 4.18], [1.45, 0.54, 4.18]],
   },
   // "Nebula Vanguard" gunship — the second ship in the progression.
   gunship: {
@@ -32,6 +34,8 @@ const MODELS = {
     targetLength: 11,
     yaw: -Math.PI / 2, // authored nose along -X → rotate onto -Z
     pitch: 0,
+    // Thruster anchors measured from the mesh (rear-facing vertex clusters).
+    anchors: [[-1.11, 0.19, 5.11], [1.11, 0.19, 5.11], [-1.01, -0.47, 5.05], [1.01, -0.47, 5.05]],
   },
   // "Obsidian Dreadnought" — the mid capital: bridges the 50→100 gap.
   // Big, but deliberately in the MIDDLE: it dwarfs the fighters yet is
@@ -41,6 +45,8 @@ const MODELS = {
     targetLength: 32,
     yaw: -Math.PI / 2, // Meshy convention: authored nose along -X
     pitch: 0,
+    // Thruster anchors measured from the mesh (rear-facing vertex clusters).
+    anchors: [[-8.47, -2.44, 14.79], [8.47, -2.44, 14.79], [-2.11, -3.85, 15.28], [2.11, -3.85, 15.28]],
   },
   // "Imperial Star Destroyer"-style flagship — the fleet carrier.
   flagship: {
@@ -48,6 +54,8 @@ const MODELS = {
     targetLength: 100, // vast: ~11x a fighter, dwarfs everything it stores
     yaw: -Math.PI / 2, // Meshy convention (verified on the turntable)
     pitch: 0,
+    // Thruster anchors measured from the mesh (rear-facing vertex clusters).
+    anchors: [[-10.54, -5.47, 45.25], [10.54, -5.47, 45.25], [-4.4, 2.35, 46.37], [4.4, 2.35, 46.37], [-2.59, -7.36, 47.01], [2.59, -7.36, 47.01]],
   },
   // "Aethelred" — the player-authored deep-space cruiser and new fleet apex.
   aethelred: {
@@ -55,6 +63,26 @@ const MODELS = {
     targetLength: 300, // ~3x the flagship: the biggest hull in the game
     yaw: -Math.PI / 2, // Meshy convention: authored nose along -X
     pitch: 0,
+    // Thruster anchors measured from the mesh (rear-facing vertex clusters).
+    anchors: [[-27.19, -6.06, 134.18], [27.19, -6.06, 134.18], [-9.38, -10.18, 133.22], [9.38, -10.18, 133.22], [-9.2, 15.13, 134.25], [9.2, 15.13, 134.25]],
+  },
+  // "Obsidian Dreadnought" mk2 — the SF-50 Aegis gunner ship (player-authored).
+  aegis: {
+    url: 'models-glb/aegis.glb',
+    targetLength: 16, // gunner ship: between the fighters (9-11) and mid capital (32)
+    yaw: -Math.PI / 2, // Meshy convention: authored nose along -X
+    pitch: 0,
+    // Thruster anchors measured from the mesh (rear-facing vertex clusters).
+    anchors: [[-4.04, 0.15, 7.59], [4.04, 0.15, 7.59], [-2.15, -0.37, 6.96], [2.15, -0.37, 6.96], [-1.09, 0.04, 7.79], [1.09, 0.04, 7.79], [-1.08, -0.85, 7.51], [1.08, -0.85, 7.51]],
+  },
+  // "Crimson Dreadnought" — the SF-70 Bastion gunner ship (player-authored).
+  bastion: {
+    url: 'models-glb/bastion.glb',
+    targetLength: 20, // heavier gunner ship, still under the mid capital
+    yaw: -Math.PI / 2, // Meshy convention: authored nose along -X
+    pitch: 0,
+    // Thruster anchors measured from the mesh (rear-facing vertex clusters).
+    anchors: [[-1.03, 1.07, 8.74], [1.03, 1.07, 8.74], [-1.18, -0.07, 8.35], [1.18, -0.07, 8.35], [0, -0.01, 9.03]],
   },
 };
 
@@ -133,6 +161,9 @@ export function loadModelShips() {
           try {
             protos[id] = normalize(gltf.scene, spec);
             if (NOZZLES[id]) protos[id].userData.nozzles = NOZZLES[id];
+            // Authored per-thruster anchors (proto space, measured from the
+            // real geometry) — supports hulls with any number of nozzles.
+            if (spec.anchors) protos[id].userData.nozzleAnchors = spec.anchors;
             for (const cb of loadListeners) cb(id);
           } catch (err) {
             console.warn(`[models] ${id} normalize failed:`, err);

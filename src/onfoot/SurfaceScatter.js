@@ -15,8 +15,9 @@ import { RARITIES, RARITY_COLOR, rollRarity } from '../economy/Rarity.js';
 
 const SCATTER_RADIUS = 420; // how far props spread around the landing point
 const ROCK_COUNT = 60;
-const TREE_COUNT = 420; // dense enough to read as a real forest (playtest)
-const GRASS_COUNT = 800;
+const TREE_COUNT = 560; // dense enough to read as a real forest (playtest)
+const PALM_COUNT = 90; // beach palms on hot shorelines
+const GRASS_COUNT = 1600; // thick ground cover (playtest: "more grass")
 
 export class SurfaceScatter {
   /**
@@ -31,6 +32,12 @@ export class SurfaceScatter {
 
     /** @type {Array<{mesh: THREE.Mesh, rarity: import('../economy/Rarity.js').Rarity, localPos: THREE.Vector3}>} */
     this.rocks = [];
+    /**
+     * Solid props the avatar cannot walk through: planet-local base points +
+     * radii. Trees, palms and ore rocks all register here.
+     * @type {Array<{local: THREE.Vector3, r: number, dead?: boolean}>}
+     */
+    this.colliders = [];
     this._group = new THREE.Group();
     planet.group.add(this._group);
 
@@ -54,6 +61,7 @@ export class SurfaceScatter {
     this._wT1 = new THREE.Vector3();
     this._wT2 = new THREE.Vector3();
     this._wQuat = new THREE.Quaternion();
+    this._yawQ = new THREE.Quaternion();
   }
 
   /** True if a world point is on solid ground above any ocean. */
@@ -126,7 +134,9 @@ export class SurfaceScatter {
       mesh.position.copy(localPoint).addScaledVector(s.up, -size * 0.25);
       mesh.castShadow = true;
       this._group.add(mesh);
-      this.rocks.push({ mesh, rarity, localPos: localPoint.clone() });
+      const collider = { local: localPoint.clone(), r: size * 1.15 };
+      this.colliders.push(collider);
+      this.rocks.push({ mesh, rarity, localPos: localPoint.clone(), collider });
     }
   }
 
@@ -153,15 +163,64 @@ export class SurfaceScatter {
       if (!s) continue;
       const h = 0.75 + Math.random() * 0.8;
       scaleV.set(h * (0.8 + Math.random() * 0.4), h, h * (0.8 + Math.random() * 0.4));
-      this._standMatrix(s.point, s.up, scaleV, mat4);
+      const localPoint = this._standMatrix(s.point, s.up, scaleV, mat4);
       trunks.setMatrixAt(placed, mat4);
       leaves.setMatrixAt(placed, mat4);
+      this.colliders.push({ local: localPoint.clone(), r: 0.75 * h });
       placed++;
     }
     trunks.count = leaves.count = placed;
     trunks.instanceMatrix.needsUpdate = leaves.instanceMatrix.needsUpdate = true;
     this._group.add(trunks, leaves);
     this._trees = [trunks, leaves];
+
+    this._buildPalms(centerWorld);
+  }
+
+  /**
+   * Beach palms: on HOT worlds with an ocean (desert/terran/volcanic), the
+   * shoreline band gets leaning palms — a taller bare trunk with a drooping
+   * frond crown — so beaches read tropical.
+   */
+  _buildPalms(centerWorld) {
+    const d = this.planet.descriptor;
+    const hot = d.archetype === 'desert' || d.archetype === 'terran' || d.archetype === 'volcanic';
+    if (!hot || !d.hasOcean) return;
+
+    const trunkGeo = new THREE.CylinderGeometry(0.16, 0.3, 8.5, 5);
+    trunkGeo.translate(0, 4.25, 0);
+    // Crown: an inverted wide cone reads as drooping fronds from any angle.
+    const frondGeo = new THREE.ConeGeometry(3.4, 1.6, 7);
+    frondGeo.rotateX(Math.PI); // droop downward
+    frondGeo.translate(0, 8.9, 0);
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8a6a44, roughness: 0.9, flatShading: true });
+    const frondMat = new THREE.MeshStandardMaterial({ color: 0x3f9a52, roughness: 0.8, flatShading: true });
+
+    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, PALM_COUNT);
+    const fronds = new THREE.InstancedMesh(frondGeo, frondMat, PALM_COUNT);
+    trunks.castShadow = fronds.castShadow = true;
+
+    const scaleV = new THREE.Vector3();
+    const mat4 = new THREE.Matrix4();
+    let placed = 0;
+    for (let i = 0; i < PALM_COUNT * 6 && placed < PALM_COUNT; i++) {
+      const s = this._sampleSurface(centerWorld, 8, SCATTER_RADIUS);
+      if (!s) continue;
+      // Shore band only: just above the waterline.
+      const h = s.point.distanceTo(this.center) - this.planet.radius;
+      if (h < 1.0 || h > 5.5) continue;
+      const k = 0.8 + Math.random() * 0.5;
+      scaleV.set(k, k, k);
+      const localPoint = this._standMatrix(s.point, s.up, scaleV, mat4);
+      trunks.setMatrixAt(placed, mat4);
+      fronds.setMatrixAt(placed, mat4);
+      this.colliders.push({ local: localPoint.clone(), r: 0.6 * k });
+      placed++;
+    }
+    trunks.count = fronds.count = placed;
+    trunks.instanceMatrix.needsUpdate = fronds.instanceMatrix.needsUpdate = true;
+    this._group.add(trunks, fronds);
+    this._palms = [trunks, fronds];
   }
 
   _buildGrass(centerWorld) {
@@ -253,7 +312,15 @@ export class SurfaceScatter {
       c.turnTimer -= dt;
       if (c.turnTimer <= 0) {
         c.turnTimer = 1.5 + Math.random() * 3;
-        c.heading += (Math.random() - 0.5) * 1.6;
+        c.headingTarget = (c.headingTarget ?? c.heading) + (Math.random() - 0.5) * 1.6;
+      }
+      // Ease toward the target heading instead of snapping (playtest:
+      // "they move really weird").
+      if (c.headingTarget !== undefined) {
+        let dh = c.headingTarget - c.heading;
+        while (dh > Math.PI) dh -= Math.PI * 2;
+        while (dh < -Math.PI) dh += Math.PI * 2;
+        c.heading += dh * Math.min(1, dt * 2.5);
       }
       this._wUp.copy(c.local).normalize();
 
@@ -269,6 +336,7 @@ export class SurfaceScatter {
         if (this._tmp.distanceTo(c.local) < 16) {
           this._tmp.subVectors(c.local, this._tmp); // away vector
           c.heading = Math.atan2(this._tmp.dot(this._wT2), this._tmp.dot(this._wT1));
+          c.headingTarget = c.heading;
           c.panic = 2.2;
         }
       }
@@ -283,9 +351,12 @@ export class SurfaceScatter {
       const h = this.planet.sampler.height(this._wUp.x, this._wUp.y, this._wUp.z);
       c.local.copy(this._wUp).multiplyScalar(R + Math.max(h, 0.5));
       c.mesh.position.copy(c.local);
-      // Stand upright, face travel direction.
+      // Stand upright AND face the travel direction (they used to slide
+      // sideways — up-alignment only, no yaw).
       this._wQuat.setFromUnitVectors(UP, this._wUp);
-      c.mesh.quaternion.copy(this._wQuat);
+      const yaw = -c.heading + Math.PI / 2; // rotate local -Z (the head) onto travel
+      this._yawQ.setFromAxisAngle(this._wUp, yaw);
+      c.mesh.quaternion.copy(this._wQuat).premultiply(this._yawQ);
     }
 
     for (const b of this.birds ?? []) {
@@ -325,12 +396,13 @@ export class SurfaceScatter {
     return best ? { rock: best, dist: bestDist } : null;
   }
 
-  /** Remove a mined rock from the world. */
+  /** Remove a mined rock from the world (and its collider). */
   removeRock(rock) {
     const i = this.rocks.indexOf(rock);
     if (i === -1) return;
     this._group.remove(rock.mesh);
     this.rocks.splice(i, 1);
+    if (rock.collider) rock.collider.dead = true;
   }
 
   /** Tear down all scattered geometry. */
@@ -341,6 +413,7 @@ export class SurfaceScatter {
     this._rockGeo.dispose();
     this._rockMats.forEach((m) => m.dispose());
     if (this._trees) this._trees.forEach((t) => { t.geometry.dispose(); t.material.dispose(); });
+    if (this._palms) this._palms.forEach((t) => { t.geometry.dispose(); t.material.dispose(); });
     if (this._grass) { this._grass.geometry.dispose(); this._grass.material.dispose(); }
     if (this._critterAssets) this._critterAssets.forEach((a) => a.dispose());
     if (this._birdAssets) this._birdAssets.forEach((a) => a.dispose());

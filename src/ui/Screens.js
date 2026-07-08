@@ -43,7 +43,8 @@ export class Screens {
         </button>
       </div>
       <div class="controls-hint">${this._controlsHint()}</div>
-      <div class="build-tag">BUILD 16 — fleet roles: guard shell + scouts, lock-till-kill</div>
+      <div class="reset-save">Reset progress</div>
+      <div class="build-tag">BUILD 17 — SF-50/70 hulls · allies fight · perfect flames</div>
     `;
     this.root.appendChild(el);
 
@@ -71,6 +72,24 @@ export class Screens {
       });
     }
     window.addEventListener('keydown', onKey);
+
+    // Reset progress: two-tap confirm, wipes the save and reloads fresh.
+    const reset = el.querySelector('.reset-save');
+    reset.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!reset.dataset.armed) {
+        reset.dataset.armed = '1';
+        reset.textContent = 'Tap again to erase ALL progress';
+        setTimeout(() => {
+          reset.dataset.armed = '';
+          reset.textContent = 'Reset progress';
+        }, 3000);
+        return;
+      }
+      this.game.save?.reset();
+      window.location.reload();
+    });
   }
 
   _buildDeathScreen() {

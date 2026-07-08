@@ -37,7 +37,7 @@ export class Explosions {
     this.pool.free.forEach((instance) => game.engine.scene.add(instance.root));
 
     game.events.on('ship:destroyed', ({ ship, byPlayer }) => {
-      const scale = clamp(ship.radius / 3, 0.7, 2.2);
+      const scale = clamp(ship.radius / 2.2, 0.9, 3.2); // beefier per playtest
       this.spawn(ship.position, scale);
     });
 

@@ -169,6 +169,7 @@ document.addEventListener('visibilitychange', () => {
 
 // Restore progression (resources, credits, inventory, upgrades, discoveries).
 const save = new SaveGame(game);
+game.save = save; // Screens' "Reset progress" needs it
 save.load();
 // Bake restored upgrade multipliers into stat caps (shield capacity/regen).
 player.applyUpgrades();

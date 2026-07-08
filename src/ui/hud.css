@@ -392,7 +392,7 @@
   position: absolute;
   inset: 0;
   background: radial-gradient(ellipse at 50% 110%,
-    rgba(255, 130, 40, 0.5) 0%, rgba(255, 60, 20, 0.18) 45%, transparent 70%);
+    rgba(255, 130, 40, 0.3) 0%, rgba(255, 60, 20, 0.11) 45%, transparent 70%);
   opacity: 0;
   will-change: opacity;
 }
@@ -795,4 +795,56 @@
   letter-spacing: 0.18em;
   color: rgba(134, 231, 255, 0.55);
   text-transform: uppercase;
+}
+
+.reset-save {
+  position: absolute;
+  bottom: calc(36px + var(--safe-b, 0px));
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: rgba(255, 140, 150, 0.7);
+  text-transform: uppercase;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.reset-save:hover { color: rgba(255, 170, 178, 0.95); }
+
+/* ---------- underwater ---------- */
+
+.underwater {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 60%,
+    rgba(12, 52, 96, 0.62) 0%, rgba(6, 30, 62, 0.78) 70%, rgba(3, 18, 40, 0.88) 100%);
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  will-change: opacity;
+}
+.underwater.visible { opacity: 1; }
+
+.air-meter {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translateX(-50%);
+  display: none;
+  gap: 7px;
+}
+.air-meter.visible { display: flex; }
+.air-meter .bubble {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(190, 230, 255, 0.85);
+  background: transparent;
+  transition: background 0.2s, transform 0.2s;
+  transform: scale(0.8);
+}
+.air-meter .bubble.full {
+  background: rgba(160, 220, 255, 0.85);
+  box-shadow: 0 0 8px rgba(140, 210, 255, 0.7);
+  transform: scale(1);
 }

@@ -86,8 +86,13 @@ export class Planet {
         roughness: descriptor.oceanRoughness ?? 0.12,
         metalness: 0.0,
         transparent: true,
-        opacity: 0.94,
+        // Nearly opaque: you shouldn't see the sea floor — or the sky through
+        // the far side of the water (playtest).
+        opacity: 0.985,
         envMapIntensity: 1.2,
+        // Scrolling procedural ripples so the surface visibly MOVES.
+        bumpMap: getWaterBumpTexture(),
+        bumpScale: 0.6,
       });
       if (descriptor.hasAtmosphere) {
         applyAtmosphericHaze(oceanMaterial, this.hazeUniforms);
@@ -193,6 +198,16 @@ export class Planet {
     this._local.copy(cameraWorldPos).sub(this.group.position);
     this.terrain.update(this._local);
 
+    // Drift the ocean ripples so water reads as moving (shared texture:
+    // offsetting it animates every ocean world at once, which is fine).
+    if (this.ocean) {
+      const bump = this.ocean.material.bumpMap;
+      if (bump) {
+        bump.offset.x = (elapsed * 0.012) % 1;
+        bump.offset.y = (elapsed * 0.007) % 1;
+      }
+    }
+
     if (this.clouds) this.clouds.update(dt, elapsed);
 
     // Ocean LOD swap around 1.6 radii out.
@@ -227,4 +242,37 @@ export class Planet {
   getAltitudeSpherical(worldPos) {
     return this._local.copy(worldPos).sub(this.group.position).length() - this.radius;
   }
+}
+
+/**
+ * Shared procedural ripple texture for every ocean (value-noise bumps,
+ * tileable via RepeatWrapping). One canvas for the whole game — zero assets.
+ */
+let waterBumpTexture = null;
+function getWaterBumpTexture() {
+  if (waterBumpTexture) return waterBumpTexture;
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      // Layered sines make cheap tileable "wavelets".
+      const u = (x / size) * Math.PI * 2;
+      const v = (y / size) * Math.PI * 2;
+      const n = Math.sin(u * 3 + Math.sin(v * 2) * 1.4)
+        + Math.sin(v * 4 + Math.sin(u * 3) * 1.2)
+        + Math.sin((u + v) * 5) * 0.5;
+      const g = Math.round(128 + n * 34);
+      const i = (y * size + x) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = g;
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  waterBumpTexture = new THREE.CanvasTexture(canvas);
+  waterBumpTexture.wrapS = waterBumpTexture.wrapT = THREE.RepeatWrapping;
+  waterBumpTexture.repeat.set(60, 40);
+  return waterBumpTexture;
 }

@@ -4,7 +4,7 @@ _This is the **single, current** handoff — it supersedes and folds in the two
 earlier `HANDOFF.md` files (see lineage below). Everything here was read out of
 the source, not remembered. Branch `claude/spaceship-assets-integration-57k8bu`,
 also fast-forwarded onto the default branch `claude/3d-space-exploration-game-ogrezx`;
-working tree clean, everything committed. **Current build: BUILD 16.**_
+working tree clean, everything committed. **Current build: BUILD 17.**_
 
 > **Handoff lineage — the three handoffs (this one replaces the other two).**
 > 1. **Original** developer handoff (pre-model era): lives in git history around
@@ -203,6 +203,72 @@ scouts, and one-ship-per-enemy pursuit):
   5 scouts (1330–1884); 4 warships → all claimed 6/6/6/2 with the far one
   scout-only; 0 target switches while targets lived.
 
+### BUILD 17 — the mega-update (autonomous ultracode session)
+Everything from the user's big playtest list, in one build:
+- **SF-50 + SF-70 real hulls:** two new player-authored models — `aegis`
+  (Obsidian Dreadnought mk2, 28.7 MB → 1.17 MB, targetLength 16) and `bastion`
+  (Crimson Dreadnought, 30.2 MB → 1.40 MB, targetLength 20). `frigate`/
+  `battlecruiser` now fly them (no more scaled-gunship placeholders). The
+  Aethelred's 5 gunner-ship escorts inherit the aegis hull automatically.
+- **Perfect thruster flames:** (1) fixed a double-scaling bug — engine anchors
+  were pre-multiplied by ship scale although EngineGlow parents flames INSIDE
+  the scaled visual, so scaled hulls (all enemies, modelScale variants) had
+  flames inside/behind the hull; (2) every hull now carries **authored
+  per-thruster anchors** in `MODELS[id].anchors`, measured from the mesh
+  (rear-facing vertex clustering + mirror-pair symmetry — see the analysis
+  method in the BUILD 17 commit); multi-nozzle hulls get one flame per bell
+  (starter 6, gunship 4, dreadnought 4, flagship 6, aethelred 6, aegis 8,
+  bastion 5); (3) flame size derives from nozzle SPACING (no blobbing).
+  `modelEngineAnchors()` in ShipFactory is the single source.
+- **Allies fight:** traffic ships engage hostiles near themselves (1600 u) or
+  the player (1300 u), lock-till-kill, `fromPlayer` bolts (kills credit you);
+  enemy fire now sweeps traffic (WeaponSystem) and their deaths route via
+  `CombatSystem → traffic.onTrafficDestroyed` (no rewards, no reinforcements).
+- **Fleet docking rework:** escorts treat the mothership hull as SOLID (keep-
+  out sphere 0.7×radius + slide, bays sit outside it) and only despawn ON
+  their bay slot (`esc.docked`) — the 45 u proximity-vanish is gone.
+- **Economy integrity:** creative sessions never write the save (sandbox);
+  "Reset progress" two-tap button on the start screen (`SaveGame.reset()`);
+  survival starts at 0 credits with a clean save.
+- **Per-ship upgrades (save v3):** `player.upgradesByShip` keyed by hull id;
+  `player.upgrades` aliases the ACTIVE ship's entry; shop/anomalies upgrade
+  only the flown hull; a destroyed hull takes its upgrades with it; legacy
+  flat saves migrate onto the active ship on load.
+- **Landing:** gentle touchdowns SETTLE (velocity zeroed, no bounce; crashes
+  still bounce); disembark requires a COMPLETE stop (speed < 2, was 32).
+- **On-foot water v1:** oceans are swimmable (ground-follow uses the UNCLAMPED
+  terrain sampler on foot — seabed, not the water surface); swim along the
+  look direction (jump = rise), slower than walking; breath meter (~22 s) as
+  popping HUD bubbles + underwater blue overlay; drowning drops your ore in a
+  glowing bag floating at the surface (amber overlay marker + arrow), refills
+  air and puts you back at the ship — ships are never lost; recover with E.
+  Ocean surface: opacity 0.985 (no see-through), scrolling procedural ripple
+  bumpMap (`getWaterBumpTexture`, animated in `Planet.update`).
+- **On-foot solidity + nature:** trees/palms/ore rocks are HARD (scatter
+  exposes `colliders`; controller push-out); TREE_COUNT 560, GRASS_COUNT 1600;
+  **beach palms** on hot ocean worlds (desert/terran/volcanic shoreline band);
+  critters turn smoothly and FACE their travel direction (yaw was missing).
+- **On-foot navigation:** overlay shows "YOUR SHIP · N m" marker/arrow, plus
+  the amber ore-bag marker.
+- **Asteroids:** `sphereHit` now scans every overlapped grid cell (the old
+  single-cell probe missed most contacts — big hulls plowed through rocks);
+  rocks have HP and BREAK under fire (`damageRock`: sparks → burst + salvage;
+  drifters removed, statics zero-scaled); each field spawns up to 6 slow
+  free-roaming DRIFTER rocks (individual meshes, shootable, collide).
+- **Brightness pass:** sun disc/coronas dimmed ~35 % (DirectionalLight
+  untouched), entry glow softened, clouds dimmed (`×0.85`, alpha 0.7).
+- **FX:** salvage shards restyled warm ember (the "blue things" are gone);
+  ship explosions ~45 % bigger.
+- **Ore:** high-tier weights buffed (red 5.5, purple 3.0, white 1.4, gold 0.6
+  — gold is actually findable now).
+- **World:** 4 new OUTER planets (deck 8→12, divisor pinned to 7 so the
+  original eight keep their exact orbits; system now reaches ~340 k).
+- **UX:** `N` toggles nav markers; "press G" fleet hint on boarding a carrier
+  hull; drowned/air/nav banners.
+- **Still open (user to supply/decide):** tree model swap-in (their Emerald
+  Canopy re-export), animal + ore model replacements, multi-solar-system
+  galaxy (big feature — needs its own design pass).
+
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally
 (`npm start`) with no deploy, incl. iPhone-over-Wi-Fi testing. On a locked-down
@@ -250,7 +316,7 @@ Because the `PlayerShip` constructor runs **before** models finish loading, the 
 **always boots on the procedural stand-in** and hot-swaps to the GLB when it arrives
 (see §1.6).
 
-### 1.3 `MODELS` registry — the five hand-authored hulls
+### 1.3 `MODELS` registry — the seven hand-authored hulls
 `src/ship/ModelShips.js` is **the single place hand-authored hulls enter the game.**
 The `MODELS` registry, verbatim:
 
@@ -261,10 +327,15 @@ The `MODELS` registry, verbatim:
 | `dreadnought` | `models-glb/dreadnought.glb` | 32 | `-Math.PI/2` | 0 | Obsidian Dreadnought (mid capital) |
 | `flagship` | `models-glb/flagship.glb` | 100 | `-Math.PI/2` | 0 | Star-Destroyer carrier ("vast, ~11× a fighter") |
 | `aethelred` | `models-glb/aethelred.glb` | 300 | `-Math.PI/2` | 0 | Aethelred cruiser (**biggest**, ~3× the flagship, radius ≈ 115) |
+| `aegis` | `models-glb/aegis.glb` | 16 | `-Math.PI/2` | 0 | SF-50 Aegis Gunner (also the fleet's gunner-ship escorts) |
+| `bastion` | `models-glb/bastion.glb` | 20 | `-Math.PI/2` | 0 | SF-70 Bastion Gunner |
 
-- **`yaw: -Math.PI/2` for all five**: Meshy authors the nose along **`-X`**; the yaw
+- **`yaw: -Math.PI/2` for all seven**: Meshy authors the nose along **`-X`**; the yaw
   rotates it onto game-forward **`-Z`**. Every new model authored the same way uses the
   same yaw.
+- **`anchors`** (BUILD 17): authored per-thruster nozzle anchors in normalized proto
+  space, measured from the mesh (rear-facing vertex clusters, mirror-paired). Consumed by
+  `modelEngineAnchors()`; flames sit one-per-bell and size by nozzle spacing.
 - **`targetLength`** is the in-game size knob. **Caveat:** `normalize()` scales by the
   **largest** bounding dimension (`max(x,y,z)`), *not* strictly length — a hull wider
   than it is long ends up shorter than `targetLength`.
@@ -306,8 +377,8 @@ Multipliers scale off the 100-hull/100-shield baseline.
 | `starter` | SF-10 Sentinel | 10 | 0 | 1 | 1 | 1 | 2 | model `starter` | — |
 | `explorer` | SF-20 Nebula Gunship | 20 | 320 | 1.25 | 1.2 | 1.08 | 3 | model `gunship` | — |
 | `interceptor` | SF-30 Kestrel | 30 | 800 | 1.5 | 1.45 | 1.18 | 3 | model `gunship`, **`modelScale 1.18`** | — |
-| `frigate` | SF-50 Aegis Gunner | 50 | 2080 | 2.2 | 2.1 | 1.28 | 4 | model `gunship`, **`modelScale 1.4`** | **`weapon 1.5`** |
-| `battlecruiser` | SF-70 Bastion Gunner | 70 | 6400 | 3.4 | 3.1 | 1.38 | 5 | model `gunship`, **`modelScale 1.7`** | **`weapon 2.0`**, `twinFin`, `quadEngines` |
+| `frigate` | SF-50 Aegis Gunner | 50 | 2080 | 2.2 | 2.1 | 1.28 | 4 | model **`aegis`** | **`weapon 1.5`** |
+| `battlecruiser` | SF-70 Bastion Gunner | 70 | 6400 | 3.4 | 3.1 | 1.38 | 5 | model **`bastion`** | **`weapon 2.0`**, `twinFin`, `quadEngines` |
 | `sovereign` | SF-100 Sovereign | 100 | 20800 | 5.2 | 4.6 | 1.5 | 7 | **procedural** (reserved for a future model) | `twinFin`, `quadEngines` |
 | `battleship` | SF-85 Obsidian Dreadnought | 85 | 12800 | 7 | 5.5 | 1.05 | 6 | model `dreadnought`, `capital 'battleship'` | `turrets 4`, **`hangar 4`** |
 | `carrier` | SF-110 Vanguard | 110 | 40000 | 11 | 8 | 0.85 | 8 | model `flagship`, `capital 'carrier'` | `turrets 2`, **`hangar 15`**, **`noLanding`** |
@@ -897,8 +968,8 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   (`.mode-btn` buttons; keyboard **Enter/Space** = Survival, **C** = Creative). The chosen
   button calls `launch(creative)`, which sets **`game.creative`**, unlocks audio, unpauses,
   and emits `game:started`. Contains the **BUILD stamp**. ⚠️ **The build stamp is a
-  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 16 —
-  fleet roles: guard shell + scouts, lock-till-kill'`) — no build-time injection; bump it manually per
+  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 17 —
+  SF-50/70 hulls · allies fight · perfect flames'`) — no build-time injection; bump it manually per
   playtest.
 - **Shop** (`ui/Shop.js`): pause-the-game modal, hailed with **`T`** (interim — no physical
   station yet). Tabs: **Sell Ore** (per-tier, Sell All), **Upgrades** (engine/weapon/shield,
@@ -965,8 +1036,8 @@ means editing those strings too.
   `NODE_VERSION="22"`, `NPM_FLAGS="--include=dev"` (so Vite, a devDependency, always
   installs). Connect the repo in the browser → Deploy; the default branch is deploy-ready.
   Full click-by-click in **`DEPLOY.md`**. Alternative: drag
-  `builds/starfall-frontier-build16.zip` into Netlify Drop.
-- **`builds/starfall-frontier-build16.zip`** (~4.7 MB): a committed ready-to-serve `dist`
+  `builds/starfall-frontier-build17.zip` into Netlify Drop.
+- **`builds/starfall-frontier-build17.zip`** (~7.3 MB): a committed ready-to-serve `dist`
   (index.html + JS/CSS + the 4 GLBs). Convention: one zip per published build, old one
   deleted. **Don't gitignore `builds/` or `public/models-glb/`.**
 - **Local dev** (`LOCAL_DEV.md`, `run.command`, `.nvmrc`): `npm start` (= `vite --open`)

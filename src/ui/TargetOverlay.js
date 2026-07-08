@@ -34,6 +34,14 @@ export class TargetOverlay {
     window.addEventListener('resize', this._resize);
     this._resize();
 
+    // N toggles the navigation markers (planet name + destination circle) —
+    // per playtest they can get in the way when you just want to fly.
+    window.addEventListener('keydown', (e) => {
+      if (e.code !== 'KeyN' || e.repeat || e.ctrlKey || e.metaKey) return;
+      game.navHidden = !game.navHidden;
+      game.events.emit('nav:toggled', game.navHidden);
+    });
+
     this._v = new THREE.Vector3();
     this._fwd = new THREE.Vector3();
     this._toObj = new THREE.Vector3();
@@ -52,7 +60,48 @@ export class TargetOverlay {
 
     const game = this.game;
     const player = game.player;
-    if (game.paused || game.mode !== 'flight' || !player || !player.alive) return;
+    if (game.paused || !player || !player.alive) return;
+
+    // On foot: the overlay's jobs are "where did I park?" and "where did my
+    // ore sink?" — markers plus edge arrows so explorers never get lost.
+    if (game.mode === 'onfoot') {
+      const cam = game.engine.camera;
+      const p = this._screen(player.position, cam);
+      const style = 'rgba(134,231,255,0.9)';
+      if (p.onScreen) {
+        ctx.strokeStyle = style;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 10 + 2 * Math.sin(elapsed * 3), 0, Math.PI * 2);
+        ctx.stroke();
+        const dist = player.position.distanceTo(cam.position);
+        this._label(ctx, p.x, p.y - 18, `YOUR SHIP · ${Math.round(dist)} m`, style, 0);
+      } else {
+        this._drawArrow(ctx, p.x, p.y, style);
+        this._label(ctx, this.w / 2, 34, '⬥ ship is off-screen — follow the arrow', style, 0);
+      }
+
+      // Dropped ore (drowning): amber marker where the bag floats.
+      const bag = game.onfoot?.oreBag;
+      if (bag && bag.planet === game.onfoot.planet) {
+        this._toObj.copy(bag.local).add(bag.planet.group.position);
+        const pb = this._screen(this._toObj, cam);
+        const amber = 'rgba(255,205,90,0.95)';
+        if (pb.onScreen) {
+          ctx.strokeStyle = amber;
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.arc(pb.x, pb.y, 9 + 2.5 * Math.sin(elapsed * 4), 0, Math.PI * 2);
+          ctx.stroke();
+          const d = this._toObj.distanceTo(cam.position);
+          this._label(ctx, pb.x, pb.y - 16, `YOUR ORE · ${Math.round(d)} m`, amber, 0);
+        } else {
+          this._drawArrow(ctx, pb.x, pb.y, amber);
+        }
+      }
+      return;
+    }
+    if (game.mode !== 'flight') return;
 
     const cam = game.engine.camera;
     cam.getWorldDirection(this._fwd);
@@ -110,9 +159,9 @@ export class TargetOverlay {
       }
     }
 
-    // --- Warp destination marker (navigation aid) ---
+    // --- Warp destination marker (navigation aid; N hides it) ---
     const warp = game.warp;
-    if (warp && warp.target) {
+    if (warp && warp.target && !game.navHidden) {
       const p = this._screen(warp.target.group.position, cam);
       const style = 'rgba(134,231,255,0.95)';
       if (!p.onScreen) {

@@ -20,8 +20,13 @@ import { UNIVERSE_SEED, PLAYER_SPAWN } from './constants.js';
  * from its own child seed.
  */
 
-/** Curated deck: one of each personality, then wildcards. */
-const ARCHETYPE_DECK = ['ocean', 'ice', 'desert', 'volcanic', 'rocky', 'terran', 'ice', 'desert'];
+/**
+ * Curated deck: one of each personality, then wildcards. The last four are
+ * the OUTER worlds (index ≥ 8) — they spiral far beyond the classic rim so
+ * the system reads bigger (playtest: "the map feels small").
+ */
+const ARCHETYPE_DECK = ['ocean', 'ice', 'desert', 'volcanic', 'rocky', 'terran', 'ice', 'desert',
+  'terran', 'ocean', 'volcanic', 'rocky'];
 
 /**
  * @param {import('../core/Game.js').Game} game
@@ -39,7 +44,10 @@ export function generateUniverse(game, universe) {
   const goldenAngle = Math.PI * (3 - Math.sqrt(5));
   const baseAngle = rng.range(0, Math.PI * 2);
   ARCHETYPE_DECK.forEach((archetype, index) => {
-    const distance = 55000 + (index / (ARCHETYPE_DECK.length - 1)) * 180000
+    // Divisor stays 7 (the original deck) so the first eight worlds keep
+    // their exact historical orbits; the four outer worlds land beyond the
+    // old 235k rim, stretching the system to ~340k.
+    const distance = 55000 + (index / 7) * 180000
       * rng.range(0.92, 1.08);
     const angle = baseAngle + goldenAngle * (index + 1);
     const inclination = rng.gaussian() * 0.09;

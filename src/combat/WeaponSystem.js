@@ -493,6 +493,18 @@ export class WeaponSystem {
           }
         }
       }
+      // …and so are the allied traffic ships (they shoot back these days).
+      for (const ally of game.traffic?.ships ?? []) {
+        if (!ally.alive) continue;
+        const distSq = this._segmentPointDistanceSq(
+          bolt.prevPos, bolt.mesh.position, ally.position,
+        );
+        const hitR = bolt.isMissile ? MISSILE_HIT_RADIUS : ally.radius * 1.1;
+        if (distSq < hitR * hitR) {
+          this._applyHit(bolt, ally, false);
+          return true;
+        }
+      }
     }
 
     // Bolts die against large bodies. Planets get a precise terrain test
@@ -516,10 +528,8 @@ export class WeaponSystem {
           ?? field.sphereHit(bolt.prevPos, 1.2);
       }
       if (rock) {
-        if (game.explosions) game.explosions.spawn(bolt.mesh.position, 0.28);
-        if (bolt.fromPlayer && game.pickups && Math.random() < 0.14) {
-          game.pickups.spawnBurst(bolt.mesh.position, 1);
-        }
+        // Spark + salvage chance + (enough hits) the rock BREAKS.
+        field.damageRock(rock, bolt.damage || 15, bolt.mesh.position, bolt.fromPlayer);
         return true;
       }
     }

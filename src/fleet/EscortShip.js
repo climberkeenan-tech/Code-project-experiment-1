@@ -150,7 +150,24 @@ export class EscortShip extends ShipBase {
     this.velocity.lerp(this._desired, 1 - Math.exp(-2.6 * dt));
     this.position.addScaledVector(this.velocity, dt);
 
-    // Reached the bay slot while recalling → ready for the FleetSystem to dock.
+    // The mothership is a HARD surface: wingmen can never pass through the
+    // hull core. The keep-out sphere (0.7×hull radius) sits INSIDE every bay
+    // mouth (flanks ±0.85R, belly −0.75R, lower-side 0.77R), so launch and
+    // dock approaches stay legal while the hull itself is impenetrable.
+    this._toTarget.copy(this.position).sub(player.position);
+    const hullDist = this._toTarget.length();
+    const keepOut = player.radius * 0.7 + this.radius * 0.5;
+    if (hullDist < keepOut && hullDist > 1e-3) {
+      this._toTarget.divideScalar(hullDist);
+      this.position.copy(player.position).addScaledVector(this._toTarget, keepOut);
+      // Kill the inward velocity component so they slide along, not into.
+      const inward = this.velocity.dot(this._toTarget);
+      if (inward < 0) this.velocity.addScaledVector(this._toTarget, -inward);
+    }
+
+    // Reached the bay mouth while recalling → ready for the FleetSystem to
+    // dock (the craft flies INTO the side/belly opening and disappears there,
+    // never mid-flight).
     this.docked = this.recalling && dist < 12;
 
     // --- Face travel direction (or the target while engaging) ---
