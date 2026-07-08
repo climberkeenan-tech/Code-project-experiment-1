@@ -43,7 +43,7 @@ export class Screens {
         </button>
       </div>
       <div class="controls-hint">${this._controlsHint()}</div>
-      <div class="build-tag">BUILD 12 — creative (free) mode + survival choice</div>
+      <div class="build-tag">BUILD 13 — fleet launch/formation rework + natural-colour enemies</div>
     `;
     this.root.appendChild(el);
 

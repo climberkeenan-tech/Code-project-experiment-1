@@ -4,7 +4,7 @@ _This is the **single, current** handoff — it supersedes and folds in the two
 earlier `HANDOFF.md` files (see lineage below). Everything here was read out of
 the source, not remembered. Branch `claude/spaceship-assets-integration-57k8bu`,
 also fast-forwarded onto the default branch `claude/3d-space-exploration-game-ogrezx`;
-working tree clean, everything committed. **Current build: BUILD 12.**_
+working tree clean, everything committed. **Current build: BUILD 13.**_
 
 > **Handoff lineage — the three handoffs (this one replaces the other two).**
 > 1. **Original** developer handoff (pre-model era): lives in git history around
@@ -87,7 +87,8 @@ Four player-authored **Meshy** hulls were brought in as GLB and wired so they
 **hot-swap** over the procedural stand-ins as they stream in: `starter`
 (Nebula Sentinel), `gunship` (Nebula Vanguard), `dreadnought` (Obsidian
 Dreadnought), `flagship` (Star-Destroyer carrier). Enemies fly the same hulls,
-red-tinted. Added an apex hunter + reinforcement swarms. See [§1](#1-the-ship-system-read-this-first).
+red-tinted (**dropped in BUILD 13** — now natural-coloured). Added an apex hunter +
+reinforcement swarms. See [§1](#1-the-ship-system-read-this-first).
 
 ### BUILD 9 — fast-loading ships
 The four hulls were **86 MB of raw FBX**; compressed to **~3.7 MB of
@@ -120,6 +121,25 @@ The start screen now offers **Survival** (normal economy) or **Creative** at
 load-in. Creative sets **`game.creative`**; the Outpost Exchange treats every
 purchase as free + always-affordable and credit readouts show **∞**. Session-only
 — never written to the save (can't inflate a survival file). See [§12](#12-ui--audio).
+
+### BUILD 13 — fleet launch/formation rework + natural-colour enemies
+Playtest feel pass on the **G**-key wing and the enemy livery:
+- **Enemies are no longer red-tinted.** `getEnemyModelProto` clones the hull
+  materials into a faction set but leaves their **natural colours** — hostiles
+  are told apart by the HUD target brackets, the red radar blips and their
+  engine glow, not a repaint. See [§1.4](#14-the-glb-load-pipeline-modelshipsjs)/[§1.7](#17-enemies-fly-the-players-hulls-natural-coloured).
+- **Fighters stream out two at a time** instead of all appearing at once — a
+  launch queue in `FleetSystem` releases one pair per wave (`LAUNCH_INTERVAL`),
+  one fighter per flank so each side is single-file.
+- **Launch port depends on the hull:** the carrier ejects from its **flanks**,
+  the smaller battleship drops fighters out of its **belly** (`_launchPort`).
+- **Formation is a shell AROUND the flagship**, not a rear queue — escorts ring
+  the hull on all sides over three fore/aft depths (`EscortShip` `_slotPos`).
+- **Free-engage escorts spread across hostiles.** `_acquire` sorts the in-range
+  enemies and each fighter picks a **different** one by slot, so the wing no
+  longer dogpiles the single nearest ship (focus-fire **V** still converges all).
+- **Recall docks at the launch port** (flank/belly) via `esc.docked`, rather
+  than merging into the hull centre. See [§11](#11-gameplay-systems-on-foot-warp-crew-fleet-economy-poi-landing).
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally
@@ -202,11 +222,11 @@ The `MODELS` registry (`ModelShips.js:21-52`), verbatim:
   (main.js does this correctly).
 - `getModelProto(id)` → normalized prototype or `null`. Consumed only by
   `buildModelRig`.
-- `getEnemyModelProto(id)` → **red-faction variant**: clones the base proto once, clones
-  each source material once (`matCache` by uuid), tints `color.multiply(1.05, 0.42, 0.38)`
-  + `emissive.setRGB(0.22, 0.015, 0.015)`, caches in `enemyProtos`. **Every enemy clone
-  of a model shares one tinted material set** — do not mutate an enemy clone's material
-  per-ship or you repaint the whole faction.
+- `getEnemyModelProto(id)` → **faction variant** (BUILD 13: **no red tint**): clones the
+  base proto once and clones each source material once (`matCache` by uuid) but leaves the
+  **natural colours**, caches in `enemyProtos`. **Every enemy clone of a model shares one
+  material set** — do not mutate an enemy clone's material per-ship or you repaint the whole
+  faction. (Hostiles are read from HUD brackets / red radar blips / engine glow, not the hull.)
 - `normalize(obj, spec)` steps: `updateMatrixWorld` → Box3 → recenter (`obj.position.sub(center)`)
   → wrap in an inner `Group` with `rotation.set(pitch, yaw, 0)` (re-axises nose to `-Z`)
   → `inner.scale.setScalar(targetLength / maxDim)` → mesh `castShadow`/`receiveShadow`,
@@ -269,7 +289,7 @@ onModelLoaded((id) => {
   otherwise swaps visual/anchors and rebuilds `EngineGlow` + `ShieldEffect(radius*1.35,
   Color(1.6,0.8,0.4))`).
 
-### 1.7 Enemies fly the player's hulls, red-tinted
+### 1.7 Enemies fly the player's hulls, natural-coloured
 `ENEMY_MODEL_MAP` (`ShipFactory.js:451-463`) maps **all 8 enemy classes** to a hero model,
 so `ENEMY_BUILDERS` (the ~180 lines of procedural enemy silhouettes) are now **pure
 fallbacks** used only during a cold load or after a failed download:
@@ -281,13 +301,14 @@ fallbacks** used only during a cold load or after a failed download:
 | `heavy` | `starter` | 1.5 | |
 | `cruiser` | `gunship` | 1.35 | |
 | `destroyer` | `gunship` | 2.1 | |
-| `warship` | `dreadnought` | 0.9 | red mid capital |
+| `warship` | `dreadnought` | 0.9 | mid capital |
 | `redcarrier` | `flagship` | 0.75 | smaller than your carrier |
 | `apex` | `flagship` | 1.25 | the apex — bigger than everything |
 
-`createEnemyShip(type)` clones the tinted proto (shared materials), derives anchors from
-`shipBounds` (**hardpoints `±W*0.3`, not the player's `±W*0.34`** — see gotcha), sets
-`glowColor = Color(5.4,0.6,0.5)` and `modeled: true`. When the model isn't ready it builds
+`createEnemyShip(type)` clones the faction proto (natural colours, shared materials), derives
+anchors from `shipBounds` (**hardpoints `±W*0.3`, not the player's `±W*0.34`** — see gotcha),
+sets `glowColor = Color(5.4,0.6,0.5)` (a reddish **engine glow** — the hull itself is untinted)
+and `modeled: true`. When the model isn't ready it builds
 a procedural stand-in via `ENEMY_BUILDERS[type]` scaled by `ENEMY_SCALE` (`scout 1.6,
 fighter 1.5, heavy 1.4, cruiser 1.35, destroyer/warship/redcarrier 1.0, apex 1.3`) and
 flags `rig.modeled = !mm` so `refreshVisual` upgrades it later. **`apex` has no builder** —
@@ -748,11 +769,18 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   persisted otherwise.
 - **Fleet** (`fleet/FleetSystem.js` + `EscortShip.js`, `game.fleet`): on a capital hull,
   **`G`** / the **Deploy** button launches a fresh wing of generic AI **attack fighters**
-  (`ATTACK_FIGHTER = 'starter'`), up to `statMult.hangar` (**battleship 4, carrier 15**), in
-  formation; **`V`** / **Focus** issues focus-fire (aim-assist lock else nearest ≤3000 u);
-  `G` again recalls (fly home → dock). Auto-recall on atmosphere/death/foot. Hangar fighters
-  are **expendable** — `onEscortDestroyed` just removes the craft (no owned-collection loss).
-  Non-capital hulls (`hangar 0`) emit `fleet:denied`.
+  (`ATTACK_FIGHTER = 'starter'`), up to `statMult.hangar` (**battleship 4, carrier 15**).
+  BUILD 13: they **stream out two at a time** (a launch queue releases one pair per
+  `LAUNCH_INTERVAL` wave — one fighter per flank, so each side is single file) from the
+  **carrier's flanks** or the **battleship's belly** (`_launchPort`); then hold a **shell
+  formation around the hull** (`EscortShip._slotPos` — a full ring over three fore/aft
+  depths, not a rear queue). On **free engage** each fighter picks a **different** hostile
+  (`_acquire` sorts the in-range enemies and indexes by slot, so they don't dogpile the
+  nearest); **`V`** / **Focus** overrides that and converges the whole wing on one target
+  (aim-assist lock else nearest ≤3000 u). `G` again **recalls** — they fly back and **dock
+  at the launch port** (flank/belly, via `esc.docked`). Auto-recall on atmosphere/death/foot.
+  Hangar fighters are **expendable** — `onEscortDestroyed` just removes the craft (no
+  owned-collection loss). Non-capital hulls (`hangar 0`) emit `fleet:denied`.
 - **POIs** (`exploration/POISystem.js` + `POIFactory.js`, `game.poi`): 2 stations, 3
   wrecks, ≤4 satellites, 3 anomalies, caches in outer asteroid fields. Signal ping (6000 u)
   → build (12000) → discovery (300). Anomalies grant **permanent** `+0.12` to an
@@ -790,8 +818,9 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   (`.mode-btn` buttons; keyboard **Enter/Space** = Survival, **C** = Creative). The chosen
   button calls `launch(creative)`, which sets **`game.creative`**, unlocks audio, unpauses,
   and emits `game:started`. Contains the **BUILD stamp**. ⚠️ **The build stamp is a
-  hand-edited string at `Screens.js:37`** — `'BUILD 12 — creative (free) mode + survival
-  choice'` — no build-time injection; bump it manually per playtest.
+  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 13 —
+  fleet launch/formation rework + natural-colour enemies'`) — no build-time injection; bump
+  it manually per playtest.
 - **Shop** (`ui/Shop.js`): pause-the-game modal, hailed with **`T`** (interim — no physical
   station yet). Tabs: **Sell Ore** (per-tier, Sell All), **Upgrades** (engine/weapon/shield,
   `+0.15`/level, cost `40 + 35*level`), **Ships** (renders `PLAYER_SHIPS`; Active/Select/

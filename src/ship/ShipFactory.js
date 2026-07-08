@@ -457,19 +457,20 @@ const ENEMY_SCALE = {
 };
 
 /**
- * Enemy classes that fly the PLAYER'S hand-made hulls, repainted red — the
- * red faction uses the same ships you do. Scale differentiates the threat.
+ * Enemy classes that fly the PLAYER'S hand-made hulls in their natural colours
+ * (no red repaint) — the hostile faction uses the same ships you do, told apart
+ * by the HUD brackets/radar and their engine glow. Scale differentiates threat.
  */
 const ENEMY_MODEL_MAP = {
-  // Light classes fly red Sentinels at escalating scale…
+  // Light classes fly Sentinels at escalating scale…
   scout: { model: 'starter', scale: 0.85 },
   fighter: { model: 'starter', scale: 1.05 },
   heavy: { model: 'starter', scale: 1.5 },
-  // …mid classes fly red gunships…
+  // …mid classes fly gunships…
   cruiser: { model: 'gunship', scale: 1.35 },
   destroyer: { model: 'gunship', scale: 2.1 },
-  warship: { model: 'dreadnought', scale: 0.9 }, // red dreadnought, mid capital
-  // …and capitals fly red star destroyers.
+  warship: { model: 'dreadnought', scale: 0.9 }, // dreadnought, mid capital
+  // …and capitals fly star destroyers.
   redcarrier: { model: 'flagship', scale: 0.75 }, // smaller than your carrier
   apex: { model: 'flagship', scale: 1.25 },       // the apex: bigger than EVERYTHING
 };
@@ -483,12 +484,12 @@ const ENEMY_MODEL_MAP = {
  * @returns {ShipRig}
  */
 export function createEnemyShip(type) {
-  // Model-based hostile hulls (red-tinted clones of the player's ships).
+  // Model-based hostile hulls (natural-coloured clones of the player's ships).
   const mm = ENEMY_MODEL_MAP[type];
   if (mm) {
     const proto = getEnemyModelProto(mm.model);
     if (proto) {
-      const group = proto.clone(true); // shares the tinted material set
+      const group = proto.clone(true); // shares the faction material set
       group.scale.multiplyScalar(mm.scale);
       const b = proto.userData.shipBounds;
       const W = b.width * mm.scale;

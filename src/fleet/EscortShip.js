@@ -31,6 +31,11 @@ export class EscortShip extends ShipBase {
     this.slot = slot;
     this.isEscort = true;
     this.recalling = false;
+    /** Set true once the escort has settled into its bay slot during a recall. */
+    this.docked = false;
+    /** Filled in by FleetSystem on launch: wing size + which port it flew from. */
+    this.wingSize = 1;
+    this.launchPort = 'side'; // 'side' (carrier flanks) | 'bottom' (battleship belly)
 
     const v = PLAYER_SHIP_BY_ID[variantId] ?? PLAYER_SHIP_BY_ID.starter;
     this.hullMax = this.hull = Math.round(100 * v.hull);
@@ -42,6 +47,7 @@ export class EscortShip extends ShipBase {
     this.shieldFx = new ShieldEffect(this.object3D, this.radius * 1.4);
 
     this._fireCooldown = Math.random() * FIRE_INTERVAL;
+    this._inRange = []; // scratch reused each frame for free-engage target spread
     this._slotPos = new THREE.Vector3();
     this._desired = new THREE.Vector3();
     this._toTarget = new THREE.Vector3();
@@ -59,20 +65,37 @@ export class EscortShip extends ShipBase {
     const player = game.player;
     this._fireCooldown -= dt;
 
-    // --- Formation slot: staggered wedge behind/beside the flagship ---
-    const side = this.slot % 2 === 0 ? -1 : 1;
-    const rank = Math.floor(this.slot / 2) + 1;
+    // --- Formation: a shell of slots AROUND the flagship (not a rear queue) ---
+    // Fighters ring the hull on every side so the capital is screened, spread
+    // over three fore/aft depths so it reads as a 3-D shell rather than a disc.
+    const n = Math.max(1, this.wingSize);
+    const ang = (this.slot / n) * Math.PI * 2;
+    const ringR = player.radius + 22 + (this.slot % 2) * 12;
     this._slotPos.set(
-      side * (player.radius + 26 + rank * 18),
-      8 + rank * 5,
-      player.radius + 20 + rank * 24, // behind (+Z in ship space)
+      Math.cos(ang) * ringR,
+      Math.sin(ang) * ringR,
+      ((this.slot % 3) - 1) * 18,
     ).applyQuaternion(player.quaternion).add(player.position);
+
+    // Recall: return to the launch port (carrier flank / battleship belly) and
+    // dock there, rather than merging into the hull centre.
+    if (this.recalling) {
+      const dside = this.slot % 2 === 0 ? -1 : 1;
+      const drank = Math.floor(this.slot / 2);
+      const R = player.radius;
+      if (this.launchPort === 'bottom') {
+        this._slotPos.set(dside * R * 0.22, -R * 0.7, R * 0.1 + drank * 3);
+      } else {
+        this._slotPos.set(dside * R * 0.85, 0, R * 0.05 + drank * 3);
+      }
+      this._slotPos.applyQuaternion(player.quaternion).add(player.position);
+    }
 
     // Engaged escorts break formation and push to a standoff point near
     // their target — real dogfights, and they naturally draw enemy fire
     // instead of hiding behind the flagship.
     const engaged = this.recalling ? null : this._acquire();
-    let goal = this.recalling ? player.position : this._slotPos;
+    let goal = this._slotPos;
     if (engaged) {
       this._desired.copy(this.position).sub(engaged.position).normalize();
       goal = this._slotPos.copy(engaged.position)
@@ -86,6 +109,9 @@ export class EscortShip extends ShipBase {
     if (dist > 1e-3) this._desired.divideScalar(dist).multiplyScalar(speed);
     this.velocity.lerp(this._desired, 1 - Math.exp(-2.6 * dt));
     this.position.addScaledVector(this.velocity, dt);
+
+    // Reached the bay slot while recalling → ready for the FleetSystem to dock.
+    this.docked = this.recalling && dist < 12;
 
     // --- Face travel direction (or the target while engaging) ---
     const target = engaged;
@@ -125,8 +151,10 @@ export class EscortShip extends ShipBase {
   /**
    * Target selection. A focus-fire order (V) overrides everything: the whole
    * wing converges on the commanded hostile, pursuing well beyond normal
-   * engagement range. With no order they hunt on their own initiative —
-   * nearest live hostile in range, no command needed.
+   * engagement range. With no order each fighter hunts on its own initiative
+   * and — crucially — the wing SPREADS across the hostiles in range instead of
+   * dogpiling the single nearest one: they sort the in-range enemies by
+   * distance and each picks a different one by its slot index.
    */
   _acquire() {
     const ordered = this.game.fleet?.focusTarget;
@@ -134,14 +162,18 @@ export class EscortShip extends ShipBase {
       && ordered.position.distanceToSquared(this.position) < COMMAND_RANGE * COMMAND_RANGE) {
       return ordered;
     }
-    let best = null;
-    let bestSq = ENGAGE_RANGE * ENGAGE_RANGE;
+    const inRange = this._inRange;
+    inRange.length = 0;
+    const rSq = ENGAGE_RANGE * ENGAGE_RANGE;
     for (const enemy of this.game.enemies?.enemies ?? []) {
-      if (!enemy.alive) continue;
-      const d = enemy.position.distanceToSquared(this.position);
-      if (d < bestSq) { bestSq = d; best = enemy; }
+      if (enemy.alive && enemy.position.distanceToSquared(this.position) < rSq) {
+        inRange.push(enemy);
+      }
     }
-    return best;
+    if (!inRange.length) return null;
+    inRange.sort((a, b) =>
+      a.position.distanceToSquared(this.position) - b.position.distanceToSquared(this.position));
+    return inRange[this.slot % inRange.length];
   }
 
   dispose() {

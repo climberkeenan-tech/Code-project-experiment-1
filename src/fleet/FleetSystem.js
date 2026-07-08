@@ -1,21 +1,26 @@
+import * as THREE from 'three';
 import { EscortShip } from './EscortShip.js';
 
 /**
  * Fleet command (bible endgame): capital ships carry a hangar of AI attack
  * fighters. Press G (or the DEPLOY button) to launch the wing, press again to
- * recall it. Fighters fan out, engage hostiles with fire credited to you, and
- * dock (despawn) when they return. They are hangar craft — NOT the player's
- * owned ships — so a lost fighter costs nothing from the collection.
+ * recall it. Fighters stream out of the hangar a pair at a time, ring the hull,
+ * dogfight hostiles on their own initiative (fire credited to you), and fly
+ * back to the launch port to dock when recalled. They are hangar craft — NOT
+ * the player's owned ships — so a lost fighter costs nothing from the collection.
  *
  * Deployment rules:
  *  - only capital hulls with a hangar can launch (battleship: 4, carrier: 15)
- *  - the wing is spawned fresh each launch, up to the hangar capacity
+ *  - the wing is spawned fresh each launch, up to the hangar capacity, released
+ *    two-at-a-time from the flanks (carrier) or belly (battleship)
  *  - auto-recall on atmosphere entry, death, or going on foot
  */
 
 /** Hull the hangar-launched attack fighters fly (a light, expendable craft). */
 const ATTACK_FIGHTER = 'starter';
 const DOCK_RANGE = 45;
+/** Seconds between hangar-launch waves (two fighters per wave). */
+const LAUNCH_INTERVAL = 0.32;
 
 export class FleetSystem {
   /** @param {import('../core/Game.js').Game} game */
@@ -31,6 +36,18 @@ export class FleetSystem {
      */
     this.focusTarget = null;
 
+    /**
+     * Staggered launch state: slot indices still waiting to be ejected, a
+     * countdown to the next wave, the launch port for this hull, and the
+     * planned wing size (so each fighter knows its place in the ring).
+     */
+    this._launchQueue = [];
+    this._launchTimer = 0;
+    this._launchPort = 'side';
+    this._wingSize = 0;
+    this._scratchA = new THREE.Vector3();
+    this._scratchB = new THREE.Vector3();
+
     game.fleet = this;
 
     game.origin.onShift((delta) => {
@@ -41,7 +58,7 @@ export class FleetSystem {
     game.events.on('onfoot:entered', () => this.recall(true));
   }
 
-  get deployed() { return this.escorts.length > 0; }
+  get deployed() { return this.escorts.length > 0 || this._launchQueue.length > 0; }
 
   /** Hangar capacity of the active ship (0 = not a carrier). */
   get hangar() {
@@ -81,11 +98,24 @@ export class FleetSystem {
       this.recall(true);
     }
 
-    // Tick escorts; dock the ones that made it home while recalling.
+    // Sequential hangar launch: eject a pair of fighters per wave so the wing
+    // streams out of the deck instead of all popping into existence at once.
+    if (this._launchQueue.length) {
+      this._launchTimer -= dt;
+      if (this._launchTimer <= 0) {
+        this._launchTimer = LAUNCH_INTERVAL;
+        for (let n = 0; n < 2 && this._launchQueue.length; n++) {
+          this._spawnEscort(this._launchQueue.shift());
+        }
+      }
+    }
+
+    // Tick escorts; dock the ones that flew home to their bay slot (or close
+    // enough to the hull) while recalling.
     for (const esc of [...this.escorts]) {
       esc.update(dt);
       if (esc.recalling
-        && esc.position.distanceTo(game.player.position) < DOCK_RANGE + game.player.radius) {
+        && (esc.docked || esc.position.distanceTo(game.player.position) < DOCK_RANGE)) {
         this._dock(esc);
       }
     }
@@ -99,20 +129,47 @@ export class FleetSystem {
       game.events.emit('fleet:denied');
       return;
     }
-    // Spawn a fresh wing of attack fighters, up to the hangar capacity, fanned
-    // out around the launching capital's deck.
-    for (let i = 0; i < hangar; i++) {
-      const esc = new EscortShip(game, ATTACK_FIGHTER, i);
-      const side = i % 2 === 0 ? -1 : 1;
-      const rank = Math.floor(i / 2);
-      esc.position.copy(game.player.position);
-      esc.position.x += side * (game.player.radius + 8 + rank * 6);
-      esc.position.y += (i % 3) * 4;
-      esc.velocity.copy(game.player.velocity);
-      this.escorts.push(esc);
-    }
+    // Queue a fresh wing up to the hangar capacity; `update` releases it two at
+    // a time. The carrier ejects from its flank hangars, the smaller battleship
+    // drops fighters out of its belly.
+    this._launchPort = game.player.statMult?.capital === 'battleship' ? 'bottom' : 'side';
+    this._wingSize = hangar;
+    this._launchQueue = [];
+    for (let i = 0; i < hangar; i++) this._launchQueue.push(i);
+    this._launchTimer = 0; // first wave on the next tick
     game.events.emit('fleet:launched', hangar);
     game.audio?.playTone?.({ type: 'sine', freq: 500, freqEnd: 840, duration: 0.3, gain: 0.16 });
+  }
+
+  /**
+   * Eject one fighter from the launch port with an outward kick, then hand it
+   * to its ring slot. Even slots leave the port side, odd slots the starboard
+   * side, so a wave shows one fighter out of each flank (single file per side).
+   */
+  _spawnEscort(slot) {
+    const game = this.game;
+    const player = game.player;
+    const esc = new EscortShip(game, ATTACK_FIGHTER, slot);
+    esc.wingSize = this._wingSize;
+    esc.launchPort = this._launchPort;
+
+    const side = slot % 2 === 0 ? -1 : 1;
+    const rank = Math.floor(slot / 2);
+    const R = player.radius;
+    const local = this._scratchA;
+    const kick = this._scratchB;
+    if (this._launchPort === 'bottom') {
+      local.set(side * R * 0.22, -R * 0.75, R * 0.12 - rank * 3);
+      kick.set(side * 0.3, -1, 0);
+    } else {
+      local.set(side * R * 0.85, 0, R * 0.1 - rank * 3);
+      kick.set(side, 0, 0);
+    }
+    esc.position.copy(local.applyQuaternion(player.quaternion)).add(player.position);
+    esc.velocity.copy(player.velocity)
+      .addScaledVector(kick.applyQuaternion(player.quaternion).normalize(), 80);
+    this.escorts.push(esc);
+    game.audio?.playTone?.({ type: 'triangle', freq: 600, freqEnd: 900, duration: 0.1, gain: 0.08 });
   }
 
   /**
@@ -149,6 +206,7 @@ export class FleetSystem {
   /** Order the wing home. `instant` skips the fly-back (mode changes). */
   recall(instant) {
     if (!this.deployed) return;
+    this._launchQueue = []; // stop any waves still queued to launch
     if (instant) {
       this._despawnAll();
       this.game.events.emit('fleet:recalled');
@@ -182,6 +240,7 @@ export class FleetSystem {
   _despawnAll() {
     for (const esc of this.escorts) esc.dispose();
     this.escorts.length = 0;
+    this._launchQueue = [];
     this.focusTarget = null;
   }
 }
