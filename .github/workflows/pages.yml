@@ -1,10 +1,12 @@
-name: Deploy game to GitHub Pages
+name: Publish game for browser play
 
-# Publishes the game to a free, public URL you can open in any browser
-# (https://climberkeenan-tech.github.io/Code-project-experiment-1/) — no
-# download, no Netlify. It deploys the already-built bundle committed under
-# builds/ (the latest starfall-frontier-build*.zip), so there is no npm build
-# in CI to fail. Runs on every push to the default branch.
+# Keeps the `gh-pages` branch up to date with the latest built game so it can be
+# played in any browser with no download:
+#   • instant link (no setup):  https://raw.githack.com/climberkeenan-tech/Code-project-experiment-1/gh-pages/index.html
+#   • or enable GitHub Pages (Settings → Pages → Deploy from a branch → gh-pages → /root)
+#     for  https://climberkeenan-tech.github.io/Code-project-experiment-1/
+# It publishes the already-built bundle (latest builds/*.zip) — no npm build in
+# CI to fail — and only needs `contents: write` (no Pages-admin permission).
 
 on:
   push:
@@ -12,44 +14,33 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: "pages"
-  cancel-in-progress: false
+  group: publish-play
+  cancel-in-progress: true
 
 jobs:
-  deploy:
+  publish:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Stage the prebuilt game (latest build zip)
+      - name: Stage the latest prebuilt game at branch root
         run: |
           set -e
           mkdir -p _site
           zip="$(ls builds/starfall-frontier-build*.zip | sort -V | tail -1)"
-          echo "Deploying $zip"
+          echo "Publishing $zip"
           unzip -o "$zip" -d _site
           test -f _site/index.html
-          ls -R _site | head -40
+          touch _site/.nojekyll
 
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
+      - name: Push to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          enablement: true
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_site
+          publish_branch: gh-pages
+          force_orphan: true
+          commit_message: "Publish built game (auto)"
