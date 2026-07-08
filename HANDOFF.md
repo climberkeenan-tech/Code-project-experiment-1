@@ -4,7 +4,7 @@ _This is the **single, current** handoff — it supersedes and folds in the two
 earlier `HANDOFF.md` files (see lineage below). Everything here was read out of
 the source, not remembered. Branch `claude/spaceship-assets-integration-57k8bu`,
 also fast-forwarded onto the default branch `claude/3d-space-exploration-game-ogrezx`;
-working tree clean, everything committed. **Current build: BUILD 15.**_
+working tree clean, everything committed. **Current build: BUILD 16.**_
 
 > **Handoff lineage — the three handoffs (this one replaces the other two).**
 > 1. **Original** developer handoff (pre-model era): lives in git history around
@@ -180,6 +180,28 @@ Space now has a **good side** you can see:
   with a name label inside 3200 u (`WINGMAN` / callsign). No off-screen arrows
   (arrows stay reserved for threats/objectives) and no health bars.
 - **Blue radar blips** for traffic (`Radar`); escorts stay green.
+
+### BUILD 16 — fleet roles: guard shell + scouts, lock-till-kill targeting
+Playtest-driven rework of the wing AI (the user wanted a protective screen, far
+scouts, and one-ship-per-enemy pursuit):
+- **Roles** (`EscortShip.role`, assigned in `FleetSystem.launch`): **~1/3 of the
+  fighters become SCOUTS** — wide world-aligned patrol orbits 1.3–2 km out
+  (`_orbitAng`/`_orbitRate`, ~30 s laps, 1.15× speed) sweeping for hostiles.
+  The rest of the fighters **plus all gunner ships are GUARDS** — the
+  protective shell ring around the hull. Guards launch first (screen forms),
+  scouts streak out last. Blue bracket labels show the role (GUARD/SCOUT).
+- **Lock-till-kill targeting** (`_acquire`): each craft keeps its `target`
+  until it **dies** (or flees past `CHASE_LEASH 5200` from the player) — no
+  mid-fight switching. Fresh picks take the nearest hostile with the **fewest
+  wingmates already locked on** (claims tally over `fleet.escorts`), so the
+  wing spreads one-per-enemy before doubling up. Focus-fire **V** still
+  overrides everything.
+- **Role engagement ranges:** guards react to hostiles within `GUARD_SELF_RANGE
+  800` of themselves or `GUARD_DEFEND_RANGE 1200` of the flagship; scouts hunt
+  anything within `SCOUT_HUNT_RANGE 2800` of their patrol.
+- Verified via harness: 20-craft Aethelred wing = 15 guards (dist 137–150) +
+  5 scouts (1330–1884); 4 warships → all claimed 6/6/6/2 with the far one
+  scout-only; 0 target switches while targets lived.
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally
@@ -827,10 +849,15 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   owned-collection loss). Non-capital hulls (`hangar 0`) emit `fleet:denied`.
   **BUILD 14 mixed wing:** a hull with a **`gunnerHangar`** (the Aethelred: 15 + 5) also
   launches that many **gunner ships** (`GUNNER_SHIP = 'frigate'`) after the light fighters —
-  same ring, but they out-hit fighters (escort bolt = `8 × catalog weapon`, so a frigate
-  gunner does 12 vs a fighter's 8). The Aethelred ejects the wing from its **lower-side**
-  bays (`launchPort: 'lowerside'`, near the belly spikes). `_launchQueue` entries are
-  `{variant, slot}` so one queue mixes both craft types.
+  they out-hit fighters (escort bolt = `8 × catalog weapon`, so a frigate gunner does 12 vs
+  a fighter's 8). The Aethelred ejects the wing from its **lower-side** bays
+  (`launchPort: 'lowerside'`, near the belly spikes). `_launchQueue` entries are
+  `{variant, slot, role, roleIndex, roleCount}` so one queue mixes craft types and roles.
+  **BUILD 16 roles:** ~1/3 of fighters = **scouts** (wide 1.3–2 km patrol orbits, hunting
+  within 2800 u); remaining fighters + all gunners = **guards** (shell ring, defending
+  within 1200 u of the flagship / 800 u of themselves). **Lock-till-kill:** every craft
+  keeps its target until it dies; fresh picks go to the least-claimed nearest hostile
+  (one-per-enemy spread). See the BUILD 16 changelog entry for constants.
 - **POIs** (`exploration/POISystem.js` + `POIFactory.js`, `game.poi`): 2 stations, 3
   wrecks, ≤4 satellites, 3 anomalies, caches in outer asteroid fields. Signal ping (6000 u)
   → build (12000) → discovery (300). Anomalies grant **permanent** `+0.12` to an
@@ -870,8 +897,8 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   (`.mode-btn` buttons; keyboard **Enter/Space** = Survival, **C** = Creative). The chosen
   button calls `launch(creative)`, which sets **`game.creative`**, unlocks audio, unpauses,
   and emits `game:started`. Contains the **BUILD stamp**. ⚠️ **The build stamp is a
-  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 15 —
-  friendly ships in the wild + blue ally boxes'`) — no build-time injection; bump it manually per
+  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 16 —
+  fleet roles: guard shell + scouts, lock-till-kill'`) — no build-time injection; bump it manually per
   playtest.
 - **Shop** (`ui/Shop.js`): pause-the-game modal, hailed with **`T`** (interim — no physical
   station yet). Tabs: **Sell Ore** (per-tier, Sell All), **Upgrades** (engine/weapon/shield,
@@ -938,8 +965,8 @@ means editing those strings too.
   `NODE_VERSION="22"`, `NPM_FLAGS="--include=dev"` (so Vite, a devDependency, always
   installs). Connect the repo in the browser → Deploy; the default branch is deploy-ready.
   Full click-by-click in **`DEPLOY.md`**. Alternative: drag
-  `builds/starfall-frontier-build15.zip` into Netlify Drop.
-- **`builds/starfall-frontier-build15.zip`** (~4.7 MB): a committed ready-to-serve `dist`
+  `builds/starfall-frontier-build16.zip` into Netlify Drop.
+- **`builds/starfall-frontier-build16.zip`** (~4.7 MB): a committed ready-to-serve `dist`
   (index.html + JS/CSS + the 4 GLBs). Convention: one zip per published build, old one
   deleted. **Don't gitignore `builds/` or `public/models-glb/`.**
 - **Local dev** (`LOCAL_DEV.md`, `run.command`, `.nvmrc`): `npm start` (= `vite --open`)

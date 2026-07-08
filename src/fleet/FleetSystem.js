@@ -3,11 +3,13 @@ import { EscortShip } from './EscortShip.js';
 
 /**
  * Fleet command (bible endgame): capital ships carry a hangar of AI attack
- * fighters. Press G (or the DEPLOY button) to launch the wing, press again to
- * recall it. Fighters stream out of the hangar a pair at a time, ring the hull,
- * dogfight hostiles on their own initiative (fire credited to you), and fly
- * back to the launch port to dock when recalled. They are hangar craft — NOT
- * the player's owned ships — so a lost fighter costs nothing from the collection.
+ * craft. Press G (or the DEPLOY button) to launch the wing, press again to
+ * recall it. Craft stream out of the hangar a pair at a time and split into
+ * roles: GUARDS form a protective shell around the flagship while SCOUTS sweep
+ * wide patrol orbits hunting for hostiles. Every craft locks one target and
+ * stays on it until it dies (fire credited to you), then flies back to the
+ * launch port to dock when recalled. They are hangar craft — NOT the player's
+ * owned ships — so a lost one costs nothing from the collection.
  *
  * Deployment rules:
  *  - only capital hulls with a hangar can launch (battleship: 4, carrier: 15)
@@ -135,14 +137,30 @@ export class FleetSystem {
     // with a `gunnerHangar` (the Aethelred) add heavier gunner ships after the
     // light fighters. Launch port comes from the catalog (`launchPort`), else
     // the belly for a battleship / the flanks for a carrier.
+    //
+    // Roles: ~1/3 of the fighters become SCOUTS (wide patrol orbits, hunting);
+    // the remaining fighters plus every gunner ship are GUARDS (the protective
+    // shell around the flagship). Guards launch first so the screen forms,
+    // then the scouts streak out to their patrols.
     const gunners = game.player.statMult?.gunnerHangar ?? 0;
     this._launchPort = game.player.statMult?.launchPort
       ?? (game.player.statMult?.capital === 'battleship' ? 'bottom' : 'side');
+    const scouts = hangar >= 3 ? Math.max(1, Math.floor(hangar / 3)) : 0;
+    const guardFighters = hangar - scouts;
+    const guardCount = guardFighters + gunners;
     this._wingSize = hangar + gunners;
     this._launchQueue = [];
     let slot = 0;
-    for (let i = 0; i < hangar; i++) this._launchQueue.push({ variant: ATTACK_FIGHTER, slot: slot++ });
-    for (let i = 0; i < gunners; i++) this._launchQueue.push({ variant: GUNNER_SHIP, slot: slot++ });
+    let g = 0;
+    for (let i = 0; i < guardFighters; i++) {
+      this._launchQueue.push({ variant: ATTACK_FIGHTER, slot: slot++, role: 'guard', roleIndex: g++, roleCount: guardCount });
+    }
+    for (let i = 0; i < gunners; i++) {
+      this._launchQueue.push({ variant: GUNNER_SHIP, slot: slot++, role: 'guard', roleIndex: g++, roleCount: guardCount });
+    }
+    for (let i = 0; i < scouts; i++) {
+      this._launchQueue.push({ variant: ATTACK_FIGHTER, slot: slot++, role: 'scout', roleIndex: i, roleCount: scouts });
+    }
     this._launchTimer = 0; // first wave on the next tick
     game.events.emit('fleet:launched', this._wingSize);
     game.audio?.playTone?.({ type: 'sine', freq: 500, freqEnd: 840, duration: 0.3, gain: 0.16 });
@@ -150,9 +168,9 @@ export class FleetSystem {
 
   /**
    * Eject one craft from the launch port with an outward kick, then hand it to
-   * its ring slot. Even slots leave the port side, odd slots the starboard
+   * its role slot. Even slots leave the port side, odd slots the starboard
    * side, so a wave shows one craft out of each flank (single file per side).
-   * @param {{variant: string, slot: number}} entry
+   * @param {{variant: string, slot: number, role: string, roleIndex: number, roleCount: number}} entry
    */
   _spawnEscort(entry) {
     const game = this.game;
@@ -161,6 +179,13 @@ export class FleetSystem {
     const esc = new EscortShip(game, variant, slot);
     esc.wingSize = this._wingSize;
     esc.launchPort = this._launchPort;
+    esc.role = entry.role ?? 'guard';
+    esc.roleIndex = entry.roleIndex ?? slot;
+    esc.roleCount = entry.roleCount ?? this._wingSize;
+    // Spread scout patrols evenly around the compass from the start.
+    if (esc.role === 'scout') {
+      esc._orbitAng = (esc.roleIndex / Math.max(1, esc.roleCount)) * Math.PI * 2;
+    }
 
     const side = slot % 2 === 0 ? -1 : 1;
     const rank = Math.floor(slot / 2);

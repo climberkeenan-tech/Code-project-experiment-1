@@ -156,7 +156,9 @@ export class TargetOverlay {
 
     // Name only when reasonably close, to keep the sky uncluttered.
     if (dist < 3200) {
-      const label = ship.isEscort ? 'WINGMAN' : (ship.callsign ?? 'ALLY').toUpperCase();
+      const label = ship.isEscort
+        ? (ship.role === 'scout' ? 'SCOUT' : 'GUARD')
+        : (ship.callsign ?? 'ALLY').toUpperCase();
       ctx.font = '10px ui-monospace, monospace';
       ctx.fillStyle = 'rgba(140,195,255,0.9)';
       ctx.textAlign = 'center';
