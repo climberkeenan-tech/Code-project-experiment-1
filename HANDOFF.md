@@ -4,7 +4,7 @@ _This is the **single, current** handoff — it supersedes and folds in the two
 earlier `HANDOFF.md` files (see lineage below). Everything here was read out of
 the source, not remembered. Branch `claude/spaceship-assets-integration-57k8bu`,
 also fast-forwarded onto the default branch `claude/3d-space-exploration-game-ogrezx`;
-working tree clean, everything committed. **Current build: BUILD 14.**_
+working tree clean, everything committed. **Current build: BUILD 15.**_
 
 > **Handoff lineage — the three handoffs (this one replaces the other two).**
 > 1. **Original** developer handoff (pre-model era): lives in git history around
@@ -165,6 +165,21 @@ A new player-authored hull and a mid-tier gun overhaul:
 - **Adaptive shadow box:** `Sun.js` now grows the shadow-cam ortho box to
   `max(90, radius×1.5)` so the huge Aethelred still shadows; small hulls keep
   the tight, sharp ±90 box.
+
+### BUILD 15 — friendly ships in the wild + blue ally boxes
+Space now has a **good side** you can see:
+- **`FriendlyTraffic`** (`src/ai/FriendlyTraffic.js`, `game.traffic`): up to **5
+  ambient allied ships** (natural-hull civilian craft — Trader/Hauler/Patrol/…
+  callsigns; ~12% chance of a capital) wander waypoints picked near the player,
+  with soft obstacle avoidance. Spawn 2.5–7 km out, despawn beyond 16 km,
+  re-checked every 3 s. **Purely decorative:** enemies ignore them, weapons pass
+  through them, they never fight. Registered between `reinforcements` and
+  `weapons`; `onShift` moves ships + waypoints.
+- **Blue ally brackets** (`TargetOverlay`): friendly ships — deployed wing craft
+  AND ambient traffic — get calm **blue corner boxes** (`FRIENDLY_RANGE 6000`),
+  with a name label inside 3200 u (`WINGMAN` / callsign). No off-screen arrows
+  (arrows stay reserved for threats/objectives) and no health bars.
+- **Blue radar blips** for traffic (`Radar`); escorts stay green.
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally
@@ -499,7 +514,7 @@ in `main.js` IS update order.**
 
 ### `main.js` registration order (simulation → camera → dressing → UI)
 `player → universe → onfoot → warp → landing → approach → settlements → poi → director →
-enemies → apex → reinforcements → weapons → combat → crew → fleet → explosions → pickups →
+enemies → apex → reinforcements → traffic → weapons → combat → crew → fleet → explosions → pickups →
 sun → camera → starfield → nebulas → dust → ship-sounds → music → hud → radar → targets →
 shop`, then `TouchControls` + `Screens` (constructed, not registered as update systems).
 After that: a `visibilitychange` audio suspend hook, `SaveGame.load()` + `applyUpgrades()`,
@@ -840,8 +855,10 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   entry glow. Subscribes to ~20 events. `?debug` adds fps/scale/draws/tris.
 - **Radar** (`ui/Radar.js`): ship-oriented minimap on a 236² canvas (shown 118², 2×
   supersample), 20 Hz. Disc range 3200 u, planet rings to 40000. `ENEMY_BLIP` size per
-  `enemy.type`; apex drawn as a throbbing red rim-arc at any distance.
-- **TargetOverlay** (`ui/TargetOverlay.js`): full-screen canvas — enemy brackets +
+  `enemy.type`; apex drawn as a throbbing red rim-arc at any distance; escorts green,
+  ambient allied traffic **blue** (BUILD 15).
+- **TargetOverlay** (`ui/TargetOverlay.js`): full-screen canvas — enemy brackets (+ **blue
+  friendly brackets**, BUILD 15) +
   `Lv{n} {class}` labels + health pips, off-screen arrows, incoming-missile markers, cyan
   warp-destination marker, mouse reticle. Boss pulse for `destroyer`/`apex`. `MAX_RANGE
   12000`, `APEX_REVEAL 2600`.
@@ -853,8 +870,8 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   (`.mode-btn` buttons; keyboard **Enter/Space** = Survival, **C** = Creative). The chosen
   button calls `launch(creative)`, which sets **`game.creative`**, unlocks audio, unpauses,
   and emits `game:started`. Contains the **BUILD stamp**. ⚠️ **The build stamp is a
-  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 14 —
-  Aethelred flagship + gunner-ship line'`) — no build-time injection; bump it manually per
+  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 15 —
+  friendly ships in the wild + blue ally boxes'`) — no build-time injection; bump it manually per
   playtest.
 - **Shop** (`ui/Shop.js`): pause-the-game modal, hailed with **`T`** (interim — no physical
   station yet). Tabs: **Sell Ore** (per-tier, Sell All), **Upgrades** (engine/weapon/shield,
@@ -921,8 +938,8 @@ means editing those strings too.
   `NODE_VERSION="22"`, `NPM_FLAGS="--include=dev"` (so Vite, a devDependency, always
   installs). Connect the repo in the browser → Deploy; the default branch is deploy-ready.
   Full click-by-click in **`DEPLOY.md`**. Alternative: drag
-  `builds/starfall-frontier-build12.zip` into Netlify Drop.
-- **`builds/starfall-frontier-build12.zip`** (3.6 MB): a committed ready-to-serve `dist`
+  `builds/starfall-frontier-build15.zip` into Netlify Drop.
+- **`builds/starfall-frontier-build15.zip`** (~4.7 MB): a committed ready-to-serve `dist`
   (index.html + JS/CSS + the 4 GLBs). Convention: one zip per published build, old one
   deleted. **Don't gitignore `builds/` or `public/models-glb/`.**
 - **Local dev** (`LOCAL_DEV.md`, `run.command`, `.nvmrc`): `npm start` (= `vite --open`)

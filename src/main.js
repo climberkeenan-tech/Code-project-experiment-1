@@ -9,6 +9,7 @@ import { EnemyManager } from './ai/EnemyManager.js';
 import { EncounterDirector } from './ai/EncounterDirector.js';
 import { ApexHunter } from './ai/ApexHunter.js';
 import { Reinforcements } from './ai/Reinforcements.js';
+import { FriendlyTraffic } from './ai/FriendlyTraffic.js';
 import { WeaponSystem } from './combat/WeaponSystem.js';
 import { CombatSystem } from './combat/CombatSystem.js';
 import { CrewManager } from './crew/CrewManager.js';
@@ -109,6 +110,9 @@ game.addSystem('apex', apex);
 const reinforcements = new Reinforcements(game);
 game.reinforcements = reinforcements;
 game.addSystem('reinforcements', reinforcements);
+
+// --- Ambient allies: friendly civilian/patrol ships cruising the area ---
+game.addSystem('traffic', new FriendlyTraffic(game));
 
 const weapons = new WeaponSystem(game);
 game.weapons = weapons;

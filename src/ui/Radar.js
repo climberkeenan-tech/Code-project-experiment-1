@@ -140,6 +140,12 @@ export class Radar {
       this._blip(ctx, half, 'rgba(143, 225, 176, 0.95)', 2.6, false);
     }
 
+    // --- Ambient allied traffic (blue) ---
+    for (const ship of game.traffic?.ships ?? []) {
+      this._toLocal(ship.position, player);
+      this._blip(ctx, half, 'rgba(96, 170, 255, 0.9)', 2.6, false);
+    }
+
     // Center: the ship.
     ctx.fillStyle = '#cfeeff';
     ctx.beginPath();

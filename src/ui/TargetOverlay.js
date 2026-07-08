@@ -2,7 +2,8 @@ import * as THREE from 'three';
 
 /**
  * Combat target overlay: red brackets around on-screen hostiles (with class,
- * level and a health pip), edge arrows toward off-screen ones, and orange
+ * level and a health pip), BLUE brackets around friendlies (wing craft +
+ * ambient allied traffic), edge arrows toward off-screen hostiles, and orange
  * markers for incoming missiles. Solves the playtest problems "I couldn't
  * find enemies" and "I didn't know a missile was coming."
  *
@@ -12,6 +13,8 @@ import * as THREE from 'three';
  */
 
 const MAX_RANGE = 12000;
+// Friendly brackets fade out beyond this — allies are ambience, not targets.
+const FRIENDLY_RANGE = 6000;
 // The apex hunter stays invisible to the overlay until it could actually
 // hit you (fire range 1600 + margin) — before that it exists only as the
 // planet-like arc on the radar, so avoiding it is a real choice.
@@ -70,6 +73,18 @@ export class TargetOverlay {
       }
     }
 
+    // --- Friendlies: blue brackets so your side reads at a glance ---
+    // Deployed wing craft + ambient allied traffic. No off-screen arrows
+    // (arrows are reserved for threats/objectives) and no health bars —
+    // just a calm blue box + name.
+    for (const friend of this._friendlies()) {
+      const dist = friend.position.distanceTo(cam.position);
+      if (dist > FRIENDLY_RANGE) continue;
+      const p = this._screen(friend.position, cam);
+      if (!p.onScreen) continue;
+      this._drawFriendlyBox(ctx, p.x, p.y, friend, dist, focal);
+    }
+
     // --- Aim reticle: follows the cursor so "shoot where I point" is visible ---
     const mouse = game.input.mouse;
     if (mouse.active && !game.input.touchActive) {
@@ -111,6 +126,41 @@ export class TargetOverlay {
         ctx.stroke();
         this._label(ctx, p.x, p.y - 20, warp.target.descriptor.name, style, 0);
       }
+    }
+  }
+
+  /** Every allied ship that should get a blue bracket. */
+  * _friendlies() {
+    for (const esc of this.game.fleet?.escorts ?? []) {
+      if (esc.alive) yield esc;
+    }
+    for (const ship of this.game.traffic?.ships ?? []) yield ship;
+  }
+
+  _drawFriendlyBox(ctx, sx, sy, ship, dist, focal) {
+    const pixR = Math.max(10, Math.min(160, (ship.radius / dist) * focal * 1.7));
+    ctx.strokeStyle = 'rgba(96,170,255,0.85)';
+    ctx.lineWidth = 1.4;
+
+    // Corner brackets (same shape as hostiles, calm blue).
+    const c = pixR * 0.4;
+    for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      const cx = sx + dx * pixR;
+      const cy = sy + dy * pixR;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - dy * c);
+      ctx.lineTo(cx, cy);
+      ctx.lineTo(cx - dx * c, cy);
+      ctx.stroke();
+    }
+
+    // Name only when reasonably close, to keep the sky uncluttered.
+    if (dist < 3200) {
+      const label = ship.isEscort ? 'WINGMAN' : (ship.callsign ?? 'ALLY').toUpperCase();
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.fillStyle = 'rgba(140,195,255,0.9)';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, sx, sy - pixR - 6);
     }
   }
 

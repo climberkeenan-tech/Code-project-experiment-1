@@ -43,7 +43,7 @@ export class Screens {
         </button>
       </div>
       <div class="controls-hint">${this._controlsHint()}</div>
-      <div class="build-tag">BUILD 14 — Aethelred flagship + gunner-ship line</div>
+      <div class="build-tag">BUILD 15 — friendly ships in the wild + blue ally boxes</div>
     `;
     this.root.appendChild(el);
 
