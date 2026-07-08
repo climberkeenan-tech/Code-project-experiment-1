@@ -17,6 +17,7 @@ const ENGAGE_RANGE = 1300;
 const COMMAND_RANGE = 5000; // ordered targets are pursued much further
 const FIRE_INTERVAL = 0.42;
 const ESCORT_SPEED = 330; // keeps pace with the flagship
+const BASE_ESCORT_DAMAGE = 8; // a light fighter's per-bolt damage (×catalog weapon)
 
 export class EscortShip extends ShipBase {
   /**
@@ -35,13 +36,16 @@ export class EscortShip extends ShipBase {
     this.docked = false;
     /** Filled in by FleetSystem on launch: wing size + which port it flew from. */
     this.wingSize = 1;
-    this.launchPort = 'side'; // 'side' (carrier flanks) | 'bottom' (battleship belly)
+    this.launchPort = 'side'; // 'side' (flanks) | 'bottom' (belly) | 'lowerside'
 
     const v = PLAYER_SHIP_BY_ID[variantId] ?? PLAYER_SHIP_BY_ID.starter;
     this.hullMax = this.hull = Math.round(100 * v.hull);
     this.shieldMax = this.shield = Math.round(100 * v.shield);
     this.shieldRegenRate = 8;
     this.shieldRegenDelay = 4;
+    // Gun scales with the hull's catalog `weapon` mult, so a deployed gunner
+    // ship (frigate, 1.5x) out-hits a light fighter.
+    this.fireDamage = BASE_ESCORT_DAMAGE * (v.weapon ?? 1);
 
     this.glow = new EngineGlow(this.visual, this.engines, this.glowColor, this.engineScale);
     this.shieldFx = new ShieldEffect(this.object3D, this.radius * 1.4);
@@ -85,6 +89,8 @@ export class EscortShip extends ShipBase {
       const R = player.radius;
       if (this.launchPort === 'bottom') {
         this._slotPos.set(dside * R * 0.22, -R * 0.7, R * 0.1 + drank * 3);
+      } else if (this.launchPort === 'lowerside') {
+        this._slotPos.set(dside * R * 0.7, -R * 0.3, R * 0.05 + drank * 3);
       } else {
         this._slotPos.set(dside * R * 0.85, 0, R * 0.05 + drank * 3);
       }
@@ -137,7 +143,7 @@ export class EscortShip extends ShipBase {
       this._toTarget.y += (Math.random() - 0.5) * 0.02;
       game.weapons.fire(this._muzzle, this._toTarget.normalize(), {
         fromPlayer: true, // hits enemies; kills credit the player
-        damage: 8,
+        damage: this.fireDamage,
         speed: 950,
         source: this,
         inheritVel: this.velocity,

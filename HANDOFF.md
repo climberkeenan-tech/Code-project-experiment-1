@@ -4,7 +4,7 @@ _This is the **single, current** handoff — it supersedes and folds in the two
 earlier `HANDOFF.md` files (see lineage below). Everything here was read out of
 the source, not remembered. Branch `claude/spaceship-assets-integration-57k8bu`,
 also fast-forwarded onto the default branch `claude/3d-space-exploration-game-ogrezx`;
-working tree clean, everything committed. **Current build: BUILD 13.**_
+working tree clean, everything committed. **Current build: BUILD 14.**_
 
 > **Handoff lineage — the three handoffs (this one replaces the other two).**
 > 1. **Original** developer handoff (pre-model era): lives in git history around
@@ -141,6 +141,31 @@ Playtest feel pass on the **G**-key wing and the enemy livery:
 - **Recall docks at the launch port** (flank/belly) via `esc.docked`, rather
   than merging into the hull centre. See [§11](#11-gameplay-systems-on-foot-warp-crew-fleet-economy-poi-landing).
 
+### BUILD 14 — Aethelred flagship + gunner-ship line
+A new player-authored hull and a mid-tier gun overhaul:
+- **`aethelred` model** (5th hand-authored hull): the "Aethelred" deep-space
+  cruiser, compressed 25 MB → **1.17 MB** (simplify + meshopt + 1K WebP).
+  `targetLength 300` — **~3× the flagship**, the biggest hull in the game
+  (radius ≈ 115). Registered in `MODELS`/`NOZZLES` like the others.
+- **New apex ship `aethelred`** (`SF-200 Aethelred`, Lv150, 90,000 cr): the new
+  best ship, so the carrier + battleship are now the #2/#3 capitals. Hull 16 /
+  shield 12, `noLanding`, and a **mixed launch wing**: `hangar 15` light
+  fighters **+ `gunnerHangar 5`** gunner ships, ejected from its **lower-side**
+  bays (`launchPort: 'lowerside'`).
+- **`weapon` catalog multiplier** (new field): scales the player's bolt damage
+  (`WeaponSystem` player-fire `× statMult.weapon`). Aethelred 2.5×.
+- **Gunner-ship line:** `frigate` (SF-50) and `battlecruiser` (SF-70) now fly
+  the **`gunship` hull** (scaled 1.4× / 1.7×) instead of the procedural fighter,
+  with heavier guns — **SF-50 `weapon 1.5`, SF-70 `weapon 2.0`**. Temporary hull
+  reuse until their own models are authored. `sovereign` (SF-100) stays
+  procedural, reserved for a future model.
+- **Gunner-ship escorts:** the wing's 5 gunner ships fly the `frigate` variant
+  (`GUNNER_SHIP`) and out-hit the light fighters (escort bolt `8 × catalog
+  weapon`). See [§11](#11-gameplay-systems-on-foot-warp-crew-fleet-economy-poi-landing).
+- **Adaptive shadow box:** `Sun.js` now grows the shadow-cam ortho box to
+  `max(90, radius×1.5)` so the huge Aethelred still shadows; small hulls keep
+  the tight, sharp ±90 box.
+
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally
 (`npm start`) with no deploy, incl. iPhone-over-Wi-Fi testing. On a locked-down
@@ -188,26 +213,27 @@ Because the `PlayerShip` constructor runs **before** models finish loading, the 
 **always boots on the procedural stand-in** and hot-swaps to the GLB when it arrives
 (see §1.6).
 
-### 1.3 `MODELS` registry — the four hand-authored hulls
+### 1.3 `MODELS` registry — the five hand-authored hulls
 `src/ship/ModelShips.js` is **the single place hand-authored hulls enter the game.**
-The `MODELS` registry (`ModelShips.js:21-52`), verbatim:
+The `MODELS` registry, verbatim:
 
 | id | url | targetLength | yaw | pitch | in-game name |
 |----|-----|-------------:|-----|------:|--------------|
 | `starter` | `models-glb/starter.glb` | 9 | `-Math.PI/2` | 0 | Nebula Sentinel |
-| `gunship` | `models-glb/gunship.glb` | 11 | `-Math.PI/2` | 0 | Nebula Vanguard |
+| `gunship` | `models-glb/gunship.glb` | 11 | `-Math.PI/2` | 0 | Nebula Vanguard (also SF-50/SF-70 gunner ships, scaled) |
 | `dreadnought` | `models-glb/dreadnought.glb` | 32 | `-Math.PI/2` | 0 | Obsidian Dreadnought (mid capital) |
 | `flagship` | `models-glb/flagship.glb` | 100 | `-Math.PI/2` | 0 | Star-Destroyer carrier ("vast, ~11× a fighter") |
+| `aethelred` | `models-glb/aethelred.glb` | 300 | `-Math.PI/2` | 0 | Aethelred cruiser (**biggest**, ~3× the flagship, radius ≈ 115) |
 
-- **`yaw: -Math.PI/2` for all four**: Meshy authors the nose along **`-X`**; the yaw
+- **`yaw: -Math.PI/2` for all five**: Meshy authors the nose along **`-X`**; the yaw
   rotates it onto game-forward **`-Z`**. Every new model authored the same way uses the
   same yaw.
 - **`targetLength`** is the in-game size knob. **Caveat:** `normalize()` scales by the
   **largest** bounding dimension (`max(x,y,z)`), *not* strictly length — a hull wider
   than it is long ends up shorter than `targetLength`.
-- The four files live in `public/models-glb/` (served static, **not** bundled by Vite):
-  `dreadnought.glb` 1,197,304 B · `flagship.glb` 997,168 B · `gunship.glb` 795,016 B ·
-  `starter.glb` 831,820 B (~3.7 MB total).
+- The files live in `public/models-glb/` (served static, **not** bundled by Vite):
+  `dreadnought.glb` ~1.20 MB · `aethelred.glb` ~1.17 MB · `flagship.glb` ~1.00 MB ·
+  `gunship.glb` ~0.80 MB · `starter.glb` ~0.83 MB (~5 MB total).
 
 ### 1.4 The GLB load pipeline (`ModelShips.js`)
 - `loadModelShips()` — idempotent singleton (`loadPromise`). Uses `GLTFLoader` **with
@@ -234,22 +260,23 @@ The `MODELS` registry (`ModelShips.js:21-52`), verbatim:
   store `proto.userData.shipBounds = {length: z-size, width: x-size, height: y-size,
   rearZ: box.max.z, noseZ: box.min.z}`. **All gameplay anchors derive from `shipBounds`.**
 
-### 1.5 `PLAYER_SHIPS` — the full catalog (`ShipFactory.js:209-250`)
-Eight entries, in catalog order. `PLAYER_SHIP_BY_ID` is `Object.fromEntries(...)` at
-`:252`. Multipliers scale off the 100-hull/100-shield baseline.
+### 1.5 `PLAYER_SHIPS` — the full catalog (`ShipFactory.js`)
+Nine entries, in catalog order. `PLAYER_SHIP_BY_ID` is `Object.fromEntries(...)`.
+Multipliers scale off the 100-hull/100-shield baseline.
 
 | id | name | Lv | cost (cr) | hull | shield | engine | crew | model / capital | flags |
 |----|------|---:|----------:|-----:|-------:|-------:|-----:|-----------------|-------|
 | `starter` | SF-10 Sentinel | 10 | 0 | 1 | 1 | 1 | 2 | model `starter` | — |
 | `explorer` | SF-20 Nebula Gunship | 20 | 320 | 1.25 | 1.2 | 1.08 | 3 | model `gunship` | — |
 | `interceptor` | SF-30 Kestrel | 30 | 800 | 1.5 | 1.45 | 1.18 | 3 | model `gunship`, **`modelScale 1.18`** | — |
-| `frigate` | SF-50 Aegis | 50 | 2080 | 2.2 | 2.1 | 1.28 | 4 | **procedural** | `twinFin` |
-| `battlecruiser` | SF-70 Bastion | 70 | 6400 | 3.4 | 3.1 | 1.38 | 5 | **procedural** | `twinFin`, `quadEngines` |
-| `sovereign` | SF-100 Sovereign | 100 | 20800 | 5.2 | 4.6 | 1.5 | 7 | **procedural** | `twinFin`, `quadEngines` |
+| `frigate` | SF-50 Aegis Gunner | 50 | 2080 | 2.2 | 2.1 | 1.28 | 4 | model `gunship`, **`modelScale 1.4`** | **`weapon 1.5`** |
+| `battlecruiser` | SF-70 Bastion Gunner | 70 | 6400 | 3.4 | 3.1 | 1.38 | 5 | model `gunship`, **`modelScale 1.7`** | **`weapon 2.0`**, `twinFin`, `quadEngines` |
+| `sovereign` | SF-100 Sovereign | 100 | 20800 | 5.2 | 4.6 | 1.5 | 7 | **procedural** (reserved for a future model) | `twinFin`, `quadEngines` |
 | `battleship` | SF-85 Obsidian Dreadnought | 85 | 12800 | 7 | 5.5 | 1.05 | 6 | model `dreadnought`, `capital 'battleship'` | `turrets 4`, **`hangar 4`** |
 | `carrier` | SF-110 Vanguard | 110 | 40000 | 11 | 8 | 0.85 | 8 | model `flagship`, `capital 'carrier'` | `turrets 2`, **`hangar 15`**, **`noLanding`** |
+| `aethelred` | SF-200 Aethelred | 150 | 90000 | 16 | 12 | 0.8 | 12 | model `aethelred`, `capital 'carrier'` | `turrets 4`, **`hangar 15`** + **`gunnerHangar 5`**, **`launchPort 'lowerside'`**, **`weapon 2.5`**, **`noLanding`** |
 
-_Prices are ×1.6 from launch, and hangars now launch generic **attack fighters** (§11 Fleet), not owned ships._
+_Hangars launch generic **attack craft** (§11 Fleet), not owned ships; the Aethelred launches a mixed wing (15 fighters + 5 gunner ships)._
 
 Every entry also carries `scale` (procedural-fallback size only), `hullColor`,
 `accentColor` (fallback-only), and `glow: [r,g,b]` (an HDR triple — **used by EngineGlow
@@ -257,13 +284,13 @@ in BOTH the model and procedural paths**, the one visual field that survives int
 rig).
 
 **Which catalog fields matter where:**
-- **Both paths:** `glow`, `hull`/`shield`/`engine`/`crew`/`turrets`/`hangar`/`capital`/`noLanding`, `model`/`modelScale`.
+- **Both paths:** `glow`, `hull`/`shield`/`engine`/`crew`/`turrets`/`hangar`/`gunnerHangar`/`capital`/`launchPort`/`noLanding`/`weapon`, `model`/`modelScale`.
 - **Procedural fallback only (dead weight once a model loads):** `scale`, `hullColor`, `accentColor`, `twinFin`, `quadEngines`.
+- **`weapon`** (new in BUILD 14): multiplies the player's bolt damage in `WeaponSystem` (default 1). **`gunnerHangar`/`launchPort`**: see [§11](#11-gameplay-systems-on-foot-warp-crew-fleet-economy-poi-landing).
 
-**Note:** `frigate`/`battlecruiser`/`sovereign` (Lv 50/70/100) still fly the **procedural
-fighter recipe** — comments call the loaded models "design 1..3 of 4", i.e. more
-hand-modeled hulls were planned for these slots. **These are the natural slots for the
-new ships.**
+**Note:** only `sovereign` (Lv 100) still flies the **procedural fighter recipe** —
+reserved for a future hand-modeled hull. `frigate`/`battlecruiser` were moved onto the
+`gunship` hull in BUILD 14 (the "gunner ship" line).
 
 ### 1.6 The hot-swap: how a GLB replaces a stand-in
 `main.js:175-180`, run **after** `save.load()` + `player.applyUpgrades()` (so the
@@ -434,10 +461,11 @@ the four hulls from 86 MB of FBX to 3.7 MB of GLB (commit `3321fc4`):
   weight once a model loads but still required for a plausible stand-in.
 - **`createMaterials` is called before the model check** (`ShipFactory.js:262`), so a
   material set is built/cached even for model ships (harmless, wasted work).
-- **Very large hulls** stress three ship-size couplings: the shadow ortho box is only
-  ±60 units (Sun.js), the asteroid spatial-hash `sphereHit` assumes a small radius vs
-  `cellSize 96`, and the landing touchdown gate uses `radius`. A hull much larger than the
-  flagship needs `noLanding` and a look at those.
+- **Very large hulls** stress ship-size couplings: the shadow ortho box (now **adaptive**,
+  `max(90, radius×1.5)` — BUILD 14), the asteroid spatial-hash `sphereHit` (assumes a small
+  radius vs `cellSize 96`), the landing touchdown gate (uses `radius`), and chase-cam framing.
+  A hull much larger than the flagship needs `noLanding` (the Aethelred sets it) and a look
+  at those. The Aethelred (radius ≈ 115) is the current stress case.
 
 ---
 
@@ -650,9 +678,10 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
 ## 8. Environment & camera
 
 - **Sun** (`environment/Sun.js`): the game's **single real light** — a `DirectionalLight`
-  (0xfff0dc, intensity 3.4) with the **only shadow camera**, a tight **±60-unit ortho box**
-  that tracks the player (⚠️ ships/terrain beyond ~120 u won't shadow correctly — relevant
-  for very large capitals). Plus a HemisphereLight fill and HDR disc + corona sprites.
+  (0xfff0dc, intensity 3.4) with the **only shadow camera**. BUILD 14: the ortho box is now
+  **adaptive — `max(90, player.radius×1.5)`** (recomputed only on change), so a small hull
+  keeps a tight ±90 box (sharp shadows) while the huge Aethelred (radius ≈ 115) still fits.
+  Tracks the player. Plus a HemisphereLight fill and HDR disc + corona sprites.
 - **Sky dressing** (`Starfield` 5200+2800 stars, `Nebulas` 5 painted sprites + 4 galaxies,
   `SpaceDust` 220 wrap points) is **glued to `camera.position` each frame** at optical
   infinity, and each also subscribes to `onShift` — both are required or the sky pops for
@@ -779,8 +808,14 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   nearest); **`V`** / **Focus** overrides that and converges the whole wing on one target
   (aim-assist lock else nearest ≤3000 u). `G` again **recalls** — they fly back and **dock
   at the launch port** (flank/belly, via `esc.docked`). Auto-recall on atmosphere/death/foot.
-  Hangar fighters are **expendable** — `onEscortDestroyed` just removes the craft (no
+  Hangar craft are **expendable** — `onEscortDestroyed` just removes the craft (no
   owned-collection loss). Non-capital hulls (`hangar 0`) emit `fleet:denied`.
+  **BUILD 14 mixed wing:** a hull with a **`gunnerHangar`** (the Aethelred: 15 + 5) also
+  launches that many **gunner ships** (`GUNNER_SHIP = 'frigate'`) after the light fighters —
+  same ring, but they out-hit fighters (escort bolt = `8 × catalog weapon`, so a frigate
+  gunner does 12 vs a fighter's 8). The Aethelred ejects the wing from its **lower-side**
+  bays (`launchPort: 'lowerside'`, near the belly spikes). `_launchQueue` entries are
+  `{variant, slot}` so one queue mixes both craft types.
 - **POIs** (`exploration/POISystem.js` + `POIFactory.js`, `game.poi`): 2 stations, 3
   wrecks, ≤4 satellites, 3 anomalies, caches in outer asteroid fields. Signal ping (6000 u)
   → build (12000) → discovery (300). Anomalies grant **permanent** `+0.12` to an
@@ -818,9 +853,9 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   (`.mode-btn` buttons; keyboard **Enter/Space** = Survival, **C** = Creative). The chosen
   button calls `launch(creative)`, which sets **`game.creative`**, unlocks audio, unpauses,
   and emits `game:started`. Contains the **BUILD stamp**. ⚠️ **The build stamp is a
-  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 13 —
-  fleet launch/formation rework + natural-colour enemies'`) — no build-time injection; bump
-  it manually per playtest.
+  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 14 —
+  Aethelred flagship + gunner-ship line'`) — no build-time injection; bump it manually per
+  playtest.
 - **Shop** (`ui/Shop.js`): pause-the-game modal, hailed with **`T`** (interim — no physical
   station yet). Tabs: **Sell Ore** (per-tier, Sell All), **Upgrades** (engine/weapon/shield,
   `+0.15`/level, cost `40 + 35*level`), **Ships** (renders `PLAYER_SHIPS`; Active/Select/
@@ -925,8 +960,11 @@ _Only issues substantiated by the code._
 - **No audio mute/volume/pause/settings UI** — `AudioEngine.setMuted()` exists, unused.
 - **No tests, no CI** — verification is manual via the screenshot harness only.
 - **Real-device iOS/Android testing has not been done** — only headless Chromium.
-- **Single-cell `sphereHit`** degrades asteroid collision for very large ship radii.
-- **Shadow ortho box is ±60 u** — hulls beyond ~120 u clip their own shadow.
+- **Single-cell `sphereHit`** degrades asteroid collision for very large ship radii
+  (notably the Aethelred, radius ≈ 115).
+- **Chase-cam framing for the Aethelred** is functional but not cinematic — the ship is so
+  large (radius ≈ 115) that the auto-scaled leash pulls the camera far back, so it can read
+  small next to a planet. A capital-specific camera tune is a polish TODO.
 
 ---
 
@@ -950,9 +988,11 @@ _Only issues substantiated by the code._
 ---
 
 ## 17. ToDo (prioritized)
-1. **More hand-modeled player hulls** for the Lv 50/70/100 slots (frigate/battlecruiser/
-   sovereign still fly the procedural fighter recipe) — this is the "new spaceships" work;
-   follow [§2](#2-adding-a-new-spaceship-the-exact-process).
+1. **Dedicated hulls for the gunner-ship line + `sovereign`.** SF-50/SF-70 currently borrow
+   the `gunship` hull (scaled) and `sovereign` still flies the procedural fighter recipe —
+   all three want their own authored models (the user is designing 2 more). Follow
+   [§2](#2-adding-a-new-spaceship-the-exact-process). Also: a **capital-specific camera tune**
+   so the huge Aethelred frames cinematically.
 2. **Commit a `tools/` FBX→GLB conversion script** so the model pipeline is reproducible
    (dev deps are already installed).
 3. **Refactor the duplicated anchor derivation** (`buildModelRig` vs `createEnemyShip`) into

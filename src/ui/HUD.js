@@ -116,7 +116,7 @@ export class HUD {
     game.events.on('missile:destroyed', () => {
       this.showBanner('Missile Intercepted', '', 1.2);
     });
-    game.events.on('fleet:launched', (n) => this.showBanner('Attack Ships Deployed', `${n} fighters launched — Deploy/G again to recall · Focus/V directs fire`, 2.8));
+    game.events.on('fleet:launched', (n) => this.showBanner('Attack Ships Deployed', `${n} craft launched — Deploy/G again to recall · Focus/V directs fire`, 2.8));
     game.events.on('fleet:focus', (t) => this.showBanner('Fleet: Focus Fire', `wing attacking Lv${t.stats?.level ?? '?'} ${t.stats?.displayName ?? 'hostile'}`, 2.4));
     game.events.on('fleet:free', () => this.showBanner('Fleet: Free Engage', 'wing hunting on its own', 2));
     game.events.on('fleet:no-wing', () => this.showBanner('No Wing Deployed', 'press Deploy (G) to launch attack ships first', 2.2));

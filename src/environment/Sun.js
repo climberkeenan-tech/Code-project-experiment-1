@@ -94,6 +94,20 @@ export class Sun {
     const player = this.game.player;
     if (!player) return;
 
+    // Grow the shadow box to fit very large hulls (the Aethelred's radius is
+    // ~115); normal ships keep the tight ±90 box for sharp shadows. Only
+    // recomputes the projection when the required size actually changes.
+    const half = Math.max(90, player.radius * 1.5);
+    const shadowCam = this.light.shadow.camera;
+    if (shadowCam.right !== half) {
+      shadowCam.left = -half;
+      shadowCam.right = half;
+      shadowCam.top = half;
+      shadowCam.bottom = -half;
+      shadowCam.far = Math.max(500, 240 + half * 2);
+      shadowCam.updateProjectionMatrix();
+    }
+
     // Keep the directional light + shadow box centered on the player.
     this.getLightDirection(this._sunDir, player.position);
 

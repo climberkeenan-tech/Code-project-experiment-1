@@ -221,11 +221,17 @@ export const PLAYER_SHIPS = [
   { id: 'interceptor', name: 'SF-30 Kestrel', level: 30, cost: 800,
     hull: 1.5, shield: 1.45, engine: 1.18, crew: 3, model: 'gunship', modelScale: 1.18,
     scale: 1.14, hullColor: 0xd6c9b9, accentColor: 0x4a3524, glow: [3.6, 2.2, 0.7] },
-  { id: 'frigate', name: 'SF-50 Aegis', level: 50, cost: 2080,
-    hull: 2.2, shield: 2.1, engine: 1.28, crew: 4, twinFin: true,
+  // SF-50 / SF-70 are the "gunner ship" line. For now they fly the same
+  // Nebula gunship hull as the SF-20 / SF-30 (scaled up per tier) until their
+  // own models are authored, and carry a heavier gun (catalog `weapon` — a
+  // multiplier on the player's bolt damage). SF-50 = 1.5x, SF-70 = 2x.
+  { id: 'frigate', name: 'SF-50 Aegis Gunner', level: 50, cost: 2080,
+    hull: 2.2, shield: 2.1, engine: 1.28, crew: 4, weapon: 1.5,
+    model: 'gunship', modelScale: 1.4, twinFin: true,
     scale: 1.26, hullColor: 0xaebfd4, accentColor: 0x22344d, glow: [1.2, 2.2, 5.4] },
-  { id: 'battlecruiser', name: 'SF-70 Bastion', level: 70, cost: 6400,
-    hull: 3.4, shield: 3.1, engine: 1.38, crew: 5, twinFin: true, quadEngines: true,
+  { id: 'battlecruiser', name: 'SF-70 Bastion Gunner', level: 70, cost: 6400,
+    hull: 3.4, shield: 3.1, engine: 1.38, crew: 5, weapon: 2.0,
+    model: 'gunship', modelScale: 1.7, twinFin: true, quadEngines: true,
     scale: 1.42, hullColor: 0x9aa8bd, accentColor: 0x40274d, glow: [3.2, 1.2, 5.2] },
   { id: 'sovereign', name: 'SF-100 Sovereign', level: 100, cost: 20800,
     hull: 5.2, shield: 4.6, engine: 1.5, crew: 7, twinFin: true, quadEngines: true,
@@ -247,6 +253,15 @@ export const PLAYER_SHIPS = [
     hull: 11, shield: 8, engine: 0.85, crew: 8, turrets: 2, hangar: 15, capital: 'carrier',
     model: 'flagship', noLanding: true,
     scale: 1, hullColor: 0xaab4c6, accentColor: 0x2a5246, glow: [0.8, 3.0, 4.6] },
+  // The Aethelred: the player-authored deep-space cruiser — the new apex of
+  // the fleet, ~3x the carrier's length (targetLength 300 vs 100), too vast to
+  // land. Deploys a MIXED wing out of its lower-side bays: 15 light fighters
+  // (hangar) + 5 gunner ships (gunnerHangar). Heaviest gun of any hull.
+  { id: 'aethelred', name: 'SF-200 Aethelred', level: 150, cost: 90000,
+    hull: 16, shield: 12, engine: 0.8, crew: 12, turrets: 4,
+    hangar: 15, gunnerHangar: 5, capital: 'carrier', launchPort: 'lowerside',
+    model: 'aethelred', noLanding: true, weapon: 2.5,
+    scale: 1, hullColor: 0x9fb0c4, accentColor: 0x2a4a5a, glow: [0.9, 2.4, 4.8] },
 ];
 
 export const PLAYER_SHIP_BY_ID = Object.fromEntries(PLAYER_SHIPS.map((s) => [s.id, s]));

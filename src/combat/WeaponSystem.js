@@ -280,7 +280,9 @@ export class WeaponSystem {
 
     this.fire(this._muzzle, this._dir, {
       fromPlayer: true,
-      damage: PLAYER_DAMAGE * player.upgrades.weapon,
+      // Per-ship gun multiplier (catalog `weapon`, default 1) on top of the
+      // weapon upgrade — this is what makes the "gunner ships" hit harder.
+      damage: PLAYER_DAMAGE * player.upgrades.weapon * (player.statMult?.weapon ?? 1),
       speed: PLAYER_BOLT_SPEED,
       source: player,
       inheritVel: player.velocity,

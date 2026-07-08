@@ -18,8 +18,10 @@ import { EscortShip } from './EscortShip.js';
 
 /** Hull the hangar-launched attack fighters fly (a light, expendable craft). */
 const ATTACK_FIGHTER = 'starter';
+/** Hull the heavier hangar-launched gunner ships fly (gunnerHangar craft). */
+const GUNNER_SHIP = 'frigate';
 const DOCK_RANGE = 45;
-/** Seconds between hangar-launch waves (two fighters per wave). */
+/** Seconds between hangar-launch waves (two craft per wave). */
 const LAUNCH_INTERVAL = 0.32;
 
 export class FleetSystem {
@@ -129,27 +131,34 @@ export class FleetSystem {
       game.events.emit('fleet:denied');
       return;
     }
-    // Queue a fresh wing up to the hangar capacity; `update` releases it two at
-    // a time. The carrier ejects from its flank hangars, the smaller battleship
-    // drops fighters out of its belly.
-    this._launchPort = game.player.statMult?.capital === 'battleship' ? 'bottom' : 'side';
-    this._wingSize = hangar;
+    // Queue a fresh wing; `update` releases it two craft at a time. Capitals
+    // with a `gunnerHangar` (the Aethelred) add heavier gunner ships after the
+    // light fighters. Launch port comes from the catalog (`launchPort`), else
+    // the belly for a battleship / the flanks for a carrier.
+    const gunners = game.player.statMult?.gunnerHangar ?? 0;
+    this._launchPort = game.player.statMult?.launchPort
+      ?? (game.player.statMult?.capital === 'battleship' ? 'bottom' : 'side');
+    this._wingSize = hangar + gunners;
     this._launchQueue = [];
-    for (let i = 0; i < hangar; i++) this._launchQueue.push(i);
+    let slot = 0;
+    for (let i = 0; i < hangar; i++) this._launchQueue.push({ variant: ATTACK_FIGHTER, slot: slot++ });
+    for (let i = 0; i < gunners; i++) this._launchQueue.push({ variant: GUNNER_SHIP, slot: slot++ });
     this._launchTimer = 0; // first wave on the next tick
-    game.events.emit('fleet:launched', hangar);
+    game.events.emit('fleet:launched', this._wingSize);
     game.audio?.playTone?.({ type: 'sine', freq: 500, freqEnd: 840, duration: 0.3, gain: 0.16 });
   }
 
   /**
-   * Eject one fighter from the launch port with an outward kick, then hand it
-   * to its ring slot. Even slots leave the port side, odd slots the starboard
-   * side, so a wave shows one fighter out of each flank (single file per side).
+   * Eject one craft from the launch port with an outward kick, then hand it to
+   * its ring slot. Even slots leave the port side, odd slots the starboard
+   * side, so a wave shows one craft out of each flank (single file per side).
+   * @param {{variant: string, slot: number}} entry
    */
-  _spawnEscort(slot) {
+  _spawnEscort(entry) {
     const game = this.game;
     const player = game.player;
-    const esc = new EscortShip(game, ATTACK_FIGHTER, slot);
+    const { variant, slot } = entry;
+    const esc = new EscortShip(game, variant, slot);
     esc.wingSize = this._wingSize;
     esc.launchPort = this._launchPort;
 
@@ -161,6 +170,10 @@ export class FleetSystem {
     if (this._launchPort === 'bottom') {
       local.set(side * R * 0.22, -R * 0.75, R * 0.12 - rank * 3);
       kick.set(side * 0.3, -1, 0);
+    } else if (this._launchPort === 'lowerside') {
+      // Out of the flanks but low on the hull, by the belly spikes.
+      local.set(side * R * 0.7, -R * 0.32, R * 0.1 - rank * 3);
+      kick.set(side, -0.5, 0);
     } else {
       local.set(side * R * 0.85, 0, R * 0.1 - rank * 3);
       kick.set(side, 0, 0);

@@ -49,6 +49,13 @@ const MODELS = {
     yaw: -Math.PI / 2, // Meshy convention (verified on the turntable)
     pitch: 0,
   },
+  // "Aethelred" — the player-authored deep-space cruiser and new fleet apex.
+  aethelred: {
+    url: 'models-glb/aethelred.glb',
+    targetLength: 300, // ~3x the flagship: the biggest hull in the game
+    yaw: -Math.PI / 2, // Meshy convention: authored nose along -X
+    pitch: 0,
+  },
 };
 
 /**
@@ -62,6 +69,7 @@ const NOZZLES = {
   gunship: { x: 0.28, y: 0.0, z: 0.86 },
   dreadnought: { x: 0.2, y: 0.05, z: 0.92 },
   flagship: { x: 0.22, y: 0.04, z: 0.94 },
+  aethelred: { x: 0.24, y: 0.06, z: 0.9 }, // wide multi-engine stern cluster
 };
 
 const protos = {};
