@@ -201,7 +201,7 @@ export class HUD {
     this._setText('hullText', String(Math.ceil(player.hull)));
     this._setText('shieldText', String(Math.ceil(player.shield)));
     this._setText('resources', String(player.resources));
-    this._setText('credits', String(player.credits));
+    this._setText('credits', this.game.creative ? '∞' : String(player.credits));
     // Cargo (mined rocks) — only shown while there's something to carry.
     const onfoot = this.game.mode === 'onfoot';
     const cargo = this.game.onfoot ? this.game.onfoot.carrying : 0;

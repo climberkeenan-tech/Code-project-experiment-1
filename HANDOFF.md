@@ -1,29 +1,43 @@
-# Starfall Frontier — Developer Handoff
+# Starfall Frontier — Developer Handoff (consolidated)
 
-_Last updated for the **hand-modeled-ship era** (branch `claude/spaceship-assets-integration-57k8bu`,
-forked from `af3a3d9`). Working tree is clean; everything described below is committed. This
-handoff was rebuilt from a full-codebase survey — every constant, event name, and
-contract below was read out of the source, not remembered._
+_This is the **single, current** handoff — it supersedes and folds in the two
+earlier `HANDOFF.md` files (see lineage below). Everything here was read out of
+the source, not remembered. Branch `claude/spaceship-assets-integration-57k8bu`,
+also fast-forwarded onto the default branch `claude/3d-space-exploration-game-ogrezx`;
+working tree clean, everything committed. **Current build: BUILD 12.**_
 
-> **Deployment-verification pass (this branch).** Every claim about the ship
-> assets was re-verified end-to-end, not assumed: all four GLBs are present and
-> valid on GitHub's default branch, `npm ci && npm run build` produces a 4.5 MB
-> `dist/` containing all four models, and the built game boots in headless
-> Chromium with **all four `.glb` fetched HTTP 200, zero console errors**, and
-> each model-backed hull loading its real geometry (40k–72k tris vs ~400 for the
-> procedural-fallback slots). See [§14](#14-build-deploy--the-test-harness) and
-> `DEPLOY.md` for the click-by-click Netlify guide.
+> **Handoff lineage — the three handoffs (this one replaces the other two).**
+> 1. **Original** developer handoff (pre-model era): lives in git history around
+>    commit `e99aabf`. Archival only — it even claimed "the bundle ships no
+>    binary assets," no longer true.
+> 2. **Hand-modeled-ship-era** rewrite: lives at commit `d511ac8` on branch
+>    `claude/focused-meitner-73h1gk`. This file began as that rewrite.
+> 3. **This file:** that rewrite, kept current through BUILD 9→12 and expanded
+>    with the full change history ([§0](#0-change-history)),
+>    creative mode, and the deploy/local-dev docs. **Read this one.**
 
-> **Why this rewrite exists:** the game now loads four hand-authored ship models
-> (GLB) that hot-swap in over the procedural hulls, and we're about to add **more
-> spaceships**. The ship system is therefore documented first and in exhaustive
-> detail — read [§1 The Ship System](#1-the-ship-system-read-this-first) and
-> [§2 Adding a New Spaceship](#2-adding-a-new-spaceship-the-exact-process) before
-> touching any hull, catalog entry, or model.
+> **Everything that was built, at a glance:** [§0 Change history](#0-change-history)
+> is the complete changelog (base game → BUILD 12). Companion docs in the repo:
+> **`DEPLOY.md`** (deploy to Netlify, click-by-click), **`LOCAL_DEV.md`** (run &
+> test on a Mac, incl. iPhone-over-Wi-Fi), **`README.md`** (overview).
+
+> **Deployment-verification pass.** Every claim about the ship assets was
+> re-verified end-to-end, not assumed: all four GLBs are present and valid on
+> GitHub's default branch, `npm install && npm run build` produces a ~4.5 MB
+> `dist/` containing all four models, and the built game boots with **all four
+> `.glb` fetched HTTP 200, zero console errors**, each model-backed hull loading
+> its real geometry (40k–72k tris vs ~400 for the procedural-fallback slots).
+> See [§14](#14-build-deploy--the-test-harness) and `DEPLOY.md`.
+
+> **Ship system first.** The game loads four hand-authored ship models (GLB)
+> that hot-swap in over procedural hulls. Read [§1 The Ship System](#1-the-ship-system-read-this-first)
+> and [§2 Adding a New Spaceship](#2-adding-a-new-spaceship-the-exact-process)
+> before touching any hull, catalog entry, or model.
 
 ---
 
 ## Table of contents
+0. [Change history — what was built](#0-change-history)
 1. [The Ship System (read this first)](#1-the-ship-system-read-this-first)
 2. [Adding a New Spaceship — the exact process](#2-adding-a-new-spaceship-the-exact-process)
 3. [Project goal & current state](#3-project-goal--current-state)
@@ -42,6 +56,77 @@ contract below was read out of the source, not remembered._
 16. [Design decisions to respect](#16-design-decisions-to-respect)
 17. [ToDo (prioritized)](#17-todo-prioritized)
 18. [Instructions for the next developer](#18-instructions-for-the-next-developer)
+
+---
+
+## 0. Change history
+
+The complete arc, oldest → newest. Earlier phases are compressed; recent builds
+(the "spaceship + balance + modes" cycle) are itemized because they're what a
+returning reader most needs.
+
+### Base game (10 build phases, pre-handoff)
+Seamless 3D space flight + combat: 6DOF flight model, chase camera, pooled
+laser combat, a 9-planet procedural single-star system with **seamless
+planetfall** (quadtree cube-sphere LOD terrain, atmosphere/cloud/haze shaders,
+gravity, altitude-scaled speed), starfield/nebulas/asteroids, POI exploration
+(stations/wrecks/anomalies), a territorial encounter director, DOM HUD + radar,
+and a fully synthesized WebAudio soundscape. **All procedural, no binary assets.**
+
+### "Playable half" + bible-completion cycles
+On-foot mode (disembark, sphere-walk, tiered mining) + credits economy; the
+**Outpost Exchange** shop (sell ore, buy engine/weapon/shield upgrades, repair);
+combat classes with levels/rewards + homing missiles + threat overlay; **warp**
+(target-lock light-speed travel); **crew** (engineer/gunner); an owned-**ship
+collection** (buy/store/swap, levels 10→100); **day/night** (sun-sweep, terrain
+never rotates); wildlife; seeded **civilizations**; and **capital ships + a
+carrier fleet** of AI escorts. Save schema v2 (credits/inventory/crew/ships).
+
+### Hand-modeled ships (the "spaceship integration" this repo is named for)
+Four player-authored **Meshy** hulls were brought in as GLB and wired so they
+**hot-swap** over the procedural stand-ins as they stream in: `starter`
+(Nebula Sentinel), `gunship` (Nebula Vanguard), `dreadnought` (Obsidian
+Dreadnought), `flagship` (Star-Destroyer carrier). Enemies fly the same hulls,
+red-tinted. Added an apex hunter + reinforcement swarms. See [§1](#1-the-ship-system-read-this-first).
+
+### BUILD 9 — fast-loading ships
+The four hulls were **86 MB of raw FBX**; compressed to **~3.7 MB of
+meshopt-GLB** (10× fewer tris, 1K WebP textures) loaded via `GLTFLoader` +
+`MeshoptDecoder`. Whole deployable game ≈ 4.5 MB. Netlify config added.
+
+### Deploy readiness (verified, not assumed)
+`netlify.toml` pins **Node 22** and forces devDependency install
+(`NPM_FLAGS=--include=dev`) so the Vite build can't fail on the classic
+"vite: not found." Verified end-to-end incl. serving the unzipped build as a
+bare static site (the real "Netlify Drop" path). Full guide in **`DEPLOY.md`**.
+
+### BUILD 10 — balance
+Ship prices **×1.6** (carrier lands on **40,000 cr**): 0 / 320 / 800 / 2080 /
+6400 / 20800 / 12800 / 40000. Enemy **laser** bolts now deal a **flat 70** to
+the player (`ENEMY_LASER_DAMAGE`, `WeaponSystem`); missiles unchanged.
+
+### BUILD 11 — fleet, flagship, flames
+- **Deploy Attack Ships**: capital hulls launch a wing of generic AI attack
+  fighters — **battleship 4, carrier 15** — via **G** / the **Deploy** button;
+  press again to recall. Fighters are expendable (no owned-ship loss). See [§11](#11-gameplay-systems-on-foot-warp-crew-fleet-economy-poi-landing).
+- **Bigger flagship**: `targetLength` 60 → **100** (~11× a fighter, radius ~38);
+  shadow ortho box widened to ±90.
+- **Engine flames scale with hull** (`EngineGlow` `sizeScale`, `rig.engineScale`)
+  so capitals get big flames; per-model **nozzle** tuning (`ModelShips` `NOZZLES`)
+  places the flame on each hull's thrusters. See [§1.8](#18-anchor-derivation-why-muzzlesnozzles-land-where-they-do).
+
+### BUILD 12 — Survival / Creative mode
+The start screen now offers **Survival** (normal economy) or **Creative** at
+load-in. Creative sets **`game.creative`**; the Outpost Exchange treats every
+purchase as free + always-affordable and credit readouts show **∞**. Session-only
+— never written to the save (can't inflate a survival file). See [§12](#12-ui--audio).
+
+### Local dev + browser-only play
+**`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally
+(`npm start`) with no deploy, incl. iPhone-over-Wi-Fi testing. On a locked-down
+machine where you can't install anything (no Node), skip local dev entirely:
+deploy once via Netlify (browser-only) and play the resulting URL in any browser
+(DuckDuckGo included — the game makes no third-party requests).
 
 ---
 
@@ -700,14 +785,22 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
 - **TouchControls** (`ui/TouchControls.js`): two dynamic virtual sticks + 10 buttons
   (Fire, Boost, Defend=`C`, Nav=`B`, Warp=`J`, Land=`L`, Fleet=`G`, Attack=`V`, Use=`E`,
   Jump). Revealed on first touch; swaps flight↔foot button sets on mode change.
-- **Screens** (`ui/Screens.js`): start (audio unlock + **BUILD stamp**) and death/respawn.
-  ⚠️ **The build stamp is a hand-edited string at `Screens.js:37`** —
-  `'BUILD 11 — bigger flagship · deploy attack ships · scaled engine flames'` — no build-time injection; bump it
-  manually per playtest.
+- **Screens** (`ui/Screens.js`): start screen + death/respawn. The start screen is the
+  audio-unlock gesture and offers a **mode choice at load-in — Survival or Creative**
+  (`.mode-btn` buttons; keyboard **Enter/Space** = Survival, **C** = Creative). The chosen
+  button calls `launch(creative)`, which sets **`game.creative`**, unlocks audio, unpauses,
+  and emits `game:started`. Contains the **BUILD stamp**. ⚠️ **The build stamp is a
+  hand-edited string at `Screens.js:37`** — `'BUILD 12 — creative (free) mode + survival
+  choice'` — no build-time injection; bump it manually per playtest.
 - **Shop** (`ui/Shop.js`): pause-the-game modal, hailed with **`T`** (interim — no physical
   station yet). Tabs: **Sell Ore** (per-tier, Sell All), **Upgrades** (engine/weapon/shield,
   `+0.15`/level, cost `40 + 35*level`), **Ships** (renders `PLAYER_SHIPS`; Active/Select/
   Buy), **Crew** (hire/dismiss, 4 rotating recruits), **Repair** (`ceil(missing*0.8)` cr).
+  **Creative mode:** two helpers gate the economy — `_afford(cost)` (`game.creative ||
+  credits >= cost`) and `_spend(cost)` (a no-op in creative). Every buy path (ship/upgrade/
+  crew/repair) routes through them, and the credit readout shows **`∞`** — so creative is
+  truly unlimited without touching `player.credits` (keeps the save clean). The HUD credit
+  readout mirrors this (`HUD.js`: `game.creative ? '∞' : credits`).
 - **Audio**: `Music.js` (generative 3-voice pad + echo melody + combat drone that rises
   when an enemy is chasing/attacking within 2200 u; ducks with atmosphere density) and
   `ShipSounds.js` (2 detuned saws + sine sub + noise wash tracking throttle/speed/boost;
@@ -760,11 +853,20 @@ means editing those strings too.
   else is `src/ui/hud.css`.
 - **Models are served from `public/`** (static copy, not bundled) via relative URLs — works
   because `base:'./'`. Renaming/moving a GLB breaks at **runtime**, not build time.
-- **Netlify** (`netlify.toml`): `command = "npm run build"`, `publish = "dist"`. Alternative:
-  drag `builds/starfall-frontier-build11.zip` into Netlify Drop.
-- **`builds/starfall-frontier-build11.zip`** (3.6 MB): a committed ready-to-serve `dist`
+- **Netlify** (`netlify.toml`): `command = "npm run build"`, `publish = "dist"`,
+  `NODE_VERSION="22"`, `NPM_FLAGS="--include=dev"` (so Vite, a devDependency, always
+  installs). Connect the repo in the browser → Deploy; the default branch is deploy-ready.
+  Full click-by-click in **`DEPLOY.md`**. Alternative: drag
+  `builds/starfall-frontier-build12.zip` into Netlify Drop.
+- **`builds/starfall-frontier-build12.zip`** (3.6 MB): a committed ready-to-serve `dist`
   (index.html + JS/CSS + the 4 GLBs). Convention: one zip per published build, old one
   deleted. **Don't gitignore `builds/` or `public/models-glb/`.**
+- **Local dev** (`LOCAL_DEV.md`, `run.command`, `.nvmrc`): `npm start` (= `vite --open`)
+  runs the game on a Mac with hot-reload and a LAN URL for iPhone testing — no deploy.
+  `run.command` is a double-click launcher (best via `git clone`; a Download-ZIP copy
+  drops its executable bit). **On a locked-down machine where nothing can be installed,**
+  skip local dev — deploy once to Netlify (browser-only) and open the resulting URL in any
+  browser (DuckDuckGo included; the game issues no third-party requests).
 - **Harness** (`tools/screenshot.mjs`): `node tools/screenshot.mjs <url> <out.png> <waitMs>
   '<actionsJson>'`. Actions: `tap` (clicks fixed 450,250 — assumes 900×500 `VIEWPORT`),
   `key {code, ms}`, `wait {ms}`, `eval {js}`, `evalFile {path}` (undocumented in the

@@ -32,27 +32,44 @@ export class Screens {
     el.innerHTML = `
       <div class="game-title">Starfall Frontier</div>
       <div class="tagline">Explore &nbsp;·&nbsp; Discover &nbsp;·&nbsp; Survive</div>
-      <div class="prompt">Tap to Launch</div>
+      <div class="mode-choose">
+        <button class="mode-btn" data-mode="survival">
+          <span class="mode-name">▶ &nbsp;Survival</span>
+          <span class="mode-desc">Mine, trade and earn credits — the full game</span>
+        </button>
+        <button class="mode-btn creative" data-mode="creative">
+          <span class="mode-name">✦ &nbsp;Creative</span>
+          <span class="mode-desc">Unlimited credits — buy any ship or upgrade for free</span>
+        </button>
+      </div>
       <div class="controls-hint">${this._controlsHint()}</div>
-      <div class="build-tag">BUILD 11 — bigger flagship · deploy attack ships · scaled engine flames</div>
+      <div class="build-tag">BUILD 12 — creative (free) mode + survival choice</div>
     `;
     this.root.appendChild(el);
 
     let launched = false;
-    const onKey = (e) => {
-      if (e.code === 'Enter' || e.code === 'Space') launch();
-    };
-    const launch = () => {
+    // `creative` chooses the free-build economy; survival is the normal game.
+    const launch = (creative) => {
       if (launched) return;
       launched = true;
       window.removeEventListener('keydown', onKey);
+      this.game.creative = creative;
       this.game.audio.unlock();
       this.game.paused = false;
       this.game.events.emit('game:started');
       el.classList.add('hidden');
       setTimeout(() => el.remove(), 700);
     };
-    el.addEventListener('pointerdown', launch, { once: true });
+    const onKey = (e) => {
+      if (e.code === 'Enter' || e.code === 'Space') launch(false); // Survival
+      else if (e.code === 'KeyC') launch(true); // Creative
+    };
+    for (const btn of el.querySelectorAll('.mode-btn')) {
+      btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        launch(btn.dataset.mode === 'creative');
+      });
+    }
     window.addEventListener('keydown', onKey);
   }
 

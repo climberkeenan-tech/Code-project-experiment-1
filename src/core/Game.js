@@ -74,6 +74,15 @@ export class Game {
     this.mode = 'flight';
 
     /**
+     * Creative (free-build) mode, chosen on the start screen. When true the
+     * Outpost Exchange treats every purchase as free and unlimited-affordable
+     * and credit readouts show ∞. Survival (false) is the normal economy.
+     * Session-only — never written to the save, so it can't inflate a
+     * survival file.
+     */
+    this.creative = false;
+
+    /**
      * The world-position the floating origin rebases around. Defaults to the
      * player ship; the on-foot controller points it at the avatar so the
      * world stays centered on whoever the camera is following.

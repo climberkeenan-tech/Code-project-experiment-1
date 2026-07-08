@@ -129,7 +129,7 @@ export class Shop {
 
   _render() {
     const player = this.game.player;
-    this.refs.shopCredits.textContent = String(player.credits);
+    this.refs.shopCredits.textContent = this.game.creative ? '∞' : String(player.credits);
     for (const t of this.el.querySelectorAll('.shop-tab')) {
       t.classList.toggle('active', t.dataset.tab === this.tab);
     }
@@ -145,7 +145,7 @@ export class Shop {
     return PLAYER_SHIPS.map((s) => {
       const owned = player.ships.owned.includes(s.id);
       const active = player.ships.active === s.id;
-      const afford = player.credits >= s.cost;
+      const afford = this._afford(s.cost);
       const btn = active ? `<button class="shop-btn disabled">Active</button>`
         : owned ? `<button class="shop-btn" data-action="selectShip" data-arg="${s.id}">Select</button>`
           : `<button class="shop-btn ${afford ? 'primary' : 'disabled'}" data-action="buyShip" data-arg="${s.id}">Buy · ${s.cost} cr</button>`;
@@ -187,7 +187,7 @@ export class Shop {
       const mult = player.upgrades[u.key];
       const level = Math.round((mult - 1) / UPGRADE_STEP);
       const cost = this._upgradeCost(level);
-      const afford = player.credits >= cost;
+      const afford = this._afford(cost);
       return `
         <div class="shop-row">
           <span class="shop-row-name">${u.label} <small>Lv ${level}</small></span>
@@ -224,7 +224,7 @@ export class Shop {
     const full = roster.length >= cap;
     const recruits = this.recruits.map((r, i) => {
       const cost = crewCost(r.stars);
-      const afford = this.game.player.credits >= cost && !full;
+      const afford = this._afford(cost) && !full;
       return `
         <div class="shop-row">
           <span class="shop-row-name">${cname(r.role)} <small>${r.name}</small></span>
@@ -244,7 +244,7 @@ export class Shop {
     const missing = Math.ceil(player.hullMax - player.hull);
     const cost = Math.ceil(missing * 0.8);
     if (missing <= 0) return `<div class="shop-empty">Hull is at full integrity.</div>`;
-    const afford = player.credits >= cost;
+    const afford = this._afford(cost);
     return `
       <div class="shop-row">
         <span class="shop-row-name">Hull Repair</span>
@@ -258,6 +258,12 @@ export class Shop {
   _upgradeCost(level) {
     return 40 + level * 35;
   }
+
+  /** Creative (free-build) mode: everything is affordable and costs nothing. */
+  _afford(cost) { return this.game.creative || this.game.player.credits >= cost; }
+
+  /** Deduct a price — a no-op in creative mode so credits never run down. */
+  _spend(cost) { if (!this.game.creative) this.game.player.credits -= cost; }
 
   // --- Actions ---
 
@@ -278,8 +284,8 @@ export class Shop {
     const player = this.game.player;
     const variant = PLAYER_SHIPS.find((s) => s.id === id);
     if (!variant || player.ships.owned.includes(id)) return;
-    if (player.credits < variant.cost) { this._deny(); return; }
-    player.credits -= variant.cost;
+    if (!this._afford(variant.cost)) { this._deny(); return; }
+    this._spend(variant.cost);
     player.ships.owned.push(id);
     player.setShip(id); // new purchase becomes the active ship
     this._chime();
@@ -299,9 +305,9 @@ export class Shop {
     const recruit = this.recruits[index];
     if (!crew || !recruit) return;
     const cost = crewCost(recruit.stars);
-    if (this.game.player.credits < cost || crew.roster.length >= crew.capacity) { this._deny(); return; }
+    if (!this._afford(cost) || crew.roster.length >= crew.capacity) { this._deny(); return; }
     if (!crew.hire(recruit)) { this._deny(); return; }
-    this.game.player.credits -= cost;
+    this._spend(cost);
     this.recruits.splice(index, 1);
     if (this.recruits.length < 2) this._refillRecruits();
     this._chime();
@@ -343,8 +349,8 @@ export class Shop {
     const player = this.game.player;
     const level = Math.round((player.upgrades[key] - 1) / UPGRADE_STEP);
     const cost = this._upgradeCost(level);
-    if (player.credits < cost) { this._deny(); return; }
-    player.credits -= cost;
+    if (!this._afford(cost)) { this._deny(); return; }
+    this._spend(cost);
     player.upgrades[key] += UPGRADE_STEP;
     if (key === 'shield') player.applyUpgrades();
     this._chime();
@@ -356,8 +362,8 @@ export class Shop {
     const player = this.game.player;
     const missing = Math.ceil(player.hullMax - player.hull);
     const cost = Math.ceil(missing * 0.8);
-    if (missing <= 0 || player.credits < cost) { this._deny(); return; }
-    player.credits -= cost;
+    if (missing <= 0 || !this._afford(cost)) { this._deny(); return; }
+    this._spend(cost);
     player.hull = player.hullMax;
     this._chime();
     this.game.events.emit('shop:purchase');
