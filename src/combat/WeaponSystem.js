@@ -319,19 +319,27 @@ export class WeaponSystem {
       // Target selection: the player by default, but a closer deployed
       // escort draws fire about half the time — fleets share the heat.
       let target = player;
-      if (escorts && escorts.length) {
+      {
+        // Every allied combatant is a candidate: deployed wing craft AND
+        // ambient traffic allies (playtest: "the good ships never die" —
+        // now they genuinely trade fire and take losses).
         let nearest = null;
         let nearestSq = Infinity;
-        for (const esc of escorts) {
+        for (const esc of escorts ?? []) {
           if (!esc.alive) continue;
           const d = esc.position.distanceToSquared(enemy.position);
           if (d < nearestSq) { nearestSq = d; nearest = esc; }
         }
-        // An escort at comparable range (within ~1.3x the player's distance)
-        // draws fire — dogfighting wingmen genuinely share the heat.
+        for (const ally of this.game.traffic?.ships ?? []) {
+          if (!ally.alive) continue;
+          const d = ally.position.distanceToSquared(enemy.position);
+          if (d < nearestSq) { nearestSq = d; nearest = ally; }
+        }
+        // An ally at comparable range draws fire more often than not —
+        // dogfighting wingmen genuinely share the heat.
         if (nearest
           && nearestSq < enemy.position.distanceToSquared(player.position) * 1.7
-          && Math.random() < 0.4) {
+          && Math.random() < 0.55) {
           target = nearest;
         }
       }

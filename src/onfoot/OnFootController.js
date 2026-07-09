@@ -146,14 +146,18 @@ export class OnFootController {
 
   /** Drain/refill breath; drowning drops the ore and puts you at the ship. */
   _updateBreath(dt) {
-    const before = this.air;
-    const wasUnder = this.eyeUnder;
     if (this.eyeUnder) {
       this.air = Math.max(0, this.air - dt / AIR_SECONDS);
     } else {
       this.air = Math.min(1, this.air + dt / 2.5);
     }
-    if (Math.abs(this.air - before) > 0.005 || wasUnder !== this.eyeUnder) {
+    // Emit against the last-SENT state (per-frame deltas are tiny — comparing
+    // to the previous frame never crossed any threshold, so the bubbles and
+    // the underwater overlay silently never updated).
+    if (this._sentUnder !== this.eyeUnder
+      || Math.abs(this.air - (this._sentAir ?? -1)) > 0.01) {
+      this._sentUnder = this.eyeUnder;
+      this._sentAir = this.air;
       this.game.events.emit('onfoot:air', { air01: this.air, under: this.eyeUnder });
     }
     if (this.air <= 0) this._drown();

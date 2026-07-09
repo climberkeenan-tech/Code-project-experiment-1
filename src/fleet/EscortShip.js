@@ -55,6 +55,9 @@ export class EscortShip extends ShipBase {
     this.roleCount = 1;
     /** The hostile this craft is locked onto — kept until it DIES. */
     this.target = null;
+    /** Defenders hold the shell and only engage hostiles right at the
+     * flagship; the rest are free to chase. Set by FleetSystem. */
+    this.defender = false;
     this._orbitAng = Math.random() * Math.PI * 2;
     this._orbitRate = 0.16 + Math.random() * 0.08; // rad/s — a scout lap ≈ 30 s
     this._claims = new Map(); // scratch: enemy → #wingmates already on it
@@ -103,14 +106,17 @@ export class EscortShip extends ShipBase {
         Math.sin(this._orbitAng) * R,
       ).add(player.position);
     } else {
-      // Guards form the protective shell: a ring of slots around the hull on
-      // every side, over three fore/aft depths — the flagship's screen.
-      const ang = (this.roleIndex / n) * Math.PI * 2;
-      const ringR = player.radius + 22 + (this.roleIndex % 2) * 12;
+      // Guards form a full SPHERE around the flagship — the player at the
+      // dead center of the ball, guards spread evenly over its whole outside
+      // (Fibonacci sphere), not a flat ring (playtest).
+      const t = (this.roleIndex + 0.5) / n;
+      const phi = Math.acos(1 - 2 * t);
+      const theta = GOLDEN_ANG * (this.roleIndex + 0.5);
+      const shellR = player.radius + 26 + (this.roleIndex % 2) * 10;
       this._slotPos.set(
-        Math.cos(ang) * ringR,
-        Math.sin(ang) * ringR,
-        ((this.roleIndex % 3) - 1) * 18,
+        Math.sin(phi) * Math.cos(theta) * shellR,
+        Math.cos(phi) * shellR,
+        Math.sin(phi) * Math.sin(theta) * shellR,
       ).applyQuaternion(player.quaternion).add(player.position);
     }
 
@@ -244,9 +250,13 @@ export class EscortShip extends ShipBase {
       }
     }
 
-    // Nearest least-claimed hostile within this role's reach.
-    const selfRangeSq = (this.role === 'scout' ? SCOUT_HUNT_RANGE : GUARD_SELF_RANGE) ** 2;
-    const defendSq = GUARD_DEFEND_RANGE * GUARD_DEFEND_RANGE;
+    // Nearest least-claimed hostile within this role's reach. Defenders use
+    // a much shorter trigger: they stay on the shell unless the fight comes
+    // to the flagship itself.
+    const selfRange = this.defender ? 450 : (this.role === 'scout' ? SCOUT_HUNT_RANGE : GUARD_SELF_RANGE);
+    const selfRangeSq = selfRange * selfRange;
+    const defendRange = this.defender ? 600 : GUARD_DEFEND_RANGE;
+    const defendSq = defendRange * defendRange;
     let best = null;
     let bestClaims = Infinity;
     let bestSq = Infinity;
@@ -274,3 +284,4 @@ export class EscortShip extends ShipBase {
 }
 
 const FORWARD = new THREE.Vector3(0, 0, -1);
+const GOLDEN_ANG = Math.PI * (3 - Math.sqrt(5)); // Fibonacci-sphere spacing

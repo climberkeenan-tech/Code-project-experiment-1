@@ -75,7 +75,22 @@ export class Sun {
     this.coronaInner.position.copy(this.position);
     game.engine.scene.add(this.coronaInner);
 
+    // Neighbouring systems get their own visible star (disc + coronas share
+    // the home star's geometry/materials). The DirectionalLight and shadow
+    // rig follow whichever star is NEAREST the player.
+    this.extraStars = [];
+    for (const sys of (game.starSystems ?? []).slice(1)) {
+      const disc = new THREE.Mesh(this.disc.geometry, this.disc.material);
+      const corona = new THREE.Sprite(this.corona.material);
+      corona.scale.copy(this.corona.scale);
+      const coronaInner = new THREE.Sprite(this.coronaInner.material);
+      coronaInner.scale.copy(this.coronaInner.scale);
+      game.engine.scene.add(disc, corona, coronaInner);
+      this.extraStars.push({ sys, disc, corona, coronaInner });
+    }
+
     this._sunDir = new THREE.Vector3();
+    this._nearest = new THREE.Vector3();
 
     game.origin.onShift((delta) => {
       this.position.sub(delta);
@@ -108,8 +123,20 @@ export class Sun {
       shadowCam.updateProjectionMatrix();
     }
 
-    // Keep the directional light + shadow box centered on the player.
-    this.getLightDirection(this._sunDir, player.position);
+    // Extra-system stars ride their (origin-shifted) system anchors.
+    let nearestPos = this.position;
+    let nearestSq = this.position.distanceToSquared(player.position);
+    for (const star of this.extraStars) {
+      star.disc.position.copy(star.sys.render);
+      star.corona.position.copy(star.sys.render);
+      star.coronaInner.position.copy(star.sys.render);
+      const d = star.sys.render.distanceToSquared(player.position);
+      if (d < nearestSq) { nearestSq = d; nearestPos = star.sys.render; }
+    }
+
+    // Keep the directional light + shadow box centered on the player, lit
+    // from the NEAREST system's star.
+    this._sunDir.copy(player.position).sub(nearestPos).normalize();
 
     // Day/night: near a planet, rotate the light by that planet's spin so
     // the ground lighting agrees with its (rotated) atmosphere terminator —

@@ -4,7 +4,7 @@ _This is the **single, current** handoff — it supersedes and folds in the two
 earlier `HANDOFF.md` files (see lineage below). Everything here was read out of
 the source, not remembered. Branch `claude/spaceship-assets-integration-57k8bu`,
 also fast-forwarded onto the default branch `claude/3d-space-exploration-game-ogrezx`;
-working tree clean, everything committed. **Current build: BUILD 17.**_
+working tree clean, everything committed. **Current build: BUILD 18.**_
 
 > **Handoff lineage — the three handoffs (this one replaces the other two).**
 > 1. **Original** developer handoff (pre-model era): lives in git history around
@@ -268,6 +268,37 @@ Everything from the user's big playtest list, in one build:
 - **Still open (user to supply/decide):** tree model swap-in (their Emerald
   Canopy re-export), animal + ore model replacements, multi-solar-system
   galaxy (big feature — needs its own design pass).
+
+### BUILD 18 — three star systems, missions, fleet sphere, hangar economy
+Second autonomous playtest-response session:
+- **Two neighbour star systems** (`Meridian Reach`, `Karyx Expanse`), each a
+  full 8-planet system with its own seed/star ~1.5M units out
+  (`UniverseGenerator`, `game.starSystems`). Each planet is lit/tinted by its
+  OWN star (`planet.starRender`); the DirectionalLight + shadow rig follow the
+  NEAREST star (`Sun.extraStars`). Crossing systems fires
+  **"Entering the X System"** banners (`Universe._updateSystemTransit`,
+  20% hysteresis). 29 planets total.
+- **Missions** (`src/missions/MissionSystem.js`, `game.missions`): a 7-rung
+  bounty ladder in the Exchange (Missions tab). Start → the target spawns
+  1.5 km ahead (shop auto-closes so you watch it arrive); any destruction of
+  it pays the reward and unlocks the next rung. `missionIndex` persists.
+- **Hangar economy:** `player.hangarStock {fighter, gunner}` (persisted;
+  default 15/5). Launch draws from stock; a craft destroyed in battle is
+  deducted; replacements bought in the Exchange **Hangar tab** (60/240 cr),
+  capped at the active hull's slots. `fleet:ship-lost` autosaves.
+- **Fleet sphere + defenders:** guards distribute over a Fibonacci SPHERE
+  (player at the dead center of the ball, not a flat ring); every second
+  guard is a **defender** that holds the shell unless hostiles come within
+  600 u of the flagship, so the wing never leaves you unprotected.
+- **Allies genuinely die now:** enemy fire targets the nearest allied ship
+  (wing craft AND traffic) 55% of the time when comparable range.
+- **Underwater fixed:** the air/overlay event only fired on large deltas —
+  per-frame drains never crossed it, so bubbles/blue murk NEVER showed in
+  real play. Now emits against last-sent state; murk opacity raised.
+- **SF-100 Sovereign** flies the `bastion` hull at `modelScale 1.5` until its
+  own model is authored.
+- **Removed `SpaceDust`** (the drifting debris specks) per playtest.
+- Save additions: `hangarStock`, `missionIndex` (still v3).
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally
@@ -607,7 +638,7 @@ in `main.js` IS update order.**
 
 ### `main.js` registration order (simulation → camera → dressing → UI)
 `player → universe → onfoot → warp → landing → approach → settlements → poi → director →
-enemies → apex → reinforcements → traffic → weapons → combat → crew → fleet → explosions → pickups →
+enemies → apex → reinforcements → traffic → weapons → combat → crew → fleet → missions → explosions → pickups →
 sun → camera → starfield → nebulas → dust → ship-sounds → music → hud → radar → targets →
 shop`, then `TouchControls` + `Screens` (constructed, not registered as update systems).
 After that: a `visibilitychange` audio suspend hook, `SaveGame.load()` + `applyUpgrades()`,
@@ -968,8 +999,8 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   (`.mode-btn` buttons; keyboard **Enter/Space** = Survival, **C** = Creative). The chosen
   button calls `launch(creative)`, which sets **`game.creative`**, unlocks audio, unpauses,
   and emits `game:started`. Contains the **BUILD stamp**. ⚠️ **The build stamp is a
-  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 17 —
-  SF-50/70 hulls · allies fight · perfect flames'`) — no build-time injection; bump it manually per
+  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 18 —
+  3 star systems · missions · fleet sphere · hangar stock'`) — no build-time injection; bump it manually per
   playtest.
 - **Shop** (`ui/Shop.js`): pause-the-game modal, hailed with **`T`** (interim — no physical
   station yet). Tabs: **Sell Ore** (per-tier, Sell All), **Upgrades** (engine/weapon/shield,
@@ -1036,8 +1067,8 @@ means editing those strings too.
   `NODE_VERSION="22"`, `NPM_FLAGS="--include=dev"` (so Vite, a devDependency, always
   installs). Connect the repo in the browser → Deploy; the default branch is deploy-ready.
   Full click-by-click in **`DEPLOY.md`**. Alternative: drag
-  `builds/starfall-frontier-build17.zip` into Netlify Drop.
-- **`builds/starfall-frontier-build17.zip`** (~7.3 MB): a committed ready-to-serve `dist`
+  `builds/starfall-frontier-build18.zip` into Netlify Drop.
+- **`builds/starfall-frontier-build18.zip`** (~7.3 MB): a committed ready-to-serve `dist`
   (index.html + JS/CSS + the 4 GLBs). Convention: one zip per published build, old one
   deleted. **Don't gitignore `builds/` or `public/models-glb/`.**
 - **Local dev** (`LOCAL_DEV.md`, `run.command`, `.nvmrc`): `npm start` (= `vite --open`)

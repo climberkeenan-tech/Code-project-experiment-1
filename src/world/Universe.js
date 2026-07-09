@@ -53,9 +53,10 @@ export class Universe {
     const game = this.game;
     const cameraPos = game.engine.camera.position;
     const sunPos = game.sun ? game.sun.position : ZERO;
+    this._updateSystemTransit(dt);
 
     for (const planet of this.planets) {
-      planet.update(dt, elapsed, cameraPos, sunPos);
+      planet.update(dt, elapsed, cameraPos, planet.starRender ?? sunPos);
     }
 
     this._updatePlayer(dt);
@@ -200,6 +201,33 @@ export class Universe {
         game.events.emit('camera:shake', 0.12);
         game.audio.playNoise({ duration: 0.2, gain: 0.2, filterFreq: 500, filterEnd: 100 });
       }
+    }
+  }
+
+  /**
+   * Which star system is the player in? Crossing to a new nearest star
+   * (with 20% hysteresis) fires the Leaving/Entering popups.
+   */
+  _updateSystemTransit(dt) {
+    const systems = this.game.starSystems;
+    if (!systems || systems.length < 2) return;
+    this._transitTimer = (this._transitTimer ?? 0) - dt;
+    if (this._transitTimer > 0) return;
+    this._transitTimer = 1;
+    const p = this.game.player.position;
+    let nearest = systems[0];
+    let nearestSq = Infinity;
+    for (const sys of systems) {
+      const d = sys.render.distanceToSquared(p);
+      if (d < nearestSq) { nearestSq = d; nearest = sys; }
+    }
+    if (!this._currentSystem) { this._currentSystem = nearest; return; }
+    if (nearest !== this._currentSystem
+      && nearestSq < this._currentSystem.render.distanceToSquared(p) * 0.64) {
+      this.game.events.emit('system:entered', {
+        name: nearest.name, from: this._currentSystem.name,
+      });
+      this._currentSystem = nearest;
     }
   }
 

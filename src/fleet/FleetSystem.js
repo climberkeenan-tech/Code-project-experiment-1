@@ -140,13 +140,23 @@ export class FleetSystem {
     // the remaining fighters plus every gunner ship are GUARDS (the protective
     // shell around the flagship). Guards launch first so the screen forms,
     // then the scouts streak out to their patrols.
-    const gunners = game.player.statMult?.gunnerHangar ?? 0;
+    // Only launch craft you actually OWN: the wing is drawn from the
+    // player's hangar stock (bought at the Exchange), capped by this hull's
+    // slot counts. Losses in battle deplete the stock permanently.
+    const stock = game.player.hangarStock ?? (game.player.hangarStock = { fighter: 15, gunner: 5 });
+    const fighters = Math.min(hangar, Math.max(0, stock.fighter));
+    const gunners = Math.min(game.player.statMult?.gunnerHangar ?? 0, Math.max(0, stock.gunner));
+    if (fighters + gunners <= 0) {
+      game.audio?.playTone?.({ type: 'square', freq: 160, freqEnd: 110, duration: 0.14, gain: 0.1 });
+      game.events.emit('fleet:empty');
+      return;
+    }
     this._launchPort = game.player.statMult?.launchPort
       ?? (game.player.statMult?.capital === 'battleship' ? 'bottom' : 'side');
-    const scouts = hangar >= 3 ? Math.max(1, Math.floor(hangar / 3)) : 0;
-    const guardFighters = hangar - scouts;
+    const scouts = fighters >= 3 ? Math.max(1, Math.floor(fighters / 3)) : 0;
+    const guardFighters = fighters - scouts;
     const guardCount = guardFighters + gunners;
-    this._wingSize = hangar + gunners;
+    this._wingSize = fighters + gunners;
     this._launchQueue = [];
     let slot = 0;
     let g = 0;
@@ -180,6 +190,9 @@ export class FleetSystem {
     esc.role = entry.role ?? 'guard';
     esc.roleIndex = entry.roleIndex ?? slot;
     esc.roleCount = entry.roleCount ?? this._wingSize;
+    // Every second guard is a DEFENDER: it holds the sphere shell around the
+    // player and only breaks off for hostiles at the flagship's doorstep.
+    esc.defender = esc.role === 'guard' && esc.roleIndex % 2 === 0;
     // Spread scout patrols evenly around the compass from the start.
     if (esc.role === 'scout') {
       esc._orbitAng = (esc.roleIndex / Math.max(1, esc.roleCount)) * Math.PI * 2;
@@ -270,6 +283,13 @@ export class FleetSystem {
     const i = this.escorts.indexOf(esc);
     if (i !== -1) this.escorts.splice(i, 1);
     esc.dispose();
+    // A destroyed hangar craft is gone for good — buy a replacement at the
+    // Exchange (Hangar tab).
+    const stock = this.game.player?.hangarStock;
+    if (stock) {
+      const key = esc.variantId === GUNNER_SHIP ? 'gunner' : 'fighter';
+      stock[key] = Math.max(0, (stock[key] ?? 0) - 1);
+    }
     this.game.events.emit('fleet:ship-lost', esc.variantId);
   }
 

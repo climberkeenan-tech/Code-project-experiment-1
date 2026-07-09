@@ -56,6 +56,8 @@ export class Shop {
           <button class="shop-tab" data-tab="sell">Sell Ore</button>
           <button class="shop-tab" data-tab="upgrades">Upgrades</button>
           <button class="shop-tab" data-tab="ships">Ships</button>
+          <button class="shop-tab" data-tab="missions">Missions</button>
+          <button class="shop-tab" data-tab="hangar">Hangar</button>
           <button class="shop-tab" data-tab="crew">Crew</button>
           <button class="shop-tab" data-tab="repair">Repair</button>
         </div>
@@ -136,6 +138,8 @@ export class Shop {
     if (this.tab === 'sell') this.refs.shopBody.innerHTML = this._renderSell();
     else if (this.tab === 'upgrades') this.refs.shopBody.innerHTML = this._renderUpgrades();
     else if (this.tab === 'ships') this.refs.shopBody.innerHTML = this._renderShips();
+    else if (this.tab === 'missions') this.refs.shopBody.innerHTML = this._renderMissions();
+    else if (this.tab === 'hangar') this.refs.shopBody.innerHTML = this._renderHangar();
     else if (this.tab === 'crew') this.refs.shopBody.innerHTML = this._renderCrew();
     else this.refs.shopBody.innerHTML = this._renderRepair();
   }
@@ -239,6 +243,76 @@ export class Shop {
       <div class="shop-section">Available Recruits</div>${recruits}`;
   }
 
+  /** Missions tab: the bounty ladder. Start spawns the target and closes
+   * the shop so you watch it warp in. */
+  _renderMissions() {
+    const missions = this.game.missions;
+    if (!missions) return `<div class="shop-empty">No contracts available.</div>`;
+    if (missions.completedAll) {
+      return `<div class="shop-empty">All contracts complete, commander. More coming soon.</div>`;
+    }
+    return missions.ladder.map((m, i) => {
+      const done = i < missions.index;
+      const current = i === missions.index;
+      const activeNow = current && !!missions.active;
+      const btn = done ? `<button class="shop-btn disabled">Complete ✓</button>`
+        : activeNow ? `<button class="shop-btn disabled">In progress…</button>`
+          : current ? `<button class="shop-btn primary" data-action="startMission" data-arg="">Start Mission</button>`
+            : `<button class="shop-btn disabled">Locked</button>`;
+      return `
+      <div class="shop-row">
+        <span class="shop-row-name">Mission ${i + 1}</span>
+        <span class="shop-row-meta">${m.label} · reward ${m.reward} cr</span>
+        ${btn}
+      </div>`;
+    }).join('');
+  }
+
+  /**
+   * Hangar tab: buy the attack craft your capitals launch. Stock is capped
+   * by the ACTIVE hull's slot counts — you can't own more than fits.
+   */
+  _renderHangar() {
+    const player = this.game.player;
+    const stock = player.hangarStock;
+    const capF = player.statMult?.hangar ?? 0;
+    const capG = player.statMult?.gunnerHangar ?? 0;
+    const rows = [
+      { key: 'fighter', name: 'Attack Fighter', desc: 'light hangar craft (Sentinel hull)', cost: 60, cap: capF, action: 'buyFighter' },
+      { key: 'gunner', name: 'Gunner Ship', desc: 'heavy escort (Aegis hull, 1.5× gun)', cost: 240, cap: capG, action: 'buyGunner' },
+    ];
+    const note = capF <= 0
+      ? `<div class="shop-empty">Fly a carrier-class ship (Dreadnought, Vanguard or Aethelred) to launch these. You can still stock up now.</div>`
+      : '';
+    return note + rows.map((r) => {
+      // With no capital active, allow stocking up to the biggest hull's bays.
+      const cap = r.cap > 0 ? r.cap : (r.key === 'fighter' ? 15 : 5);
+      const have = stock[r.key] ?? 0;
+      const full = have >= cap;
+      const afford = this._afford(r.cost);
+      const btn = full
+        ? `<button class="shop-btn disabled">Slots full</button>`
+        : `<button class="shop-btn ${afford ? 'primary' : 'disabled'}" data-action="${r.action}" data-arg="">Buy · ${r.cost} cr</button>`;
+      return `
+      <div class="shop-row">
+        <span class="shop-row-name">${r.name}</span>
+        <span class="shop-row-meta">${r.desc} · ${have}/${cap} slots</span>
+        ${btn}
+      </div>`;
+    }).join('');
+  }
+
+  _buyHangarCraft(key, cost, cap) {
+    const player = this.game.player;
+    const stock = player.hangarStock;
+    if ((stock[key] ?? 0) >= cap) { this._deny(); return; }
+    if (!this._afford(cost)) { this._deny(); return; }
+    this._spend(cost);
+    stock[key] = (stock[key] ?? 0) + 1;
+    this._chime();
+    this.game.events.emit('shop:purchase');
+  }
+
   _renderRepair() {
     const player = this.game.player;
     const missing = Math.ceil(player.hullMax - player.hull);
@@ -276,6 +350,12 @@ export class Shop {
     else if (action === 'hireCrew') this._hireCrew(Number(arg));
     else if (action === 'fireCrew') this._fireCrew(Number(arg));
     else if (action === 'buyShip') this._buyShip(arg);
+    else if (action === 'startMission') {
+      if (this.game.missions?.start()) this.close(); // watch the target warp in
+      else this._deny();
+    }
+    else if (action === 'buyFighter') this._buyHangarCraft('fighter', 60, this.game.player.statMult?.hangar > 0 ? this.game.player.statMult.hangar : 15);
+    else if (action === 'buyGunner') this._buyHangarCraft('gunner', 240, this.game.player.statMult?.gunnerHangar > 0 ? this.game.player.statMult.gunnerHangar : 5);
     else if (action === 'selectShip') this._selectShip(arg);
     this._render();
   }

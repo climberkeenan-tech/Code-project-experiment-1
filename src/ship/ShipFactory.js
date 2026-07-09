@@ -232,8 +232,10 @@ export const PLAYER_SHIPS = [
     hull: 3.4, shield: 3.1, engine: 1.38, crew: 5, weapon: 2.0,
     model: 'bastion', twinFin: true, quadEngines: true,
     scale: 1.42, hullColor: 0x9aa8bd, accentColor: 0x40274d, glow: [3.2, 1.2, 5.2] },
+  // Flies a scaled-up Crimson Dreadnought until its own model is authored.
   { id: 'sovereign', name: 'SF-100 Sovereign', level: 100, cost: 20800,
     hull: 5.2, shield: 4.6, engine: 1.5, crew: 7, twinFin: true, quadEngines: true,
+    model: 'bastion', modelScale: 1.5,
     scale: 1.62, hullColor: 0xd8dde6, accentColor: 0x9a7b2e, glow: [4.6, 3.4, 1.0] },
   // --- Capitals: slow, strategic, crewed. The battleship is a pure gun
   // platform (gunner-operated turrets, no hangar); the carrier is the fleet

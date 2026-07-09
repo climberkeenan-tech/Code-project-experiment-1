@@ -818,7 +818,7 @@
   position: absolute;
   inset: 0;
   background: radial-gradient(ellipse at 50% 60%,
-    rgba(12, 52, 96, 0.62) 0%, rgba(6, 30, 62, 0.78) 70%, rgba(3, 18, 40, 0.88) 100%);
+    rgba(14, 58, 104, 0.8) 0%, rgba(7, 34, 68, 0.9) 70%, rgba(3, 18, 40, 0.96) 100%);
   opacity: 0;
   transition: opacity 0.35s ease;
   will-change: opacity;

@@ -44,7 +44,7 @@ export class Screens {
       </div>
       <div class="controls-hint">${this._controlsHint()}</div>
       <div class="reset-save">Reset progress</div>
-      <div class="build-tag">BUILD 17 — SF-50/70 hulls · allies fight · perfect flames</div>
+      <div class="build-tag">BUILD 18 — 3 star systems · missions · fleet sphere · hangar stock</div>
     `;
     this.root.appendChild(el);
 

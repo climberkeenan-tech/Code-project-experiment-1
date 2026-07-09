@@ -96,6 +96,14 @@ export class PlayerShip extends ShipBase {
     this.ships = { owned: ['starter'], active: 'starter' };
     this.statMult = PLAYER_SHIP_BY_ID.starter;
 
+    /**
+     * Hangar craft stock: how many attack fighters / gunner ships you own
+     * for your capitals' bays. Launching uses them; LOSING one in battle
+     * removes it — buy replacements at the Exchange (Hangar tab). Capped at
+     * the active hull's slot counts when buying.
+     */
+    this.hangarStock = { fighter: 15, gunner: 5 };
+
     this.glow = new EngineGlow(this.visual, this.engines, this.glowColor, this.engineScale);
     this.shieldFx = new ShieldEffect(this.object3D, this.radius * 1.4);
 

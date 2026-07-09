@@ -130,6 +130,18 @@ export class HUD {
         this.showBanner('Fleet Ready', 'press G — your ships deploy as a protective fleet around you', 3.6);
       }
     });
+    game.events.on('system:entered', ({ name, from }) => {
+      this.showBanner(`Entering the ${name} System`, `leaving ${from} behind — new worlds ahead`, 4.5);
+    });
+    game.events.on('mission:started', (m) => {
+      this.showBanner(`Mission ${m.index + 1}`, `${m.label} — it just warped in ahead of you!`, 3.6);
+    });
+    game.events.on('mission:completed', ({ reward, label }) => {
+      this.showBanner(`Mission Complete · +${reward} cr`, label, 3.4);
+    });
+    game.events.on('mission:lost', () => {
+      this.showBanner('Mission Target Lost', 'restart it from the Exchange (T → Missions)', 3);
+    });
     game.events.on('nav:toggled', (hidden) => {
       this.showBanner(hidden ? 'Navigation Markers Hidden' : 'Navigation Markers Shown', 'press N to toggle', 1.6);
     });
@@ -163,7 +175,7 @@ export class HUD {
     game.events.on('fleet:recalled', () => this.showBanner('Attack Ships Recalled', 'wing docked', 1.8));
     game.events.on('fleet:ship-lost', () => this.showBanner('Attack Ship Down', 'a fighter was destroyed', 2));
     game.events.on('fleet:denied', () => this.showBanner('No Hangar', 'only a Dreadnought or Carrier can deploy attack ships', 2.4));
-    game.events.on('fleet:empty', () => this.showBanner('Hangar Empty', 'no attack ships available', 2.4));
+    game.events.on('fleet:empty', () => this.showBanner('Hangar Empty', 'buy attack craft at the Exchange — press T, Hangar tab', 3));
     game.events.on('onfoot:prompt', (text) => this.setPrompt(text));
     game.events.on('landing:hint', (text) => {
       this.refs.landHint.textContent = text;

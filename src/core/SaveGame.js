@@ -42,7 +42,7 @@ export class SaveGame {
     // Progression-changing moments trigger a (debounced) save.
     const events = [
       'poi:discovered', 'enemy:killed', 'player:respawned', 'pickup:collected',
-      'shop:purchase', 'crew:changed', 'ship:changed', 'onfoot:left',
+      'shop:purchase', 'crew:changed', 'ship:changed', 'onfoot:left', 'fleet:ship-lost',
     ];
     for (const event of events) {
       game.events.on(event, () => this.requestSave());
@@ -89,6 +89,14 @@ export class SaveGame {
       player.setShip(active);
     }
 
+    if (data.hangarStock && typeof data.hangarStock === 'object') {
+      for (const key of ['fighter', 'gunner']) {
+        if (typeof data.hangarStock[key] === 'number') {
+          player.hangarStock[key] = Math.max(0, Math.floor(data.hangarStock[key]));
+        }
+      }
+    }
+
     // Upgrades (per ship since v3; restored after ships so the active alias
     // points at the right entry). Legacy saves stored one flat
     // {engine, shield, weapon} — migrate it onto the active ship.
@@ -109,6 +117,10 @@ export class SaveGame {
         }
       }
       player.upgrades = player.upgradesFor(player.ships.active);
+    }
+
+    if (typeof data.missionIndex === 'number' && this.game.missions) {
+      this.game.missions.index = Math.max(0, Math.floor(data.missionIndex));
     }
 
     // Accept both the legacy `discovered` and the v2 `discoveredSites`.
@@ -132,6 +144,8 @@ export class SaveGame {
         ? this.game.crew.roster.map((c) => ({ role: c.role, name: c.name, stars: c.stars }))
         : [],
       ships: { owned: [...player.ships.owned], active: player.ships.active },
+      hangarStock: { ...player.hangarStock },
+      missionIndex: this.game.missions?.index ?? 0,
       discoveredSites: this.game.poi
         ? this.game.poi.sites.filter((s) => s.discovered).map((s) => s.id)
         : [],

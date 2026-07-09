@@ -60,6 +60,44 @@ export function generateUniverse(game, universe) {
     universe.addPlanet(new Planet(game, descriptor, center));
   });
 
+  // --- Neighbouring star systems ("copy-paste the galaxy") ---
+  // Two more complete solar systems, ~1.5M units out in different bearings:
+  // same recipe, DIFFERENT seeds, so every planet has its own name, terrain,
+  // land/water layout. Reachable by hyperdrive (~35 s cruise); crossing the
+  // midpoint fires the Leaving/Entering system banners (Universe.update).
+  game.starSystems = [
+    { name: 'Solari', center: new THREE.Vector3(0, 0, 0), render: new THREE.Vector3(0, 0, 0).sub(game.origin.offset) },
+  ];
+  const NEIGHBOURS = [
+    { name: 'Meridian Reach', dir: new THREE.Vector3(0.83, 0.1, -0.55) },
+    { name: 'Karyx Expanse', dir: new THREE.Vector3(-0.62, -0.08, -0.78) },
+  ];
+  NEIGHBOURS.forEach((n, k) => {
+    const center = n.dir.clone().normalize().multiplyScalar(1500000);
+    const sys = { name: n.name, center, render: center.clone().sub(game.origin.offset) };
+    game.starSystems.push(sys);
+    const sysRng = new Rng(`${UNIVERSE_SEED}:system:${k + 1}`);
+    const base2 = sysRng.range(0, Math.PI * 2);
+    const deck = ['terran', 'ocean', 'ice', 'desert', 'volcanic', 'rocky', 'terran', 'ocean'];
+    deck.forEach((archetype, index) => {
+      const distance = 55000 + (index / 7) * 170000 * sysRng.range(0.92, 1.08);
+      const angle = base2 + goldenAngle * (index + 1);
+      const inclination = sysRng.gaussian() * 0.09;
+      const pcenter = new THREE.Vector3(
+        Math.cos(angle) * distance,
+        Math.sin(inclination) * distance * 0.35,
+        Math.sin(angle) * distance,
+      ).add(center);
+      const descriptor = generateDescriptor(`${UNIVERSE_SEED}:system:${k + 1}:planet:${index}`, archetype);
+      const planet = new Planet(game, descriptor, pcenter);
+      planet.starRender = sys.render; // its OWN sun lights/tints it
+      universe.addPlanet(planet);
+    });
+  });
+  game.origin.onShift((delta) => {
+    for (const sys of game.starSystems) sys.render.sub(delta);
+  });
+
   // --- Asteroid fields: the inner mining cluster + two outer belts ---
   const fields = [];
   fields.push(new AsteroidField(game, {

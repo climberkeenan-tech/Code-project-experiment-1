@@ -14,13 +14,13 @@ import { WeaponSystem } from './combat/WeaponSystem.js';
 import { CombatSystem } from './combat/CombatSystem.js';
 import { CrewManager } from './crew/CrewManager.js';
 import { FleetSystem } from './fleet/FleetSystem.js';
+import { MissionSystem } from './missions/MissionSystem.js';
 import { Pickups } from './combat/Pickups.js';
 import { Explosions } from './fx/Explosions.js';
 import { ChaseCamera } from './camera/ChaseCamera.js';
 import { Sun } from './environment/Sun.js';
 import { Starfield } from './environment/Starfield.js';
 import { Nebulas } from './environment/Nebulas.js';
-import { SpaceDust } from './environment/SpaceDust.js';
 import { createSpaceEnvironment } from './environment/SpaceEnvMap.js';
 import { Universe } from './world/Universe.js';
 import { generateUniverse } from './world/UniverseGenerator.js';
@@ -126,6 +126,9 @@ game.addSystem('crew', new CrewManager(game));
 // --- Fleet: carrier-launched AI escorts from your stored ships ---
 game.addSystem('fleet', new FleetSystem(game));
 
+// --- Missions: bounty ladder started from the Exchange ---
+game.addSystem('missions', new MissionSystem(game));
+
 const explosions = new Explosions(game);
 game.explosions = explosions;
 game.addSystem('explosions', explosions);
@@ -145,7 +148,6 @@ game.addSystem('camera', chaseCamera);
 
 game.addSystem('starfield', new Starfield(game));
 game.addSystem('nebulas', new Nebulas(game));
-game.addSystem('dust', new SpaceDust(game));
 
 // --- Audio + UI ---
 game.addSystem('ship-sounds', new ShipSounds(game));
