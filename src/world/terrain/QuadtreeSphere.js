@@ -159,6 +159,22 @@ export class QuadtreeSphere {
   }
 
   /**
+   * Force-rebuild every patch overlapping a region (terrain sculpting).
+   * Released meshes re-enter the normal build queue on the next LOD pass,
+   * closest-first — a sculpted hill pops into shape within a few frames.
+   * @param {THREE.Vector3} centerLocal planet-local point on the surface
+   * @param {number} worldRadius affected radius in world units
+   */
+  invalidateRegion(centerLocal, worldRadius) {
+    const visit = (node) => {
+      if (node.centerPos.distanceTo(centerLocal) > node.worldSize * 1.3 + worldRadius) return;
+      node.releaseMesh();
+      if (node.children) for (const child of node.children) visit(child);
+    };
+    for (const root of this.roots) visit(root);
+  }
+
+  /**
    * Per-frame LOD update.
    * @param {THREE.Vector3} cameraLocal camera position in planet-local space
    */

@@ -4,7 +4,7 @@ _This is the **single, current** handoff — it supersedes and folds in the two
 earlier `HANDOFF.md` files (see lineage below). Everything here was read out of
 the source, not remembered. Branch `claude/spaceship-assets-integration-57k8bu`,
 also fast-forwarded onto the default branch `claude/3d-space-exploration-game-ogrezx`;
-working tree clean, everything committed. **Current build: BUILD 26.**_
+working tree clean, everything committed. **Current build: BUILD 27.**_
 
 > **Handoff lineage — the three handoffs (this one replaces the other two).**
 > 1. **Original** developer handoff (pre-model era): lives in git history around
@@ -492,6 +492,40 @@ in the real game.
 guys"): ENEMY_TYPES load-time buff extended — accuracy +0.08 (cap 0.97),
 fireInterval ×0.9, detectRange ×1.3; victim system now HALF ally-hunters
 (`id % 2 === 0`, bias 0.45) and player-preferrers switch at bias 1.25.
+
+### BUILD 27 — landscape tools + library prefabs (playtest: "tools that I
+### can use to develop the landscape… real trees and rocks")
+**Terrain sculpting.** The height sampler gained a SCULPT layer
+(`terrainHeight.js`): a mutable `sculpts` array applied after all
+procedural layers — strokes are `{x,y,z: unit dir, cr: chord radius, r2,
+amt, flat, h0}` with a smoothstep falloff; `flat` lerps toward `h0`
+(FLATTEN), else adds `amt` (RAISE/LOWER −). Because visuals AND collision
+share the sampler, sculpted ground is instantly walkable/landable, and
+lowering below sea level floods (the ocean sphere is fixed at sea level —
+free lakes). `QuadtreeSphere.invalidateRegion(centerLocal, worldRadius)`
+releases overlapping patch meshes; the normal LOD queue rebuilds them
+closest-first within a few frames. Persistence: `sculptStore.js`
+(`starfall.sculpt.v1`, MAX_STROKES 400/planet, `r2` derived not stored),
+loaded in the Planet constructor so every boot (game or editor) shows the
+same landscape.
+**Editor tools**: PLACE/RAISE/LOWER/FLATTEN buttons (T cycles), hold LEFT
+to sculpt (0.12 s ticks, amt = brushRadius×0.08), WHEEL sizes the brush on
+sculpt tools (10–400 m; fly speed on PLACE), ring cursor shows the true
+brush footprint with per-tool colours, FLATTEN anchors at first-touch
+height. Saves per stroke.
+**Library prefabs** (`three-low-poly` 1.0.1, MIT, installed
+`--legacy-peer-deps` — its peer wants three ≥0.180, we pin 0.170; it only
+uses stable APIs and tree-shakes to ~12 kB gz): palette is now 9 entries —
+Tree/Rock/Boulder/MossyRock are `pre()` prefab builds (random variation
+per placement), normalized to a target height by MEASURED bounding box
+(`modelScale`/`modelLift` in `_spawn` — the raw prefabs are library-scene
+scale and land HUGE otherwise; bit us once). Old `oakParts`/`rockParts`/
+`boulderParts` factories are dead code. Prop-store `t` indices are stable
+(0 tree, 5 rock, 6 boulder, 8 mossy rock is NEW).
+**Assets reality (again)**: UE marketplace is UE-only; kenney/quaternius/
+polyhaven/jsdelivr/unpkg all blocked from the workspace; npm registry and
+GitHub raw ARE reachable. Real scanned models should come as user Meshy
+GLB uploads → new PROPS entries.
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally
@@ -1192,8 +1226,8 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   (`.mode-btn` buttons; keyboard **Enter/Space** = Survival, **C** = Creative). The chosen
   button calls `launch(creative)`, which sets **`game.creative`**, unlocks audio, unpauses,
   and emits `game:started`. Contains the **BUILD stamp**. ⚠️ **The build stamp is a
-  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 26 —
-  the WORLD EDITOR (its own button ↑) + meaner, ally-hunting enemies'`) — no build-time injection; bump it manually per
+  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 27 —
+  TERRAIN SCULPTING (raise/lower/flatten) + pro 3D trees & rocks'`) — no build-time injection; bump it manually per
   playtest.
 - **Shop** (`ui/Shop.js`): pause-the-game modal, hailed with **`T`** (interim — no physical
   station yet). Tabs: **Sell Ore** (per-tier, Sell All), **Upgrades** (engine/weapon/shield,
@@ -1260,8 +1294,8 @@ means editing those strings too.
   `NODE_VERSION="22"`, `NPM_FLAGS="--include=dev"` (so Vite, a devDependency, always
   installs). Connect the repo in the browser → Deploy; the default branch is deploy-ready.
   Full click-by-click in **`DEPLOY.md`**. Alternative: drag
-  `builds/starfall-frontier-build26.zip` into Netlify Drop.
-- **`builds/starfall-frontier-build26.zip`** (~10 MB): a committed ready-to-serve `dist`
+  `builds/starfall-frontier-build27.zip` into Netlify Drop.
+- **`builds/starfall-frontier-build27.zip`** (~10 MB): a committed ready-to-serve `dist`
   (index.html + JS/CSS + the 12 GLBs). Convention: one zip per published build, old one
   deleted. **Don't gitignore `builds/` or `public/models-glb/`.**
 - **Local dev** (`LOCAL_DEV.md`, `run.command`, `.nvmrc`): `npm start` (= `vite --open`)

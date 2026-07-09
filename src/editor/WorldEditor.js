@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { PROPS, MAX_PER_PLANET } from '../world/NatureEditor.js';
+import { saveSculpts, MAX_STROKES } from '../world/sculptStore.js';
 
 /**
  * The WORLD EDITOR — a standalone design tool, launched from its own start
@@ -23,6 +24,12 @@ import { PROPS, MAX_PER_PLANET } from '../world/NatureEditor.js';
  */
 
 const CURSOR_MAX = 6000; // how far the ground cursor reaches
+const STROKE_INTERVAL = 0.12; // hold-to-sculpt tick
+/** Tool → cursor-ring colour. */
+const TOOL_COLORS = {
+  place: 0x7dffa8, raise: 0xffb56b, lower: 0xff6b81, flatten: 0x6bc8ff,
+};
+const TOOLS = ['place', 'raise', 'lower', 'flatten'];
 
 export class WorldEditor {
   /** @param {import('../core/Game.js').Game} game */
@@ -36,6 +43,13 @@ export class WorldEditor {
     /** @type {import('../world/Planet.js').Planet|null} */
     this.planet = null;
     this.flySpeed = 120; // u/s, wheel-adjustable
+
+    /** Landscape tools: 'place' plants props; the rest sculpt the terrain. */
+    this.tool = 'place';
+    this.brushRadius = 60; // metres; wheel-adjustable while sculpting
+    this._sculpting = false;
+    this._strokeTimer = 0;
+    this._flattenH = 0;
 
     this._pos = new THREE.Vector3();
     this._quat = new THREE.Quaternion();
@@ -125,7 +139,9 @@ export class WorldEditor {
     if (!this.planet) return;
     this._planetEl.textContent = this.planet.descriptor.name;
     const list = this.game.natureEditor?.placed.get(this.planet.descriptor.name) ?? [];
-    this._countEl.textContent = `${list.length}/${MAX_PER_PLANET} props`;
+    const strokes = this.planet.sampler.sculpts.length;
+    this._countEl.textContent = `${list.length}/${MAX_PER_PLANET} props · ${strokes}/${MAX_STROKES} sculpts`;
+    this._brushEl.textContent = this.tool === 'place' ? '' : `brush ${Math.round(this.brushRadius)} m`;
   }
 
   // ------------------------------------------------------------------
@@ -177,6 +193,53 @@ export class WorldEditor {
     player.alive = true;
 
     this._updateCursor();
+
+    // Hold-to-sculpt: while the mouse is down on a sculpt tool, keep
+    // applying brush strokes under the cursor.
+    if (this._sculpting && this._cursorValid && this.tool !== 'place') {
+      this._strokeTimer -= dt;
+      if (this._strokeTimer <= 0) {
+        this._strokeTimer = STROKE_INTERVAL;
+        this._applyStroke();
+      }
+    }
+  }
+
+  /** One brush stroke: push into the sampler, rebuild patches, persist. */
+  _applyStroke() {
+    const planet = this.planet;
+    const sculpts = planet.sampler.sculpts;
+    if (sculpts.length >= MAX_STROKES) {
+      this._brushEl.textContent = 'stroke limit!';
+      this.game.audio?.playTone?.({ type: 'square', freq: 170, freqEnd: 110, duration: 0.1, gain: 0.08 });
+      return;
+    }
+    this._up.copy(this._cursorPoint).sub(planet.group.position).normalize();
+    const cr = this.brushRadius / planet.radius;
+    const stroke = {
+      x: this._up.x, y: this._up.y, z: this._up.z,
+      cr, r2: cr * cr,
+      // Per-tick strength: holding ~1 s builds ≈ 2/3 of the brush radius in
+      // height — fast enough to shape, slow enough to control.
+      amt: this.tool === 'lower' ? -this.brushRadius * 0.08 : this.brushRadius * 0.08,
+      flat: this.tool === 'flatten',
+      h0: this._flattenH,
+    };
+    sculpts.push(stroke);
+    // Rebuild the touched patches; collision reads the sampler live already.
+    this._point.copy(this._cursorPoint).sub(planet.group.position);
+    planet.terrain.invalidateRegion(this._point, this.brushRadius * 1.8);
+    saveSculpts(planet.descriptor.name, sculpts);
+    this._refreshLabels();
+  }
+
+  _setTool(tool) {
+    this.tool = tool;
+    for (const btn of this.bar.querySelectorAll('.we-tool')) {
+      btn.classList.toggle('active', btn.dataset.tool === tool);
+    }
+    if (this.cursor) this.cursor.material.color.setHex(TOOL_COLORS[tool]);
+    this._refreshLabels();
   }
 
   _updateCursor() {
@@ -210,6 +273,9 @@ export class WorldEditor {
       this.cursor.position.copy(this._cursorPoint).addScaledVector(this._up, 0.4);
       this._q.setFromUnitVectors(FORWARD_Z, this._up);
       this.cursor.quaternion.copy(this._q);
+      // Sculpt tools show the true brush footprint; place shows a small ring.
+      const ringR = this.tool === 'place' ? 2.4 : this.brushRadius;
+      this.cursor.scale.setScalar(ringR / 1.9); // ring geometry mean radius
     }
   }
 
@@ -243,27 +309,44 @@ export class WorldEditor {
       if (e.button === 2) { this._looking = true; return; }
       if (e.button !== 0) return;
       if (e.target && e.target.closest?.('.nature-bar')) return; // UI click
-      if (this._cursorValid && this.planet) {
+      if (!this._cursorValid || !this.planet) return;
+      if (this.tool === 'place') {
         this.game.natureEditor?.placeProp(this.planet, this._cursorPoint, this.selected);
         this._refreshLabels();
+      } else {
+        // Sculpt: anchor FLATTEN at the first-touch height, stroke while held.
+        this._up.copy(this._cursorPoint).sub(this.planet.group.position).normalize();
+        this._flattenH = this.planet.sampler.height(this._up.x, this._up.y, this._up.z);
+        this._sculpting = true;
+        this._strokeTimer = 0; // first stroke this frame
       }
     });
     window.addEventListener('mouseup', (e) => {
       if (e.button === 2) this._looking = false;
+      if (e.button === 0) this._sculpting = false;
     });
     window.addEventListener('contextmenu', (e) => {
       if (this.active) e.preventDefault();
     });
     window.addEventListener('wheel', (e) => {
       if (!this.active) return;
-      this.flySpeed = Math.min(2400, Math.max(20, this.flySpeed * (e.deltaY > 0 ? 0.85 : 1.18)));
-      this._speedEl.textContent = `${Math.round(this.flySpeed)} u/s`;
+      if (this.tool === 'place') {
+        this.flySpeed = Math.min(2400, Math.max(20, this.flySpeed * (e.deltaY > 0 ? 0.85 : 1.18)));
+        this._speedEl.textContent = `${Math.round(this.flySpeed)} u/s`;
+      } else {
+        // While a sculpt tool is up, the wheel sizes the brush instead.
+        this.brushRadius = Math.min(400, Math.max(10, this.brushRadius * (e.deltaY > 0 ? 0.85 : 1.18)));
+        this._refreshLabels();
+      }
     });
     window.addEventListener('keydown', (e) => {
       if (!this.active || e.repeat) return;
       if (e.code.startsWith('Digit')) {
         const n = Number(e.code.slice(5)) - 1;
-        if (n >= 0 && n < PROPS.length) this._select(n);
+        if (n >= 0 && n < PROPS.length) { this._setTool('place'); this._select(n); }
+      }
+      if (e.code === 'KeyT') {
+        this._setTool(TOOLS[(TOOLS.indexOf(this.tool) + 1) % TOOLS.length]);
       }
       if (e.code === 'KeyX' && this._cursorValid && this.planet) {
         if (this.game.natureEditor?.removeNearest(this.planet, this._cursorPoint)) {
@@ -292,17 +375,32 @@ export class WorldEditor {
         <span class="we-meta" data-el="speed">120 u/s</span>
         <button class="we-btn we-exit" data-el="exit">EXIT</button>
       </div>
+      <div class="we-row">
+        <button class="we-btn we-tool active" data-tool="place">🌿 PLACE</button>
+        <button class="we-btn we-tool" data-tool="raise">⛰️ RAISE</button>
+        <button class="we-btn we-tool" data-tool="lower">🕳️ LOWER</button>
+        <button class="we-btn we-tool" data-tool="flatten">▬ FLATTEN</button>
+        <span class="we-meta" data-el="brush"></span>
+      </div>
       <div class="nb-row">${PROPS.map((p, i) => `
         <button class="nb-item" data-i="${i}"><span class="nb-icon">${p.icon}</span>${i + 1}·${p.name}</button>`).join('')}
       </div>
-      <div class="nb-hint">RIGHT-DRAG look · WASD fly · E/Q up/down · SHIFT fast · WHEEL speed ·
-        CLICK plant · <b>X</b> delete · <b>[ ]</b> planet</div>
+      <div class="nb-hint">RIGHT-DRAG look · WASD fly · E/Q up/down · SHIFT fast · WHEEL speed/brush ·
+        CLICK plant / HOLD sculpt · <b>T</b> tool · <b>X</b> delete · <b>[ ]</b> planet</div>
     `;
     document.body.appendChild(bar);
     this.bar = bar;
     this._planetEl = bar.querySelector('[data-el="planet"]');
     this._countEl = bar.querySelector('[data-el="count"]');
     this._speedEl = bar.querySelector('[data-el="speed"]');
+    this._brushEl = bar.querySelector('[data-el="brush"]');
+    for (const btn of bar.querySelectorAll('.we-tool')) {
+      btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this._setTool(btn.dataset.tool);
+      });
+    }
     for (const btn of bar.querySelectorAll('.nb-item')) {
       btn.addEventListener('pointerdown', (e) => {
         e.preventDefault();

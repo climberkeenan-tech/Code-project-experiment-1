@@ -54,7 +54,7 @@ export class Screens {
         <span class="ml-bar"><span class="ml-fill"></span></span>
       </div>
       <div class="reset-save">Reset progress</div>
-      <div class="build-tag">BUILD 26 — the WORLD EDITOR (its own button ↑) + meaner, ally-hunting enemies</div>
+      <div class="build-tag">BUILD 27 — TERRAIN SCULPTING (raise/lower/flatten) + pro 3D trees &amp; rocks</div>
     `;
     this.root.appendChild(el);
 

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createTerrainSampler } from './terrainHeight.js';
+import { loadSculpts } from './sculptStore.js';
 import { QuadtreeSphere } from './terrain/QuadtreeSphere.js';
 import { Atmosphere } from './Atmosphere.js';
 import { Clouds } from './Clouds.js';
@@ -37,6 +38,9 @@ export class Planet {
     ).normalize();
 
     this.sampler = createTerrainSampler(descriptor);
+    // World Editor landscapes: saved sculpt strokes join the height field
+    // BEFORE the terrain builds, so visuals and collision agree from boot.
+    loadSculpts(descriptor.name, this.sampler.sculpts);
 
     /** Live planet→sun unit vector shared by all planet materials. */
     this.sunDir = new THREE.Vector3(0, 1, 0);

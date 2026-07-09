@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Tree, Rock, MossyRock, Boulder } from 'three-low-poly';
 import { SimplexNoise } from '../core/math/noise.js';
 import { Rng } from '../core/math/rng.js';
 
@@ -130,17 +131,35 @@ export class NatureEditor {
     const group = this._live.get(planet.descriptor.name);
     if (!group) return;
     const type = PROPS[entry.t % PROPS.length];
-    // ONE merged mesh per prop (geometry cached per variant): 500 placed
-    // props cost 500 draw calls, not thousands of per-part meshes.
-    const prop = new THREE.Mesh(type.geo(this._counter++ % type.variants), MAT);
-    prop.castShadow = !type.noShadow;
-    prop.receiveShadow = true;
+    let prop;
+    let modelScale = 1;
+    let modelLift = 0;
+    if (type.model) {
+      // Library prefab (three-low-poly): a single multi-material mesh with
+      // fresh random variation per build. Prefabs come in library-scene
+      // units — measure and normalize to the game-world target height,
+      // and lift so the base sits on the ground.
+      prop = type.build();
+      prop.traverse((c) => {
+        if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; }
+      });
+      const box = _box.setFromObject(prop);
+      modelScale = type.targetH / Math.max(box.max.y - box.min.y, 1e-3);
+      modelLift = -box.min.y * modelScale;
+    } else {
+      // ONE merged mesh per prop (geometry cached per variant): 500 placed
+      // props cost 500 draw calls, not thousands of per-part meshes.
+      prop = new THREE.Mesh(type.geo(this._counter++ % type.variants), MAT);
+      prop.castShadow = !type.noShadow;
+      prop.receiveShadow = true;
+    }
     prop.position.set(entry.p[0], entry.p[1], entry.p[2]);
     // Stand upright on the sphere: local up = radial direction.
     this._up.set(entry.p[0], entry.p[1], entry.p[2]).normalize();
     prop.quaternion.setFromUnitVectors(UP, this._up);
     prop.rotateY(entry.r);
-    prop.scale.setScalar(entry.s);
+    prop.scale.setScalar(entry.s * modelScale * (type.scl ?? 1));
+    if (modelLift) prop.position.addScaledVector(this._up, modelLift * entry.s);
     prop.userData.entry = entry;
     entry._mesh = prop;
     group.add(prop);
@@ -389,13 +408,25 @@ function def(name, icon, variants, partsFn, noShadow = false) {
   };
 }
 
+const _box = new THREE.Box3();
+
+/** Library prefab entry (three-low-poly), normalized to `targetH` metres. */
+function pre(name, icon, build, targetH) {
+  return { name, icon, model: true, build, targetH };
+}
+
+const LEAF_GREENS = [0x2e8b3d, 0x228b22, 0x3aa655, 0x1e7a33, 0x4caf50];
+
 export const PROPS = [
-  def('Oak', '🌳', 4, oakParts),
+  pre('Tree', '🌳', () => new Tree({
+    leafColor: LEAF_GREENS[Math.floor(Math.random() * LEAF_GREENS.length)],
+  }), 7),
   def('Pine', '🌲', 3, pineParts),
   def('Palm', '🌴', 3, palmParts),
   def('Bush', '🌿', 5, bushParts),
   def('Flowers', '🌸', 5, flowerParts),
-  def('Rock', '🪨', 5, rockParts),
-  def('Boulders', '⛰️', 4, boulderParts),
+  pre('Rock', '🪨', () => new Rock(), 1.4),
+  pre('Boulder', '⛰️', () => new Boulder(), 2.6),
   def('Grass', '🌾', 6, grassParts, true),
+  pre('Mossy Rock', '🍀', () => new MossyRock(), 1.5),
 ];
