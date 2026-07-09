@@ -919,3 +919,35 @@
   border-radius: 2px;
 }
 .shop-row.locked { opacity: 0.75; }
+
+/* ---------- start-screen model-loading gate ---------- */
+
+.model-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: rgba(134, 231, 255, 0.75);
+}
+.model-loading .ml-bar {
+  width: 220px;
+  height: 5px;
+  background: rgba(134, 231, 255, 0.12);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.model-loading .ml-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #86e7ff;
+  box-shadow: 0 0 8px rgba(134, 231, 255, 0.7);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+.model-loading.done { color: #8fe1b0; }
+.model-loading.done .ml-fill { background: #8fe1b0; }
+.mode-btn.waiting { opacity: 0.35; pointer-events: none; }

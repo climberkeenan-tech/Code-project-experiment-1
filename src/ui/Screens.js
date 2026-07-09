@@ -4,6 +4,8 @@
  * The start screen doubles as the audio unlock gesture (browsers require a
  * user interaction before an AudioContext may start).
  */
+import { loadModelShips, onModelLoaded, getModelTotal } from '../ship/ModelShips.js';
+
 export class Screens {
   /** @param {import('../core/Game.js').Game} game */
   constructor(game) {
@@ -43,15 +45,41 @@ export class Screens {
         </button>
       </div>
       <div class="controls-hint">${this._controlsHint()}</div>
+      <div class="model-loading" data-el="modelLoading">
+        <span class="ml-text">LOADING SHIP MODELS…</span>
+        <span class="ml-bar"><span class="ml-fill"></span></span>
+      </div>
       <div class="reset-save">Reset progress</div>
-      <div class="build-tag">BUILD 19 — the Night Hawk: mission reward + reinforcement call</div>
+      <div class="build-tag">BUILD 20 — no more old-model flash: ships fully load before launch</div>
     `;
     this.root.appendChild(el);
 
     let launched = false;
+    // GATE: the game cannot start until every ship model is fully loaded, so
+    // the old procedural stand-ins never flash in before the real hulls.
+    let modelsReady = false;
+    const loadingEl = el.querySelector('[data-el="modelLoading"]');
+    const fill = loadingEl.querySelector('.ml-fill');
+    const text = loadingEl.querySelector('.ml-text');
+    const total = getModelTotal();
+    let loadedCount = 0;
+    for (const btn of el.querySelectorAll('.mode-btn')) btn.classList.add('waiting');
+    onModelLoaded(() => {
+      loadedCount = Math.min(total, loadedCount + 1);
+      text.textContent = `LOADING SHIP MODELS ${loadedCount}/${total}`;
+      fill.style.width = `${Math.round((loadedCount / total) * 100)}%`;
+    });
+    loadModelShips().then(() => { // idempotent: joins main.js's load
+      modelsReady = true;
+      loadingEl.classList.add('done');
+      text.textContent = 'ALL SHIPS READY';
+      fill.style.width = '100%';
+      for (const btn of el.querySelectorAll('.mode-btn')) btn.classList.remove('waiting');
+    });
+
     // `creative` chooses the free-build economy; survival is the normal game.
     const launch = (creative) => {
-      if (launched) return;
+      if (launched || !modelsReady) return;
       launched = true;
       window.removeEventListener('keydown', onKey);
       this.game.creative = creative;

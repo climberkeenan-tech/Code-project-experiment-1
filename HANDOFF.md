@@ -4,7 +4,7 @@ _This is the **single, current** handoff — it supersedes and folds in the two
 earlier `HANDOFF.md` files (see lineage below). Everything here was read out of
 the source, not remembered. Branch `claude/spaceship-assets-integration-57k8bu`,
 also fast-forwarded onto the default branch `claude/3d-space-exploration-game-ogrezx`;
-working tree clean, everything committed. **Current build: BUILD 19.**_
+working tree clean, everything committed. **Current build: BUILD 20.**_
 
 > **Handoff lineage — the three handoffs (this one replaces the other two).**
 > 1. **Original** developer handoff (pre-model era): lives in git history around
@@ -325,6 +325,14 @@ Second autonomous playtest-response session:
 - Verified end-to-end twice: full-ladder grind incl. the requires-ship gate
   both ways, unlock grant, save round-trip, popup clamp (99→40, −3→1),
   40-ship wave all locking the apex, tour-expiry both branches, zero errors.
+
+### BUILD 20 — model-loading gate (no more stand-in flash)
+The start screen now **blocks launch until every GLB hull is loaded**
+(`Screens` joins `loadModelShips()`; progress bar "LOADING SHIP MODELS n/8" →
+"ALL SHIPS READY"; mode buttons get `.waiting` until the promise resolves).
+Player, enemies, escorts and traffic therefore always spawn on their REAL
+models — the procedural stand-ins can no longer render first. The hot-swap
+path remains only as recovery for a failed download.
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally
@@ -1025,8 +1033,8 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   (`.mode-btn` buttons; keyboard **Enter/Space** = Survival, **C** = Creative). The chosen
   button calls `launch(creative)`, which sets **`game.creative`**, unlocks audio, unpauses,
   and emits `game:started`. Contains the **BUILD stamp**. ⚠️ **The build stamp is a
-  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 19 —
-  the Night Hawk: mission reward + reinforcement call'`) — no build-time injection; bump it manually per
+  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 20 —
+  no more old-model flash: ships fully load before launch'`) — no build-time injection; bump it manually per
   playtest.
 - **Shop** (`ui/Shop.js`): pause-the-game modal, hailed with **`T`** (interim — no physical
   station yet). Tabs: **Sell Ore** (per-tier, Sell All), **Upgrades** (engine/weapon/shield,
@@ -1093,8 +1101,8 @@ means editing those strings too.
   `NODE_VERSION="22"`, `NPM_FLAGS="--include=dev"` (so Vite, a devDependency, always
   installs). Connect the repo in the browser → Deploy; the default branch is deploy-ready.
   Full click-by-click in **`DEPLOY.md`**. Alternative: drag
-  `builds/starfall-frontier-build19.zip` into Netlify Drop.
-- **`builds/starfall-frontier-build19.zip`** (~7.6 MB): a committed ready-to-serve `dist`
+  `builds/starfall-frontier-build20.zip` into Netlify Drop.
+- **`builds/starfall-frontier-build20.zip`** (~7.6 MB): a committed ready-to-serve `dist`
   (index.html + JS/CSS + the 4 GLBs). Convention: one zip per published build, old one
   deleted. **Don't gitignore `builds/` or `public/models-glb/`.**
 - **Local dev** (`LOCAL_DEV.md`, `run.command`, `.nvmrc`): `npm start` (= `vite --open`)

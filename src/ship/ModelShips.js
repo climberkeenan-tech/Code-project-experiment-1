@@ -124,6 +124,11 @@ export function onModelLoaded(cb) {
   for (const id of Object.keys(protos)) cb(id);
 }
 
+/** How many hulls the registry will load (for the start-screen gate). */
+export function getModelTotal() {
+  return Object.keys(MODELS).length;
+}
+
 /** The normalized prototype for a model id, or null while loading/failed. */
 export function getModelProto(id) {
   return protos[id] ?? null;
