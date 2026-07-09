@@ -88,10 +88,12 @@ export class Shop {
     this._onKey = (e) => { if (e.code === 'Escape') this.close(); };
 
     // FAB visibility follows the play state.
-    game.events.on('game:started', () => this._setFab(true));
+    game.events.on('game:started', () => this._setFab(!game.editorMode));
     game.events.on('player:died', () => this._setFab(false));
     game.events.on('player:respawned', () => this._setFab(true));
     game.events.on('shop:open', () => this.open());
+    // The World Editor is a design tool: no trading, no TRADE button.
+    game.events.on('editor:enter', () => { if (this.isOpen) this.close(); this._setFab(false); });
   }
 
   update() {
@@ -101,7 +103,10 @@ export class Shop {
   }
 
   open() {
-    if (this.isOpen || this.game.paused) return; // never over start/death screens
+    // Never over start/death screens — and NEVER in the World Editor:
+    // opening pauses the game, which freezes the editor solid (playtest:
+    // "the thing doesn't work at all, I can't move around / can't place").
+    if (this.isOpen || this.game.paused || this.game.editorMode) return;
     if (this.recruits.length === 0) this._refillRecruits();
     this.isOpen = true;
     this.game.paused = true;
@@ -116,7 +121,7 @@ export class Shop {
     if (!this.isOpen) return;
     this.isOpen = false;
     this.game.paused = false;
-    this._setFab(true);
+    this._setFab(!this.game.editorMode);
     this.el.classList.add('hidden');
     window.removeEventListener('keydown', this._onKey);
     this.game.audio?.playTone?.({ type: 'sine', freq: 620, freqEnd: 440, duration: 0.16, gain: 0.12 });

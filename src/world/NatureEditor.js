@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Tree, Rock, MossyRock, Boulder } from 'three-low-poly';
 import { SimplexNoise } from '../core/math/noise.js';
 import { Rng } from '../core/math/rng.js';
+import WORLD_DESIGN from './worldDesign.json';
 
 /**
  * Placed-nature layer: the data store + renderer for player-designed props
@@ -114,6 +115,15 @@ export class NatureEditor {
     return true;
   }
 
+  /** Wipe every placed prop on a planet (World Editor CLEAR). */
+  clearPlanet(planet) {
+    const name = planet.descriptor.name;
+    this.placed.set(name, []);
+    this._save();
+    const group = this._live.get(name);
+    if (group) group.clear();
+  }
+
   // ------------------------------------------------------------------
   // Live meshes
   // ------------------------------------------------------------------
@@ -171,13 +181,20 @@ export class NatureEditor {
   // ------------------------------------------------------------------
 
   _load() {
+    let map;
     try {
       const raw = localStorage.getItem(STORE_KEY);
-      if (!raw) return new Map();
-      return new Map(Object.entries(JSON.parse(raw)));
+      map = raw ? new Map(Object.entries(JSON.parse(raw))) : new Map();
     } catch {
-      return new Map();
+      map = new Map();
     }
+    // Bundled design (the exported file committed into the game): planets
+    // with no local edits show the shipped placements. Entries are cloned
+    // so live `_mesh` tags never touch the imported module data.
+    for (const [name, list] of Object.entries(WORLD_DESIGN.props ?? {})) {
+      if (!map.has(name)) map.set(name, list.map((e) => ({ ...e })));
+    }
+    return map;
   }
 
   _save() {

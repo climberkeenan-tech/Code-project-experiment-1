@@ -54,7 +54,7 @@ export class Screens {
         <span class="ml-bar"><span class="ml-fill"></span></span>
       </div>
       <div class="reset-save">Reset progress</div>
-      <div class="build-tag">BUILD 27 — TERRAIN SCULPTING (raise/lower/flatten) + pro 3D trees &amp; rocks</div>
+      <div class="build-tag">BUILD 28 — editor fixed: move/place/delete/save all work now</div>
     `;
     this.root.appendChild(el);
 

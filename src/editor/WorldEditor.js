@@ -27,9 +27,9 @@ const CURSOR_MAX = 6000; // how far the ground cursor reaches
 const STROKE_INTERVAL = 0.12; // hold-to-sculpt tick
 /** Tool → cursor-ring colour. */
 const TOOL_COLORS = {
-  place: 0x7dffa8, raise: 0xffb56b, lower: 0xff6b81, flatten: 0x6bc8ff,
+  place: 0x7dffa8, raise: 0xffb56b, lower: 0xff6b81, flatten: 0x6bc8ff, delete: 0xff4455,
 };
-const TOOLS = ['place', 'raise', 'lower', 'flatten'];
+const TOOLS = ['place', 'raise', 'lower', 'flatten', 'delete'];
 
 export class WorldEditor {
   /** @param {import('../core/Game.js').Game} game */
@@ -171,6 +171,19 @@ export class WorldEditor {
       this._pos.addScaledVector(this._up, lift * speed * dt);
     }
 
+    // Arrow keys look around too — friendlier than right-drag on
+    // trackpads and Chromebooks.
+    const yawKeys = (keys.has('ArrowLeft') ? 1 : 0) - (keys.has('ArrowRight') ? 1 : 0);
+    const pitchKeys = (keys.has('ArrowUp') ? 1 : 0) - (keys.has('ArrowDown') ? 1 : 0);
+    if ((yawKeys || pitchKeys) && this.planet) {
+      this._up.copy(this._pos).sub(this.planet.group.position).normalize();
+      this._q.setFromAxisAngle(this._up, yawKeys * 1.6 * dt);
+      this._quat.premultiply(this._q);
+      this._axis.set(1, 0, 0).applyQuaternion(this._quat);
+      this._q.setFromAxisAngle(this._axis, pitchKeys * 1.2 * dt);
+      this._quat.premultiply(this._q).normalize();
+    }
+
     // Never sink below the terrain.
     if (this.planet) {
       const alt = this.planet.getAltitude(this._pos);
@@ -245,17 +258,26 @@ export class WorldEditor {
   _updateCursor() {
     if (!this.planet || !this.cursor) return;
     const cam = this.game.engine.camera;
-    this._ndc.set(
-      (this._mouse.x / window.innerWidth) * 2 - 1,
-      -(this._mouse.y / window.innerHeight) * 2 + 1,
-      0.5,
-    );
-    this._ray.copy(this._ndc.unproject(cam)).sub(cam.position).normalize();
+    // Build the mouse ray from the EDITOR'S OWN pose (+ the camera's fov/
+    // aspect) — never from camera matrices. `unproject` reads matrixWorld,
+    // which other camera systems can overwrite between renders; that made
+    // the cursor silently invalid on real clicks (playtest: "can't place").
+    const ndcX = (this._mouse.x / window.innerWidth) * 2 - 1;
+    const ndcY = -(this._mouse.y / window.innerHeight) * 2 + 1;
+    const tanY = Math.tan((cam.fov * Math.PI / 180) / 2);
+    this._ray.set(ndcX * tanY * cam.aspect, ndcY * tanY, -1)
+      .applyQuaternion(this._quat)
+      .normalize();
 
     this._cursorValid = false;
-    let step = 1;
-    for (let t = 2; t < CURSOR_MAX; t += step) {
-      this._point.copy(cam.position).addScaledVector(this._ray, t);
+    // Adaptive march with a HARD iteration cap. Without the cap, a ray
+    // skimming the horizon kept the step tiny for thousands of expensive
+    // height samples EVERY FRAME — the whole game froze into a slideshow
+    // the moment the mouse crossed the horizon (playtest: "it isn't
+    // working, I can't move around"). ≤110 samples/frame, guaranteed.
+    let t = 2;
+    for (let i = 0; i < 110 && t < CURSOR_MAX; i++) {
+      this._point.copy(this._pos).addScaledVector(this._ray, t);
       const alt = this.planet.getAltitude(this._point);
       if (alt <= 0) {
         this._up.copy(this._point).sub(this.planet.group.position).normalize();
@@ -264,8 +286,9 @@ export class WorldEditor {
         this._cursorValid = true;
         break;
       }
-      // Adaptive march: far from the ground, stride by the altitude.
-      step = Math.max(0.75, Math.min(alt * 0.5, 60));
+      // Stride by altitude, but always grow with distance so skimming
+      // rays terminate; precision matters less the farther the hit.
+      t += Math.max(1.5, alt * 0.6, t * 0.03);
     }
 
     this.cursor.visible = this._cursorValid;
@@ -273,8 +296,9 @@ export class WorldEditor {
       this.cursor.position.copy(this._cursorPoint).addScaledVector(this._up, 0.4);
       this._q.setFromUnitVectors(FORWARD_Z, this._up);
       this.cursor.quaternion.copy(this._q);
-      // Sculpt tools show the true brush footprint; place shows a small ring.
-      const ringR = this.tool === 'place' ? 2.4 : this.brushRadius;
+      // Sculpt tools show the true brush footprint; place/delete a small ring.
+      const pointTool = this.tool === 'place' || this.tool === 'delete';
+      const ringR = pointTool ? 2.4 : this.brushRadius;
       this.cursor.scale.setScalar(ringR / 1.9); // ring geometry mean radius
     }
   }
@@ -284,7 +308,7 @@ export class WorldEditor {
   // ------------------------------------------------------------------
 
   _bindInput() {
-    window.addEventListener('mousemove', (e) => {
+    window.addEventListener('pointermove', (e) => {
       this._mouse.x = e.clientX;
       this._mouse.y = e.clientY;
       if (this.active && this._looking) {
@@ -304,14 +328,23 @@ export class WorldEditor {
         this._quat.premultiply(this._q).normalize();
       }
     });
-    window.addEventListener('mousedown', (e) => {
+    window.addEventListener('pointerdown', (e) => {
       if (!this.active) return;
       if (e.button === 2) { this._looking = true; return; }
       if (e.button !== 0) return;
       if (e.target && e.target.closest?.('.nature-bar')) return; // UI click
-      if (!this._cursorValid || !this.planet) return;
+      if (!this._cursorValid || !this.planet) {
+        // Click with no ground under the cursor: audible "no".
+        this.game.audio?.playTone?.({ type: 'square', freq: 180, freqEnd: 120, duration: 0.1, gain: 0.08 });
+        return;
+      }
       if (this.tool === 'place') {
         this.game.natureEditor?.placeProp(this.planet, this._cursorPoint, this.selected);
+        this._refreshLabels();
+      } else if (this.tool === 'delete') {
+        if (!this.game.natureEditor?.removeNearest(this.planet, this._cursorPoint)) {
+          this.game.audio?.playTone?.({ type: 'square', freq: 180, freqEnd: 120, duration: 0.1, gain: 0.08 });
+        }
         this._refreshLabels();
       } else {
         // Sculpt: anchor FLATTEN at the first-touch height, stroke while held.
@@ -321,7 +354,7 @@ export class WorldEditor {
         this._strokeTimer = 0; // first stroke this frame
       }
     });
-    window.addEventListener('mouseup', (e) => {
+    window.addEventListener('pointerup', (e) => {
       if (e.button === 2) this._looking = false;
       if (e.button === 0) this._sculpting = false;
     });
@@ -330,7 +363,7 @@ export class WorldEditor {
     });
     window.addEventListener('wheel', (e) => {
       if (!this.active) return;
-      if (this.tool === 'place') {
+      if (this.tool === 'place' || this.tool === 'delete') {
         this.flySpeed = Math.min(2400, Math.max(20, this.flySpeed * (e.deltaY > 0 ? 0.85 : 1.18)));
         this._speedEl.textContent = `${Math.round(this.flySpeed)} u/s`;
       } else {
@@ -373,6 +406,8 @@ export class WorldEditor {
         <button class="we-btn" data-el="next">▶</button>
         <span class="we-meta" data-el="count"></span>
         <span class="we-meta" data-el="speed">120 u/s</span>
+        <button class="we-btn" data-el="export">💾 SAVE FILE</button>
+        <button class="we-btn we-exit" data-el="clear">CLEAR</button>
         <button class="we-btn we-exit" data-el="exit">EXIT</button>
       </div>
       <div class="we-row">
@@ -380,6 +415,7 @@ export class WorldEditor {
         <button class="we-btn we-tool" data-tool="raise">⛰️ RAISE</button>
         <button class="we-btn we-tool" data-tool="lower">🕳️ LOWER</button>
         <button class="we-btn we-tool" data-tool="flatten">▬ FLATTEN</button>
+        <button class="we-btn we-tool" data-tool="delete">🗑️ DELETE</button>
         <span class="we-meta" data-el="brush"></span>
       </div>
       <div class="nb-row">${PROPS.map((p, i) => `
@@ -411,7 +447,59 @@ export class WorldEditor {
     bar.querySelector('[data-el="prev"]').addEventListener('pointerdown', () => this._gotoPlanet(this.planetIndex - 1));
     bar.querySelector('[data-el="next"]').addEventListener('pointerdown', () => this._gotoPlanet(this.planetIndex + 1));
     bar.querySelector('[data-el="exit"]').addEventListener('pointerdown', () => location.reload());
+    bar.querySelector('[data-el="export"]').addEventListener('pointerdown', () => this._exportDesign());
+    this._clearEl = bar.querySelector('[data-el="clear"]');
+    this._clearEl.addEventListener('pointerdown', () => this._clearPlanet());
     this._select(0);
+  }
+
+  /**
+   * Download the COMPLETE world design (props + sculpts, local edits over
+   * the bundled defaults) as a JSON file. Attach it to Claude and it gets
+   * committed into the game — the design then ships for every player.
+   */
+  _designJson() {
+    const merge = (localKey, bundled) => {
+      let local = {};
+      try { local = JSON.parse(localStorage.getItem(localKey) ?? '{}'); } catch { /* fresh */ }
+      return { ...bundled, ...local };
+    };
+    return JSON.stringify({
+      props: merge('starfall.props.v1', {}),
+      sculpts: merge('starfall.sculpt.v1', {}),
+    }, null, 1);
+  }
+
+  _exportDesign() {
+    const blob = new Blob([this._designJson()], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'starfall-world-design.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    this.game.audio?.playTone?.({ type: 'triangle', freq: 700, freqEnd: 1000, duration: 0.15, gain: 0.12 });
+  }
+
+  /** Two-click confirm, then wipe every prop AND sculpt on this planet. */
+  _clearPlanet() {
+    if (!this.planet) return;
+    if (!this._clearArmed) {
+      this._clearArmed = true;
+      this._clearEl.textContent = 'SURE?';
+      setTimeout(() => { this._clearArmed = false; this._clearEl.textContent = 'CLEAR'; }, 2500);
+      return;
+    }
+    this._clearArmed = false;
+    this._clearEl.textContent = 'CLEAR';
+    const planet = this.planet;
+    this.game.natureEditor?.clearPlanet(planet);
+    planet.sampler.sculpts.length = 0;
+    saveSculpts(planet.descriptor.name, planet.sampler.sculpts);
+    // Rebuild the whole planet's terrain (local frame origin, full radius).
+    this._point.set(0, 0, 0);
+    planet.terrain.invalidateRegion(this._point, planet.radius * 2.2);
+    this._refreshLabels();
+    this.game.audio?.playTone?.({ type: 'sine', freq: 500, freqEnd: 240, duration: 0.3, gain: 0.14 });
   }
 
   _select(i) {

@@ -4,7 +4,7 @@ _This is the **single, current** handoff — it supersedes and folds in the two
 earlier `HANDOFF.md` files (see lineage below). Everything here was read out of
 the source, not remembered. Branch `claude/spaceship-assets-integration-57k8bu`,
 also fast-forwarded onto the default branch `claude/3d-space-exploration-game-ogrezx`;
-working tree clean, everything committed. **Current build: BUILD 27.**_
+working tree clean, everything committed. **Current build: BUILD 28.**_
 
 > **Handoff lineage — the three handoffs (this one replaces the other two).**
 > 1. **Original** developer handoff (pre-model era): lives in git history around
@@ -526,6 +526,39 @@ scale and land HUGE otherwise; bit us once). Old `oakParts`/`rockParts`/
 polyhaven/jsdelivr/unpkg all blocked from the workspace; npm registry and
 GitHub raw ARE reachable. Real scanned models should come as user Meshy
 GLB uploads → new PROPS entries.
+
+### BUILD 28 — the editor actually works (three real-input bugs)
+Playtest: "it isn't working, I can't move around… can't place things…
+doesn't work at all… no way to delete." All found by driving REAL browser
+input in the harness (`key`/`tap` actions) — synthetic `placeProp()` calls
+and dispatched events had hidden every one of them:
+1. **Horizon freeze**: the ground-cursor ray-march had no iteration cap; a
+   ray skimming the horizon took thousands of expensive `getAltitude`
+   samples PER FRAME. Now ≤110 samples (adaptive stride grows with both
+   altitude and distance). ~6 ms / 200 calls.
+2. **Hidden shop ate clicks**: `.shop-tab`/`.shop-btn`/etc. force
+   `pointer-events:auto`, overriding the hidden overlay's `none` — the
+   INVISIBLE panel hit-tested over mid-screen and its cancelled
+   pointerdowns suppressed the game's derived mouse events beneath.
+   Fix: `.shop-screen.hidden * { pointer-events:none !important }`.
+   Also: the Shop can NEVER open in editorMode (opening pauses the game,
+   which froze the editor solid — T key or the TRADE fab did this), the
+   fab hides on editor:enter.
+3. **Stale camera matrices**: the cursor ray came from `unproject(cam)` →
+   `camera.matrixWorld`, which is only rebuilt at render and can carry
+   another system's transform. The ray is now built from the editor's OWN
+   `_quat` + fov/aspect and marches from `_pos` — no camera-matrix
+   dependency. (Editor listeners are `pointer*` events now, too.)
+New in this build: **🗑 DELETE tool** (click a prop to remove it; X still
+works), **CLEAR button** (two-click confirm — wipes ALL props+sculpts on
+the current planet and rebuilds its terrain), **💾 SAVE FILE** (downloads
+`starfall-world-design.json` = localStorage props+sculpts merged over the
+bundled defaults), **bundled world design** (`src/world/worldDesign.json`,
+imported statically by NatureEditor + sculptStore as per-planet fallback —
+paste a player's exported file there to SHIP their design to everyone),
+**arrow-key look** (trackpad/Chromebook-friendly), compact bottom-docked
+editor bar (the tall centered bar used to cover mid-screen and swallow
+clicks on small windows).
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally
@@ -1226,8 +1259,8 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   (`.mode-btn` buttons; keyboard **Enter/Space** = Survival, **C** = Creative). The chosen
   button calls `launch(creative)`, which sets **`game.creative`**, unlocks audio, unpauses,
   and emits `game:started`. Contains the **BUILD stamp**. ⚠️ **The build stamp is a
-  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 27 —
-  TERRAIN SCULPTING (raise/lower/flatten) + pro 3D trees & rocks'`) — no build-time injection; bump it manually per
+  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 28 —
+  editor fixed: move/place/delete/save all work now'`) — no build-time injection; bump it manually per
   playtest.
 - **Shop** (`ui/Shop.js`): pause-the-game modal, hailed with **`T`** (interim — no physical
   station yet). Tabs: **Sell Ore** (per-tier, Sell All), **Upgrades** (engine/weapon/shield,
@@ -1294,8 +1327,8 @@ means editing those strings too.
   `NODE_VERSION="22"`, `NPM_FLAGS="--include=dev"` (so Vite, a devDependency, always
   installs). Connect the repo in the browser → Deploy; the default branch is deploy-ready.
   Full click-by-click in **`DEPLOY.md`**. Alternative: drag
-  `builds/starfall-frontier-build27.zip` into Netlify Drop.
-- **`builds/starfall-frontier-build27.zip`** (~10 MB): a committed ready-to-serve `dist`
+  `builds/starfall-frontier-build28.zip` into Netlify Drop.
+- **`builds/starfall-frontier-build28.zip`** (~10 MB): a committed ready-to-serve `dist`
   (index.html + JS/CSS + the 12 GLBs). Convention: one zip per published build, old one
   deleted. **Don't gitignore `builds/` or `public/models-glb/`.**
 - **Local dev** (`LOCAL_DEV.md`, `run.command`, `.nvmrc`): `npm start` (= `vite --open`)
