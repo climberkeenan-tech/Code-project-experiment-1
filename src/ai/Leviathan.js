@@ -31,6 +31,9 @@ const GUARD_CAP = 70; // live guards at once — the stream refills losses
 const ACTIVE_RANGE = 26000; // stream while the player is this close
 const RELEASE_RANGE = 34000; // beyond this the garrison stands down
 const STREAM_INTERVAL = 0.6; // seconds between launches while under cap
+// First fill is FAST (the shell must already be swarming when the player
+// arrives from a warp drop ~19 km out); losses refill at the normal pace.
+const FILL_INTERVAL = 0.12;
 
 // Endless-supply mix — scout-heavy, echoing the design ratios (1,000 lv10 /
 // 50 lv30–40 / 25 lv50–60 / 10 of each capital class) at simulatable scale.
@@ -115,12 +118,19 @@ export class Leviathan {
     /** @type {HubFortress|null} */
     this.hub = null;
     this.obstacle = null;
+    /**
+     * Planet-shaped adapter so the hyperdrive can lock/cycle/auto-drop on
+     * the fortress exactly like a planet (B to lock, J to travel, arrive).
+     * Null until the hub is built and after it falls.
+     */
+    this.navTarget = null;
     /** @type {import('./EnemyShip.js').EnemyShip[]} */
     this.guards = [];
     this._streamTimer = 0;
     this._mixCursor = 0;
     this._announced = false;
     this._fallen = false;
+    this._filled = false;
     this._dir = new THREE.Vector3();
   }
 
@@ -153,6 +163,7 @@ export class Leviathan {
       for (const g of this.guards) game.enemies.remove(g);
       this.guards.length = 0;
       this._announced = false;
+      this._filled = false; // next visit re-fills the shell fast again
       return;
     }
 
@@ -165,9 +176,13 @@ export class Leviathan {
     if (game.missions?.active) return;
     if (dist > ACTIVE_RANGE) return;
 
+    if (this.guards.length >= GUARD_CAP) {
+      if (!this._filled) { this._filled = true; this._streamTimer = STREAM_INTERVAL; }
+      return;
+    }
     this._streamTimer -= dt;
-    if (this._streamTimer > 0 || this.guards.length >= GUARD_CAP) return;
-    this._streamTimer = STREAM_INTERVAL;
+    if (this._streamTimer > 0) return;
+    this._streamTimer = this._filled ? STREAM_INTERVAL : FILL_INTERVAL;
     this._launchGuard();
   }
 
@@ -184,6 +199,15 @@ export class Leviathan {
     // (Player bolts test the enemy list FIRST, so the hub stays hittable.)
     this.obstacle = { position: hub.position, radius: hub.radius * 1.04 };
     game.obstacles.push(this.obstacle);
+    // Hyperdrive destination: same shape the warp/HUD code reads off a
+    // planet (group.position is the LIVE hub position — shifts included).
+    this.navTarget = {
+      group: { position: hub.position },
+      radius: hub.radius,
+      influenceRadius: 6000,
+      descriptor: { name: '☠ OBSIDIAN LEVIATHAN' },
+      leviathan: true,
+    };
     this.hub = hub;
   }
 
@@ -238,6 +262,7 @@ export class Leviathan {
     const i = game.obstacles.indexOf(this.obstacle);
     if (i !== -1) game.obstacles.splice(i, 1);
     this.obstacle = null;
+    this.navTarget = null; // no more warp lock / nav marker
 
     game.events.emit('leviathan:destroyed');
   }

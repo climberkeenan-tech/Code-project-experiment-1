@@ -4,7 +4,7 @@ _This is the **single, current** handoff — it supersedes and folds in the two
 earlier `HANDOFF.md` files (see lineage below). Everything here was read out of
 the source, not remembered. Branch `claude/spaceship-assets-integration-57k8bu`,
 also fast-forwarded onto the default branch `claude/3d-space-exploration-game-ogrezx`;
-working tree clean, everything committed. **Current build: BUILD 22.**_
+working tree clean, everything committed. **Current build: BUILD 23.**_
 
 > **Handoff lineage — the three handoffs (this one replaces the other two).**
 > 1. **Original** developer handoff (pre-model era): lives in git history around
@@ -386,6 +386,25 @@ despawns) when the player leaves (34 km); everything dies with the fortress
 tumbles in place — per-rock quaternion + axis/rate in the rock record,
 amortized ⅓ of the field per frame, distance-gated (radius + 5 km),
 `DynamicDrawUsage`; drifter count raised to `min(10, rocks/18)`.
+
+### BUILD 23 — the Leviathan is findable (playtest: "I don't see the huge ship")
+BUILD 22 shipped the fortress **unreachable**: warp only auto-dropped at
+planets, so at 42 km/s you overshot it, and nothing pointed at it 590 km out.
+Three fixes:
+- **`Leviathan.navTarget`** — a planet-shaped adapter (`group.position` is the
+  LIVE hub position, `influenceRadius` 6000, `descriptor.name`
+  `'☠ OBSIDIAN LEVIATHAN'`). `WarpSystem.destinations` = planets + adapter
+  while the hub stands; **B cycles onto it, nav-assist bends onto it, and the
+  auto-drop leaves you ~19 km out** — inside ACTIVE_RANGE, outside the scout
+  screen. Cleared on fall (stale `targetIndex` wraps safely).
+- **Always-on red ☠ nav marker** in TargetOverlay (diamond + `☠ LEVIATHAN
+  N km`, off-screen arrow otherwise; hidden by N, replaced by the normal
+  hostile brackets inside APEX_REVEAL, gone once the hub falls).
+- **Fast first fill**: the garrison streams at `FILL_INTERVAL` 0.12 s until it
+  first hits GUARD_CAP (≈9 s — full shell by the time you fly in from the
+  drop), then `STREAM_INTERVAL` 0.6 s for refills; reaching cap arms the full
+  0.6 s delay so a kill is never replaced instantly. Stand-down resets to
+  fast fill for the next visit.
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally
@@ -1086,8 +1105,8 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   (`.mode-btn` buttons; keyboard **Enter/Space** = Survival, **C** = Creative). The chosen
   button calls `launch(creative)`, which sets **`game.creative`**, unlocks audio, unpauses,
   and emits `game:started`. Contains the **BUILD stamp**. ⚠️ **The build stamp is a
-  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 22 —
-  fleet call, 4 new hulls, the Obsidian Leviathan, tumbling rocks'`) — no build-time injection; bump it manually per
+  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 23 —
+  the Leviathan is findable: red ☠ marker + [B] warp lock'`) — no build-time injection; bump it manually per
   playtest.
 - **Shop** (`ui/Shop.js`): pause-the-game modal, hailed with **`T`** (interim — no physical
   station yet). Tabs: **Sell Ore** (per-tier, Sell All), **Upgrades** (engine/weapon/shield,
@@ -1154,8 +1173,8 @@ means editing those strings too.
   `NODE_VERSION="22"`, `NPM_FLAGS="--include=dev"` (so Vite, a devDependency, always
   installs). Connect the repo in the browser → Deploy; the default branch is deploy-ready.
   Full click-by-click in **`DEPLOY.md`**. Alternative: drag
-  `builds/starfall-frontier-build22.zip` into Netlify Drop.
-- **`builds/starfall-frontier-build22.zip`** (~10 MB): a committed ready-to-serve `dist`
+  `builds/starfall-frontier-build23.zip` into Netlify Drop.
+- **`builds/starfall-frontier-build23.zip`** (~10 MB): a committed ready-to-serve `dist`
   (index.html + JS/CSS + the 12 GLBs). Convention: one zip per published build, old one
   deleted. **Don't gitignore `builds/` or `public/models-glb/`.**
 - **Local dev** (`LOCAL_DEV.md`, `run.command`, `.nvmrc`): `npm start` (= `vite --open`)

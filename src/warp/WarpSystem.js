@@ -46,12 +46,24 @@ export class WarpSystem {
     return this.state === 'cruise';
   }
 
+  /**
+   * Everything the hyperdrive can lock and auto-drop on: every planet plus
+   * the Obsidian Leviathan fortress (a planet-shaped nav adapter) while it
+   * stands. Without this the fortress was unreachable — warp only stopped
+   * at planets, so players overshot it at 42 km/s and never saw it.
+   */
+  get destinations() {
+    const planets = this.game.universe?.planets ?? [];
+    const fortress = this.game.leviathan?.navTarget;
+    return fortress ? [...planets, fortress] : planets;
+  }
+
   /** @returns {import('../world/Planet.js').Planet|null} */
   get target() {
-    const planets = this.game.universe?.planets;
-    if (!planets || planets.length === 0) return null;
-    this.targetIndex %= planets.length;
-    return planets[this.targetIndex];
+    const destinations = this.destinations;
+    if (destinations.length === 0) return null;
+    this.targetIndex %= destinations.length;
+    return destinations[this.targetIndex];
   }
 
   /** Distance to the locked target's surface (for the HUD). */
@@ -74,9 +86,9 @@ export class WarpSystem {
   }
 
   cycleTarget() {
-    const planets = this.game.universe?.planets;
-    if (!planets || planets.length === 0) return;
-    this.targetIndex = (this.targetIndex + 1) % planets.length;
+    const destinations = this.destinations;
+    if (destinations.length === 0) return;
+    this.targetIndex = (this.targetIndex + 1) % destinations.length;
     this.game.events.emit('warp:target', this.target);
     this.game.audio?.playTone?.({ type: 'sine', freq: 700, freqEnd: 900, duration: 0.08, gain: 0.1 });
   }
@@ -147,16 +159,18 @@ export class WarpSystem {
     // The drive owns the velocity: full speed along the nose, every frame.
     player.velocity.copy(this._fwd).multiplyScalar(this.cruiseSpeed);
 
-    // Auto-drop when a planet looms AHEAD — arrive where you were looking.
-    // The cone is tight (~26°): a planet beside or behind you (e.g. the one
-    // you just left) must never yank you out of hyperdrive — that was the
-    // playtest "sends me back to the same planet" bug.
-    for (const planet of game.universe?.planets ?? []) {
-      this._toPlanet.copy(planet.group.position).sub(player.position);
+    // Auto-drop when a destination looms AHEAD — arrive where you were
+    // looking. The cone is tight (~26°): a planet beside or behind you
+    // (e.g. the one you just left) must never yank you out of hyperdrive —
+    // that was the playtest "sends me back to the same planet" bug.
+    // Destinations include the Leviathan fortress, so warping at it drops
+    // you ~19 km out — inside its garrison's wake-up range.
+    for (const dest of this.destinations) {
+      this._toPlanet.copy(dest.group.position).sub(player.position);
       const dist = this._toPlanet.length();
-      const dropRadius = planet.influenceRadius * 1.6 + this.cruiseSpeed * 0.22;
+      const dropRadius = dest.influenceRadius * 1.6 + this.cruiseSpeed * 0.22;
       if (dist < dropRadius && this._toPlanet.normalize().dot(this._fwd) > 0.9) {
-        this._drop('arrival', planet);
+        this._drop('arrival', dest);
         return;
       }
     }

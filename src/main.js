@@ -108,7 +108,7 @@ game.apexSystem = apex;
 game.addSystem('apex', apex);
 
 // --- The enemy HUB: the Obsidian Leviathan fortress + its endless garrison ---
-game.addSystem('leviathan', new Leviathan(game));
+game.leviathan = game.addSystem('leviathan', new Leviathan(game));
 
 // --- Escalation: every kill calls in two replacements; warp out to escape ---
 const reinforcements = new Reinforcements(game);

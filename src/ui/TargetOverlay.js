@@ -159,6 +159,36 @@ export class TargetOverlay {
       }
     }
 
+    // --- The enemy HUB: always-on red fortress marker (N hides it) ---
+    // Players could never FIND the Leviathan without this — it sits ~590 km
+    // out with nothing pointing at it. Within bracket range the normal
+    // hostile target box takes over.
+    const hub = game.leviathan?.hub;
+    if (hub?.alive && !game.navHidden) {
+      const hubDist = hub.position.distanceTo(cam.position);
+      if (hubDist > APEX_REVEAL) {
+        const p = this._screen(hub.position, cam);
+        const style = 'rgba(255,86,100,0.95)';
+        const label = `☠ LEVIATHAN ${hubDist > 2000 ? Math.round(hubDist / 1000) + ' km' : Math.round(hubDist) + ' m'}`;
+        if (!p.onScreen) {
+          this._drawArrow(ctx, p.x, p.y, style);
+          this._label(ctx, p.x, p.y, label, style, 16);
+        } else {
+          ctx.strokeStyle = style;
+          ctx.lineWidth = 1.4;
+          const r = 10 + 2 * Math.sin(elapsed * 3);
+          ctx.beginPath(); // diamond, so it never reads as the cyan warp ring
+          ctx.moveTo(p.x, p.y - r);
+          ctx.lineTo(p.x + r, p.y);
+          ctx.lineTo(p.x, p.y + r);
+          ctx.lineTo(p.x - r, p.y);
+          ctx.closePath();
+          ctx.stroke();
+          this._label(ctx, p.x, p.y - 20, label, style, 0);
+        }
+      }
+    }
+
     // --- Warp destination marker (navigation aid; N hides it) ---
     const warp = game.warp;
     if (warp && warp.target && !game.navHidden) {
