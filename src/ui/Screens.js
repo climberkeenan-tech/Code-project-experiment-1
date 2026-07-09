@@ -44,7 +44,7 @@ export class Screens {
       </div>
       <div class="controls-hint">${this._controlsHint()}</div>
       <div class="reset-save">Reset progress</div>
-      <div class="build-tag">BUILD 18 — 3 star systems · missions · fleet sphere · hangar stock</div>
+      <div class="build-tag">BUILD 19 — the Night Hawk: mission reward + reinforcement call</div>
     `;
     this.root.appendChild(el);
 

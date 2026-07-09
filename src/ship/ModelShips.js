@@ -75,6 +75,15 @@ const MODELS = {
     // Thruster anchors measured from the mesh (rear-facing vertex clusters).
     anchors: [[-4.04, 0.15, 7.59], [4.04, 0.15, 7.59], [-2.15, -0.37, 6.96], [2.15, -0.37, 6.96], [-1.09, 0.04, 7.79], [1.09, 0.04, 7.79], [-1.08, -0.85, 7.51], [1.08, -0.85, 7.51]],
   },
+  // "Night Hawk" — the mission-reward interceptor (player-authored).
+  nighthawk: {
+    url: 'models-glb/nighthawk.glb',
+    targetLength: 12, // agile interceptor, a touch bigger than the gunship
+    yaw: -Math.PI / 2, // Meshy convention: authored nose along -X
+    pitch: 0,
+    // Thruster anchors measured from the mesh (rear-facing vertex clusters).
+    anchors: [[-1.52, 0.62, 5.6], [1.52, 0.62, 5.6], [0, -0.6, 5.43]],
+  },
   // "Crimson Dreadnought" — the SF-70 Bastion gunner ship (player-authored).
   bastion: {
     url: 'models-glb/bastion.glb',

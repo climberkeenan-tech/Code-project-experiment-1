@@ -42,7 +42,7 @@ export class SaveGame {
     // Progression-changing moments trigger a (debounced) save.
     const events = [
       'poi:discovered', 'enemy:killed', 'player:respawned', 'pickup:collected',
-      'shop:purchase', 'crew:changed', 'ship:changed', 'onfoot:left', 'fleet:ship-lost',
+      'shop:purchase', 'crew:changed', 'ship:changed', 'onfoot:left', 'fleet:ship-lost', 'mission:completed',
     ];
     for (const event of events) {
       game.events.on(event, () => this.requestSave());

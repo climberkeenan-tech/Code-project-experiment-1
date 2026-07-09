@@ -4,7 +4,7 @@ _This is the **single, current** handoff — it supersedes and folds in the two
 earlier `HANDOFF.md` files (see lineage below). Everything here was read out of
 the source, not remembered. Branch `claude/spaceship-assets-integration-57k8bu`,
 also fast-forwarded onto the default branch `claude/3d-space-exploration-game-ogrezx`;
-working tree clean, everything committed. **Current build: BUILD 18.**_
+working tree clean, everything committed. **Current build: BUILD 19.**_
 
 > **Handoff lineage — the three handoffs (this one replaces the other two).**
 > 1. **Original** developer handoff (pre-model era): lives in git history around
@@ -299,6 +299,32 @@ Second autonomous playtest-response session:
   own model is authored.
 - **Removed `SpaceDust`** (the drifting debris specks) per playtest.
 - Save additions: `hangarStock`, `missionIndex` (still v3).
+
+### BUILD 19 — the Night Hawk (mission reward + reinforcement call)
+- **`nighthawk` model** (8th hull, player-authored "Nightfall" interceptor):
+  14.7 MB → 302 KB, targetLength 12, 3 measured thruster anchors.
+- **SF-45 Night Hawk** catalog entry: `missionLocked` (shop shows a 🔒 row
+  with a mission progress bar until the ladder is done), `reinforce: true`,
+  1400 cr, gun ×1.4. **Completing ALL missions grants the first one free**
+  (`MissionSystem._complete` pushes it into `ships.owned` + the
+  `mission:allcomplete` banner); replacements are bought normally.
+- **Reinforcement call:** on a `reinforce` hull, **G** opens a popup
+  (HUD `.reinforce-popup`, pauses the game) asking how many allied ships
+  (1–40, clamped). Confirming emits `reinforce:call` →
+  `FriendlyTraffic.spawnReinforcements(n)`: n combat allies ring in around
+  the player (mixed starter/explorer/frigate hulls, `ship.reinforcement`),
+  fight with the normal ally AI, and cruise off after a ~150 s tour —
+  never mid-fight. Regression-checked: G on carriers still launches the wing.
+- **Missions ladder → 10 rungs** with multi-ship contracts (`ships` array;
+  `remaining` Set tracked per kill + `mission:progress` banners): adds a
+  5-ship pirate fleet, a Gunner Ship, a 3-ship Gunner fleet, and a Gunner
+  Ship that must be fought **flying the SF-10** (`requiresShip` gate — the
+  Start button demands the hull).
+- **Ship tooltips:** hovering a Ships-tab row lists every stat/special
+  (`Shop._shipFeatures`).
+- Verified end-to-end twice: full-ladder grind incl. the requires-ship gate
+  both ways, unlock grant, save round-trip, popup clamp (99→40, −3→1),
+  40-ship wave all locking the apex, tour-expiry both branches, zero errors.
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally
@@ -999,8 +1025,8 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   (`.mode-btn` buttons; keyboard **Enter/Space** = Survival, **C** = Creative). The chosen
   button calls `launch(creative)`, which sets **`game.creative`**, unlocks audio, unpauses,
   and emits `game:started`. Contains the **BUILD stamp**. ⚠️ **The build stamp is a
-  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 18 —
-  3 star systems · missions · fleet sphere · hangar stock'`) — no build-time injection; bump it manually per
+  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 19 —
+  the Night Hawk: mission reward + reinforcement call'`) — no build-time injection; bump it manually per
   playtest.
 - **Shop** (`ui/Shop.js`): pause-the-game modal, hailed with **`T`** (interim — no physical
   station yet). Tabs: **Sell Ore** (per-tier, Sell All), **Upgrades** (engine/weapon/shield,
@@ -1067,8 +1093,8 @@ means editing those strings too.
   `NODE_VERSION="22"`, `NPM_FLAGS="--include=dev"` (so Vite, a devDependency, always
   installs). Connect the repo in the browser → Deploy; the default branch is deploy-ready.
   Full click-by-click in **`DEPLOY.md`**. Alternative: drag
-  `builds/starfall-frontier-build18.zip` into Netlify Drop.
-- **`builds/starfall-frontier-build18.zip`** (~7.3 MB): a committed ready-to-serve `dist`
+  `builds/starfall-frontier-build19.zip` into Netlify Drop.
+- **`builds/starfall-frontier-build19.zip`** (~7.6 MB): a committed ready-to-serve `dist`
   (index.html + JS/CSS + the 4 GLBs). Convention: one zip per published build, old one
   deleted. **Don't gitignore `builds/` or `public/models-glb/`.**
 - **Local dev** (`LOCAL_DEV.md`, `run.command`, `.nvmrc`): `npm start` (= `vite --open`)

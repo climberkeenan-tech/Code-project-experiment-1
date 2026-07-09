@@ -144,17 +144,44 @@ export class Shop {
     else this.refs.shopBody.innerHTML = this._renderRepair();
   }
 
+  /** Hover text: every special feature of a hull, for the ships tab. */
+  _shipFeatures(s) {
+    const parts = [`Level ${s.level}`, `hull ×${s.hull}`, `shield ×${s.shield}`, `engine ×${s.engine}`, `crew ${s.crew}`];
+    if (s.weapon) parts.push(`gun ×${s.weapon}`);
+    if (s.turrets) parts.push(`${s.turrets} gunner turrets`);
+    if (s.hangar) parts.push(`hangar for ${s.hangar} fighters`);
+    if (s.gunnerHangar) parts.push(`+${s.gunnerHangar} gunner-ship bays`);
+    if (s.reinforce) parts.push('SPECIAL: press G to call 1-40 allied reinforcements');
+    if (s.noLanding) parts.push('too large to land');
+    if (s.missionLocked) parts.push('mission reward — first one free');
+    return parts.join(' · ');
+  }
+
   _renderShips() {
     const player = this.game.player;
+    const missions = this.game.missions;
     return PLAYER_SHIPS.map((s) => {
       const owned = player.ships.owned.includes(s.id);
       const active = player.ships.active === s.id;
       const afford = this._afford(s.cost);
+      // Mission-locked hulls show a progress bar until the ladder is done.
+      if (s.missionLocked && !owned && missions && !missions.completedAll) {
+        const pct = Math.round((missions.index / missions.ladder.length) * 100);
+        return `
+      <div class="shop-row locked" title="${this._shipFeatures(s)}">
+        <span class="shop-row-name">🔒 ${s.name}</span>
+        <span class="shop-row-meta">complete ALL missions to unlock — first one FREE
+          <span class="ship-progress"><span class="ship-progress-fill" style="width:${pct}%"></span></span>
+          ${missions.index}/${missions.ladder.length} missions
+        </span>
+        <button class="shop-btn disabled">Locked</button>
+      </div>`;
+      }
       const btn = active ? `<button class="shop-btn disabled">Active</button>`
         : owned ? `<button class="shop-btn" data-action="selectShip" data-arg="${s.id}">Select</button>`
           : `<button class="shop-btn ${afford ? 'primary' : 'disabled'}" data-action="buyShip" data-arg="${s.id}">Buy · ${s.cost} cr</button>`;
       return `
-        <div class="shop-row">
+        <div class="shop-row" title="${this._shipFeatures(s)}">
           <span class="shop-row-name">${s.name} <small>Lv ${s.level}</small></span>
           <span class="shop-row-meta">hull ×${s.hull} · shd ×${s.shield} · crew ${s.crew}${s.turrets ? ` · ⌖${s.turrets} turrets` : ''}${s.hangar ? ` · ⬡${s.hangar} hangar` : ''}</span>
           ${btn}
@@ -255,10 +282,12 @@ export class Shop {
       const done = i < missions.index;
       const current = i === missions.index;
       const activeNow = current && !!missions.active;
+      const wrongShip = current && missions.wrongShip();
       const btn = done ? `<button class="shop-btn disabled">Complete ✓</button>`
         : activeNow ? `<button class="shop-btn disabled">In progress…</button>`
-          : current ? `<button class="shop-btn primary" data-action="startMission" data-arg="">Start Mission</button>`
-            : `<button class="shop-btn disabled">Locked</button>`;
+          : wrongShip ? `<button class="shop-btn disabled">Requires SF-10 Sentinel</button>`
+            : current ? `<button class="shop-btn primary" data-action="startMission" data-arg="">Start Mission</button>`
+              : `<button class="shop-btn disabled">Locked</button>`;
       return `
       <div class="shop-row">
         <span class="shop-row-name">Mission ${i + 1}</span>

@@ -77,6 +77,15 @@ export class HUD {
       <div class="entry-glow" data-el="entryGlow"></div>
       <div class="underwater" data-el="underwater"></div>
       <div class="air-meter" data-el="airMeter"></div>
+      <div class="reinforce-popup" data-el="reinforcePopup">
+        <div class="rp-title">Call Reinforcements</div>
+        <div class="rp-sub">How many allied ships should answer? (1–40)</div>
+        <input type="number" min="1" max="40" value="10" data-el="reinforceCount">
+        <div class="rp-row">
+          <button class="rp-btn primary" data-el="reinforceGo">Call them in</button>
+          <button class="rp-btn" data-el="reinforceCancel">Cancel</button>
+        </div>
+      </div>
       <div class="hud-debug" data-el="debug"></div>
     `;
     root.appendChild(this.el);
@@ -129,6 +138,33 @@ export class HUD {
       if ((game.player?.statMult?.hangar ?? 0) > 0) {
         this.showBanner('Fleet Ready', 'press G — your ships deploy as a protective fleet around you', 3.6);
       }
+    });
+    // Night Hawk: the G-key reinforcement call popup.
+    game.events.on('reinforce:prompt', () => {
+      this.refs.reinforcePopup.classList.add('visible');
+      game.paused = true;
+      setTimeout(() => this.refs.reinforceCount.focus(), 50);
+    });
+    const closeReinforce = () => {
+      this.refs.reinforcePopup.classList.remove('visible');
+      game.paused = false;
+    };
+    this.refs.reinforceGo.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const n = Math.max(1, Math.min(40, parseInt(this.refs.reinforceCount.value, 10) || 10));
+      closeReinforce();
+      game.events.emit('reinforce:call', { count: n });
+      this.showBanner('Reinforcements Inbound', `${n} allied ships answering your call`, 3);
+    });
+    this.refs.reinforceCancel.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      closeReinforce();
+    });
+    game.events.on('mission:allcomplete', () => {
+      this.showBanner('★ NIGHT HAWK UNLOCKED ★', 'all missions complete — your free Night Hawk is in the Ships tab', 6);
+    });
+    game.events.on('mission:progress', ({ left, total }) => {
+      this.showBanner('Mission Progress', `${total - left}/${total} targets destroyed`, 1.6);
     });
     game.events.on('system:entered', ({ name, from }) => {
       this.showBanner(`Entering the ${name} System`, `leaving ${from} behind — new worlds ahead`, 4.5);

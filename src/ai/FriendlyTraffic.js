@@ -203,6 +203,35 @@ export class FriendlyTraffic {
         ship.waypoint.sub(delta);
       }
     });
+
+    // The Night Hawk's special power: a called wave of allied ships.
+    game.events.on('reinforce:call', ({ count }) => this.spawnReinforcements(count));
+  }
+
+  /**
+   * Warp in `count` (1-40) allied reinforcements around the player. They are
+   * full combat allies (same AI as traffic) with a service life — once the
+   * area has been quiet for a while they cruise off and despawn.
+   */
+  spawnReinforcements(count) {
+    const game = this.game;
+    const n = Math.max(1, Math.min(40, Math.floor(count) || 1));
+    for (let i = 0; i < n; i++) {
+      const variant = i % 6 === 5 ? 'frigate' : (i % 3 === 2 ? 'explorer' : 'starter');
+      const ship = new TrafficShip(game, variant, 'Reinforcement');
+      ship.reinforcement = true;
+      ship.life = 150; // seconds of service (extended while fighting)
+      const ang = (i / n) * Math.PI * 2;
+      const r = 180 + (i % 5) * 70;
+      ship.position.copy(game.player.position);
+      ship.position.x += Math.cos(ang) * r;
+      ship.position.y += ((i % 3) - 1) * 60;
+      ship.position.z += Math.sin(ang) * r;
+      ship.waypoint.copy(ship.position);
+      ship._retarget = 0;
+      this.ships.push(ship);
+    }
+    game.audio?.playTone?.({ type: 'sine', freq: 420, freqEnd: 880, duration: 0.5, gain: 0.2 });
   }
 
   update(dt) {
@@ -210,7 +239,17 @@ export class FriendlyTraffic {
     const player = game.player;
     if (!player) return;
 
-    for (const ship of this.ships) ship.update(dt);
+    for (const ship of this.ships) {
+      ship.update(dt);
+      // Reinforcements serve a tour then leave (never mid-fight).
+      if (ship.reinforcement) {
+        ship.life -= dt;
+        if (ship.life <= 0 && !ship.target?.alive) {
+          ship.dispose();
+          this.ships.splice(this.ships.indexOf(ship), 1);
+        }
+      }
+    }
 
     this._checkTimer -= dt;
     if (this._checkTimer > 0) return;

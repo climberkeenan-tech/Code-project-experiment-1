@@ -848,3 +848,74 @@
   box-shadow: 0 0 8px rgba(140, 210, 255, 0.7);
   transform: scale(1);
 }
+
+/* ---------- reinforcement call popup (Night Hawk) ---------- */
+
+.reinforce-popup {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 22px;
+  background: var(--hud-glass);
+  border: 1px solid var(--hud-accent-dim);
+  border-radius: 4px;
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+  text-align: center;
+  min-width: 260px;
+}
+.reinforce-popup.visible { display: flex; }
+.reinforce-popup .rp-title {
+  font-size: 15px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+}
+.reinforce-popup .rp-sub { font-size: 11px; opacity: 0.75; }
+.reinforce-popup input {
+  font-family: var(--hud-mono);
+  font-size: 20px;
+  text-align: center;
+  background: rgba(134, 231, 255, 0.08);
+  border: 1px solid var(--hud-accent-dim);
+  border-radius: 3px;
+  color: var(--hud-accent);
+  padding: 6px;
+  outline: none;
+}
+.reinforce-popup .rp-row { display: flex; gap: 8px; justify-content: center; }
+.rp-btn {
+  font-family: var(--hud-font);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 7px 14px;
+  background: rgba(134, 231, 255, 0.08);
+  border: 1px solid var(--hud-accent-dim);
+  border-radius: 3px;
+  color: var(--hud-accent);
+  cursor: pointer;
+}
+.rp-btn.primary { background: rgba(134, 231, 255, 0.22); }
+.rp-btn:hover { background: rgba(134, 231, 255, 0.3); }
+
+/* mission-unlock progress bar in the ships tab */
+.ship-progress {
+  display: block;
+  height: 5px;
+  margin: 4px 0 2px;
+  background: rgba(134, 231, 255, 0.12);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.ship-progress-fill {
+  display: block;
+  height: 100%;
+  background: #ffd479;
+  box-shadow: 0 0 6px #ffd479;
+  border-radius: 2px;
+}
+.shop-row.locked { opacity: 0.75; }

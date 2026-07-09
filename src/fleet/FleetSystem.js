@@ -78,7 +78,10 @@ export class FleetSystem {
     const game = this.game;
 
     if (game.mode === 'flight' && game.input.consumeFleet()) {
-      if (this.deployed) this.recall(false);
+      if (game.player.statMult?.reinforce) {
+        // Night Hawk special: G calls in allied reinforcements instead.
+        game.events.emit('reinforce:prompt');
+      } else if (this.deployed) this.recall(false);
       else this.launch();
     }
 

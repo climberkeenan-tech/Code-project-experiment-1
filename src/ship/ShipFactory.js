@@ -221,6 +221,14 @@ export const PLAYER_SHIPS = [
   { id: 'interceptor', name: 'SF-30 Kestrel', level: 30, cost: 800,
     hull: 1.5, shield: 1.45, engine: 1.18, crew: 3, model: 'gunship', modelScale: 1.18,
     scale: 1.14, hullColor: 0xd6c9b9, accentColor: 0x4a3524, glow: [3.6, 2.2, 0.7] },
+  // The Night Hawk: mission-reward interceptor. LOCKED until every mission
+  // is complete (first one is granted FREE); replacements cost 1400 cr.
+  // Special power: press G to CALL REINFORCEMENTS — a chosen number of
+  // allied ships (1-40) warp in and fight for you.
+  { id: 'nighthawk', name: 'SF-45 Night Hawk', level: 45, cost: 1400,
+    hull: 2.0, shield: 1.9, engine: 1.42, crew: 3, weapon: 1.4,
+    model: 'nighthawk', reinforce: true, missionLocked: true,
+    scale: 1.2, hullColor: 0x2a3242, accentColor: 0x101722, glow: [2.4, 1.1, 5.8] },
   // SF-50 / SF-70: the "gunner ship" line, each on its own player-authored
   // hull, with a heavier gun (catalog `weapon` — a multiplier on the player's
   // bolt damage). SF-50 = 1.5x, SF-70 = 2x.
