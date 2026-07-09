@@ -3,17 +3,19 @@ import { SimplexNoise } from '../core/math/noise.js';
 import { Rng } from '../core/math/rng.js';
 
 /**
- * The NATURE EDITOR (playtest ask: "create something for me so I can see the
- * game and create the terrain and place the bushes and rocks and trees").
+ * Placed-nature layer: the data store + renderer for player-designed props
+ * (trees, bushes, rocks, grass) on planet surfaces.
  *
- * While ON FOOT, press P: a palette bar opens with 8 nature props — trees,
- * bushes, flowers, rocks, grass. Click the ground to plant the selected prop
- * where you're looking; X removes the nearest placed prop; P closes.
+ * EDITING lives in the standalone WORLD EDITOR (src/editor/WorldEditor.js,
+ * launched from the start screen — playtest: "the planetary editor is for
+ * me… it shouldn't be an in-game experience"). This system only loads,
+ * spawns, and persists what the editor placed, so designs appear in the
+ * actual game when you land and walk there.
  *
  * Placements are PERSISTENT (their own localStorage key, independent of the
- * save slot, so creative-mode decorating carries into survival) and are
- * stored in planet-local coordinates, parented to the planet group — the
- * floating origin and planet day/night need no special handling.
+ * save slot, so editor decorating carries into survival) and are stored in
+ * planet-local coordinates, parented to the planet group — the floating
+ * origin and planet day/night need no special handling.
  *
  * The props are hand-built (flat-shaded fBm blobs + vertex-colour gradients,
  * the game's art style). The palette is designed to grow: a Meshy GLB can be
@@ -21,9 +23,8 @@ import { Rng } from '../core/math/rng.js';
  */
 
 const STORE_KEY = 'starfall.props.v1';
-const MAX_PER_PLANET = 500;
-const PLACE_RANGE = 90; // how far ahead you can plant
-const REMOVE_RANGE = 12;
+export const MAX_PER_PLANET = 500;
+const REMOVE_RANGE = 60; // editor delete reach around the cursor point
 
 export class NatureEditor {
   /** @param {import('../core/Game.js').Game} game */
@@ -31,126 +32,20 @@ export class NatureEditor {
     this.game = game;
     game.natureEditor = this;
 
-    this.open = false;
-    this.selected = 0;
     /** @type {Map<string, Array<{t:number,p:[number,number,number],s:number,r:number}>>} */
     this.placed = this._load();
     /** Planet name → THREE.Group of live prop meshes (built on first visit). */
     this._live = new Map();
     this._counter = 0;
 
-    this._ray = new THREE.Vector3();
     this._point = new THREE.Vector3();
     this._up = new THREE.Vector3();
 
-    this._buildBar();
-
     // Build a planet's saved props the first time we set foot on it.
     game.events.on('onfoot:entered', (planet) => this._ensureBuilt(planet));
-    game.events.on('onfoot:left', () => this._setOpen(false));
-
-    window.addEventListener('keydown', (e) => {
-      if (game.mode !== 'onfoot') return;
-      if (e.code === 'KeyP' && !e.repeat) this._setOpen(!this.open);
-      if (!this.open) return;
-      if (e.code.startsWith('Digit')) {
-        const n = Number(e.code.slice(5)) - 1;
-        if (n >= 0 && n < PROPS.length) this._select(n);
-      }
-      if (e.code === 'KeyX' && !e.repeat) this._removeNearest();
-    });
-    window.addEventListener('mousedown', (e) => {
-      if (!this.open || game.mode !== 'onfoot' || e.button !== 0) return;
-      if (e.target && e.target.closest?.('.nature-bar')) return; // palette click
-      this._placeAtAim();
-    });
   }
 
   update() {} // event-driven; registered as a system for lifecycle symmetry
-
-  // ------------------------------------------------------------------
-  // UI
-  // ------------------------------------------------------------------
-
-  _buildBar() {
-    const bar = document.createElement('div');
-    bar.className = 'nature-bar';
-    bar.innerHTML = `
-      <div class="nb-title">NATURE EDITOR</div>
-      <div class="nb-row">${PROPS.map((p, i) => `
-        <button class="nb-item" data-i="${i}"><span class="nb-icon">${p.icon}</span>${i + 1}·${p.name}</button>`).join('')}
-      </div>
-      <div class="nb-hint">click the ground to plant · <b>X</b> removes nearest · <b>1-8</b> pick · <b>P</b> close
-        <span class="nb-count" data-el="count"></span></div>
-    `;
-    document.body.appendChild(bar);
-    this.bar = bar;
-    this._countEl = bar.querySelector('[data-el="count"]');
-    for (const btn of bar.querySelectorAll('.nb-item')) {
-      btn.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this._select(Number(btn.dataset.i));
-      });
-    }
-    this._select(0);
-  }
-
-  _select(i) {
-    this.selected = i;
-    for (const btn of this.bar.querySelectorAll('.nb-item')) {
-      btn.classList.toggle('active', Number(btn.dataset.i) === i);
-    }
-  }
-
-  _setOpen(open) {
-    if (this.open === open) return;
-    this.open = open;
-    this.bar.classList.toggle('visible', open);
-    this._refreshCount();
-    this.game.audio?.playTone?.({
-      type: 'sine', freq: open ? 520 : 420, freqEnd: open ? 760 : 300, duration: 0.12, gain: 0.1,
-    });
-  }
-
-  _refreshCount() {
-    const planet = this.game.onfoot?.planet;
-    if (!planet || !this._countEl) return;
-    const list = this.placed.get(planet.descriptor.name) ?? [];
-    this._countEl.textContent = ` · ${list.length}/${MAX_PER_PLANET} placed here`;
-  }
-
-  // ------------------------------------------------------------------
-  // Placement
-  // ------------------------------------------------------------------
-
-  /** March the camera ray against the terrain; null when no ground ahead. */
-  _aimGround(planet) {
-    const cam = this.game.engine.camera;
-    cam.getWorldDirection(this._ray);
-    for (let t = 2; t < PLACE_RANGE; t += 0.5) {
-      this._point.copy(cam.position).addScaledVector(this._ray, t);
-      if (planet.getAltitude(this._point) <= 0) {
-        // Refine: back off to the surface along the radial.
-        const alt = planet.getAltitude(this._point);
-        this._up.copy(this._point).sub(planet.group.position).normalize();
-        this._point.addScaledVector(this._up, -alt);
-        return this._point;
-      }
-    }
-    return null;
-  }
-
-  _placeAtAim() {
-    const planet = this.game.onfoot?.planet;
-    if (!planet) return;
-    const point = this._aimGround(planet);
-    if (!point) {
-      this.game.audio?.playTone?.({ type: 'square', freq: 180, freqEnd: 120, duration: 0.1, gain: 0.08 });
-      return;
-    }
-    this.placeProp(planet, point, this.selected);
-  }
 
   /**
    * Plant a prop at a world-space ground point (also the harness test API).
@@ -182,30 +77,29 @@ export class NatureEditor {
     this._save();
     this._ensureBuilt(planet);
     if (wasBuilt) this._spawn(planet, entry);
-    this._refreshCount();
     this.game.audio?.playTone?.({ type: 'triangle', freq: 660, freqEnd: 880, duration: 0.08, gain: 0.1 });
     return true;
   }
 
-  /** Remove the placed prop nearest the avatar (within REMOVE_RANGE). */
-  _removeNearest() {
-    const planet = this.game.onfoot?.planet;
-    const avatar = this.game.onfoot?.avatar;
-    if (!planet || !avatar) return;
+  /**
+   * Remove the placed prop nearest a world-space point (editor delete).
+   * @returns {boolean} removed
+   */
+  removeNearest(planet, worldPoint) {
     const name = planet.descriptor.name;
     const list = this.placed.get(name) ?? [];
     const group = this._live.get(name);
-    if (!list.length || !group) return;
+    if (!list.length || !group) return false;
 
     let best = -1;
     let bestSq = REMOVE_RANGE * REMOVE_RANGE;
     for (let i = 0; i < list.length; i++) {
       const [x, y, z] = list[i].p;
       this._point.set(x, y, z).add(planet.group.position);
-      const d = this._point.distanceToSquared(avatar.position);
+      const d = this._point.distanceToSquared(worldPoint);
       if (d < bestSq) { bestSq = d; best = i; }
     }
-    if (best === -1) return;
+    if (best === -1) return false;
     const [entry] = list.splice(best, 1);
     this._save();
     if (entry._mesh) {
@@ -215,8 +109,8 @@ export class NatureEditor {
       const child = group.children.find((c) => c.userData.entry === entry);
       if (child) group.remove(child);
     }
-    this._refreshCount();
     this.game.audio?.playTone?.({ type: 'sine', freq: 420, freqEnd: 240, duration: 0.1, gain: 0.1 });
+    return true;
   }
 
   // ------------------------------------------------------------------
@@ -225,12 +119,11 @@ export class NatureEditor {
 
   _ensureBuilt(planet) {
     const name = planet.descriptor.name;
-    if (this._live.has(name)) { this._refreshCount(); return; }
+    if (this._live.has(name)) return;
     const group = new THREE.Group();
     planet.group.add(group);
     this._live.set(name, group);
     for (const entry of this.placed.get(name) ?? []) this._spawn(planet, entry);
-    this._refreshCount();
   }
 
   _spawn(planet, entry) {
@@ -496,7 +389,7 @@ function def(name, icon, variants, partsFn, noShadow = false) {
   };
 }
 
-const PROPS = [
+export const PROPS = [
   def('Oak', '🌳', 4, oakParts),
   def('Pine', '🌲', 3, pineParts),
   def('Palm', '🌴', 3, palmParts),

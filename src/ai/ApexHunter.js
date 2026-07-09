@@ -35,6 +35,7 @@ export class ApexHunter {
 
   update(dt) {
     const game = this.game;
+    if (game.editorMode) return; // world editor: the hunt waits
     const player = game.player;
     if (!player || !player.alive) return;
     // The hunt waits while a mission contract is live (a hunter already in

@@ -259,6 +259,7 @@ export class FriendlyTraffic {
 
   update(dt) {
     const game = this.game;
+    if (game.editorMode) return; // world editor: skies stay empty
     const player = game.player;
     if (!player) return;
 

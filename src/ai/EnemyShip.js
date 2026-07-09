@@ -88,10 +88,15 @@ export const ENEMY_TYPES = {
 // Playtest: "the game is really easy — make the enemy ships more dangerous,
 // raise their power by 25%." A flat buff to every hostile's hull, shield,
 // and gun, applied once at load so every spawn path gets it.
+// Second pass ("the enemy ships are still not aggressive"): sharper aim,
+// faster trigger fingers, and they pick fights from noticeably farther out.
 for (const stats of Object.values(ENEMY_TYPES)) {
   stats.hull = Math.round(stats.hull * 1.25);
   stats.shield = Math.round(stats.shield * 1.25);
   stats.damage = Math.round(stats.damage * 1.25);
+  stats.accuracy = Math.min(0.97, (stats.accuracy ?? 0.7) + 0.08);
+  stats.fireInterval *= 0.9;
+  stats.detectRange = Math.round(stats.detectRange * 1.3);
 }
 
 /** AI states — see `_updateAI` for the transition graph. */
@@ -255,7 +260,10 @@ export class EnemyShip extends ShipBase {
     if (!currentValid) this.victim = null;
     this._victimTimer = 1.2 + this.rng.range(0, 0.8);
 
-    const allyBias = this.id % 3 === 0 ? 0.55 : 1.6;
+    // Playtest round 2: "they need to kill more blue guys" — HALF of every
+    // class hunts allied ships by preference now, and even player-hunters
+    // switch to a blue ship that's meaningfully closer.
+    const allyBias = this.id % 2 === 0 ? 0.45 : 1.25;
     let best = playerAlive ? player : null;
     let bestScore = playerAlive
       ? this.position.distanceToSquared(player.position) : Infinity;

@@ -1028,3 +1028,30 @@
   letter-spacing: 0.08em;
   opacity: 0.75;
 }
+
+/* --- World editor top row (planet nav / count / speed / exit) --- */
+.we-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+.we-planet { color: #8fe1b0; letter-spacing: 0.18em; min-width: 140px; }
+.we-meta { opacity: 0.7; font-size: 10px; }
+.we-btn {
+  background: rgba(18, 34, 48, 0.9);
+  border: 1px solid rgba(134, 231, 255, 0.25);
+  border-radius: 6px;
+  color: #cfeefc;
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.we-btn:hover { border-color: #86e7ff; }
+.we-exit { border-color: rgba(255, 93, 108, 0.5); color: #ff9aa5; }
+.mode-btn.editor .mode-name { color: #8fe1b0; }
+.editor-mode #game-canvas { cursor: crosshair; }

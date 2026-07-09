@@ -51,6 +51,7 @@ export class Reinforcements {
   }
 
   update(dt) {
+    if (this.game.editorMode) return; // world editor: no escalation
     if (this.queue.length === 0) return;
     const game = this.game;
     const player = game.player;

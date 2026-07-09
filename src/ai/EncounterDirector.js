@@ -143,6 +143,7 @@ export class EncounterDirector {
   }
 
   update(dt) {
+    if (this.game.editorMode) return; // world editor: no hostiles, ever
     this._checkTimer -= dt;
     if (this._checkTimer > 0) return;
     this._checkTimer = CHECK_INTERVAL;

@@ -43,6 +43,10 @@ export class Screens {
           <span class="mode-name">✦ &nbsp;Creative</span>
           <span class="mode-desc">Unlimited credits — buy any ship or upgrade for free</span>
         </button>
+        <button class="mode-btn editor" data-mode="editor">
+          <span class="mode-name">🛠 &nbsp;World Editor</span>
+          <span class="mode-desc">Design planets like a game engine — fly free, place trees &amp; rocks</span>
+        </button>
       </div>
       <div class="controls-hint">${this._controlsHint()}</div>
       <div class="model-loading" data-el="modelLoading">
@@ -50,7 +54,7 @@ export class Screens {
         <span class="ml-bar"><span class="ml-fill"></span></span>
       </div>
       <div class="reset-save">Reset progress</div>
-      <div class="build-tag">BUILD 25 — missiles that hunt + the NATURE EDITOR (on foot, press P)</div>
+      <div class="build-tag">BUILD 26 — the WORLD EDITOR (its own button ↑) + meaner, ally-hunting enemies</div>
     `;
     this.root.appendChild(el);
 
@@ -77,8 +81,9 @@ export class Screens {
       for (const btn of el.querySelectorAll('.mode-btn')) btn.classList.remove('waiting');
     });
 
-    // `creative` chooses the free-build economy; survival is the normal game.
-    const launch = (creative) => {
+    // `creative` chooses the free-build economy; survival is the normal
+    // game; `editor` boots creative then hands control to the WorldEditor.
+    const launch = (creative, editor = false) => {
       if (launched || !modelsReady) return;
       launched = true;
       window.removeEventListener('keydown', onKey);
@@ -86,6 +91,7 @@ export class Screens {
       this.game.audio.unlock();
       this.game.paused = false;
       this.game.events.emit('game:started');
+      if (editor) this.game.events.emit('editor:enter');
       el.classList.add('hidden');
       setTimeout(() => el.remove(), 700);
     };
@@ -96,7 +102,8 @@ export class Screens {
     for (const btn of el.querySelectorAll('.mode-btn')) {
       btn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        launch(btn.dataset.mode === 'creative');
+        const mode = btn.dataset.mode;
+        launch(mode !== 'survival', mode === 'editor');
       });
     }
     window.addEventListener('keydown', onKey);
