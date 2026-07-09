@@ -33,10 +33,15 @@ const HEAT_COOL_RATE = 26;
 const OVERHEAT_LOCK_UNTIL = 30;
 const NEAR_MISS_DIST = 20;
 
-const MISSILE_SPEED = 300;
-const MISSILE_LIFETIME = 6;
-const MISSILE_TURN_RATE = 1.6; // rad/s homing agility (dodgeable)
-const MISSILE_HIT_RADIUS = 6; // proximity fuse
+// Playtest: "the missiles don't go at you and hit your ship" — at 300 u/s
+// they were slower than most cruise speeds and died after 6 s, so they never
+// closed. Now they genuinely chase you down: faster than any non-boost
+// cruise, longer burn, harder tracking. Escapes that still work: BOOST away,
+// out-turn them up close (turn radius ≈ speed/rate ≈ 300 m), or C-key them.
+const MISSILE_SPEED = 680;
+const MISSILE_LIFETIME = 9;
+const MISSILE_TURN_RATE = 2.2; // rad/s homing agility (dodgeable)
+const MISSILE_HIT_RADIUS = 8; // proximity fuse
 
 export class WeaponSystem {
   /** @param {import('../core/Game.js').Game} game */
@@ -108,6 +113,7 @@ export class WeaponSystem {
     this._toTarget = new THREE.Vector3();
     this._closest = new THREE.Vector3();
     this._segment = new THREE.Vector3();
+    this._axis = new THREE.Vector3();
     this._jitterQuat = new THREE.Quaternion();
     this._jitterEuler = new THREE.Euler();
 
@@ -392,20 +398,28 @@ export class WeaponSystem {
       }
 
       // Homing missiles bend their velocity toward the target, capped by a
-      // turn rate so a jinking player can shake or outrun them.
+      // turn rate so a jinking player can shake or outrun them. TRUE
+      // axis-angle rotation at the full turn rate — the old lerp stepped by
+      // 1−cos(rate·dt) ≈ 0.6%/frame, so missiles could barely turn at all
+      // (playtest: "the missiles don't go at you and hit your ship").
       if (bolt.homing && bolt.target && bolt.target.alive) {
         this._toTarget.copy(bolt.target.position).sub(bolt.mesh.position);
         const dist = this._toTarget.length();
         if (dist > 1e-3) {
           this._toTarget.divideScalar(dist);
           this._dir.copy(bolt.velocity).normalize();
-          const maxCos = Math.cos(bolt.turnRate * dt);
-          const dot = clamp(this._dir.dot(this._toTarget), -1, 1);
-          if (dot < maxCos) {
-            // Rotate _dir toward target by the turn-rate step (slerp-ish).
-            this._dir.lerp(this._toTarget, 1 - Math.cos(bolt.turnRate * dt)).normalize();
-          } else {
+          const angle = Math.acos(clamp(this._dir.dot(this._toTarget), -1, 1));
+          const step = bolt.turnRate * dt;
+          if (angle <= step) {
             this._dir.copy(this._toTarget);
+          } else {
+            this._axis.crossVectors(this._dir, this._toTarget);
+            if (this._axis.lengthSq() > 1e-10) {
+              this._dir.applyAxisAngle(this._axis.normalize(), step);
+            } else {
+              // Dead astern: any nudge breaks the anti-parallel stalemate.
+              this._dir.lerp(this._toTarget, 0.2).normalize();
+            }
           }
           bolt.velocity.copy(this._dir).multiplyScalar(bolt.speed);
           bolt.mesh.quaternion.setFromUnitVectors(UP, this._dir);

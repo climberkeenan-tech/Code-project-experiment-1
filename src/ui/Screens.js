@@ -50,7 +50,7 @@ export class Screens {
         <span class="ml-bar"><span class="ml-fill"></span></span>
       </div>
       <div class="reset-save">Reset progress</div>
-      <div class="build-tag">BUILD 24 — enemies +25%, they hunt your allies, defenders hold, deadly fortress</div>
+      <div class="build-tag">BUILD 25 — missiles that hunt + the NATURE EDITOR (on foot, press P)</div>
     `;
     this.root.appendChild(el);
 

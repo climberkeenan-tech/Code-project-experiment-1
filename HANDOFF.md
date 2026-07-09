@@ -4,7 +4,7 @@ _This is the **single, current** handoff — it supersedes and folds in the two
 earlier `HANDOFF.md` files (see lineage below). Everything here was read out of
 the source, not remembered. Branch `claude/spaceship-assets-integration-57k8bu`,
 also fast-forwarded onto the default branch `claude/3d-space-exploration-game-ogrezx`;
-working tree clean, everything committed. **Current build: BUILD 24.**_
+working tree clean, everything committed. **Current build: BUILD 25.**_
 
 > **Handoff lineage — the three handoffs (this one replaces the other two).**
 > 1. **Original** developer handoff (pre-model era): lives in git history around
@@ -431,6 +431,37 @@ Three fixes:
   the alarm is up. **ALARM**: any `combat:hit-confirmed` on the hub or a
   guard sets a 25 s garrison-wide rage (all patrol → chase), refreshed per
   hit, cleared on stand-down.
+
+### BUILD 25 — homing missiles fixed + the Nature Editor
+**Missiles** (playtest: "the missiles don't go at you and hit your ship") —
+TWO compounding bugs: (1) speed 300 was slower than most cruise speeds and
+the 6 s lifetime expired mid-chase → now 680 u/s / 9 s / turn 2.2 rad/s /
+fuse 8; (2) the homing steer turned by `1 − cos(rate·dt)` ≈ 0.6%/frame
+(quadratically tiny) → replaced with a TRUE axis-angle rotation at the full
+turn-rate step (`_axis` scratch). Escapes that still work: boost away,
+out-turn at close range (turn radius ≈ 300 m), C-key countermeasure.
+
+**Nature Editor** (`src/world/NatureEditor.js`, playtest: "place the bushes
+and rocks and trees"): ON FOOT, **P** toggles a palette bar (8 props: oak,
+pine, palm, bush, flowers, rock, boulders, grass) · **click the ground** to
+plant at the aimed point (camera-ray march vs `planet.getAltitude`, ≤90 m)
+· **1–8** select · **X** removes nearest (≤12 m) · 500/planet cap.
+Persistence: own localStorage key `starfall.props.v1` (NOT the save slot —
+decorating carries between creative and survival on purpose), planet-local
+coords, meshes parented to `planet.group` (origin shifts free; terrain never
+rotates). Every prop variant is baked into ONE merged non-indexed geometry
+(`mergeParts`, cached per `type:variant`) so each placement is a single
+draw call; grass casts no shadow. Props are flat-shaded fBm blobs + vertex
+colour gradients; to add a Meshy GLB prop later, add a PROPS entry whose
+`geo()` returns its geometry. Live groups build lazily on first on-foot
+visit per session (`_ensureBuilt`); note placeProp must NOT double-spawn on
+the first build (the `wasBuilt` guard — bit us once).
+
+**UE asset reality check** (recorded for future asks): Unreal
+Marketplace/Fab assets are licensed+formatted for Unreal only; kenney.nl /
+quaternius.com / polyhaven.com are unreachable from the workspace proxy.
+Real scanned/modelled props should come in as user-uploaded GLBs (Meshy
+chat attachments — the ship pipeline) and get added to PROPS.
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally
@@ -1131,8 +1162,8 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   (`.mode-btn` buttons; keyboard **Enter/Space** = Survival, **C** = Creative). The chosen
   button calls `launch(creative)`, which sets **`game.creative`**, unlocks audio, unpauses,
   and emits `game:started`. Contains the **BUILD stamp**. ⚠️ **The build stamp is a
-  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 24 —
-  enemies +25%, they hunt your allies, defenders hold, deadly fortress'`) — no build-time injection; bump it manually per
+  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 25 —
+  missiles that hunt + the NATURE EDITOR (on foot, press P)'`) — no build-time injection; bump it manually per
   playtest.
 - **Shop** (`ui/Shop.js`): pause-the-game modal, hailed with **`T`** (interim — no physical
   station yet). Tabs: **Sell Ore** (per-tier, Sell All), **Upgrades** (engine/weapon/shield,
@@ -1199,8 +1230,8 @@ means editing those strings too.
   `NODE_VERSION="22"`, `NPM_FLAGS="--include=dev"` (so Vite, a devDependency, always
   installs). Connect the repo in the browser → Deploy; the default branch is deploy-ready.
   Full click-by-click in **`DEPLOY.md`**. Alternative: drag
-  `builds/starfall-frontier-build24.zip` into Netlify Drop.
-- **`builds/starfall-frontier-build24.zip`** (~10 MB): a committed ready-to-serve `dist`
+  `builds/starfall-frontier-build25.zip` into Netlify Drop.
+- **`builds/starfall-frontier-build25.zip`** (~10 MB): a committed ready-to-serve `dist`
   (index.html + JS/CSS + the 12 GLBs). Convention: one zip per published build, old one
   deleted. **Don't gitignore `builds/` or `public/models-glb/`.**
 - **Local dev** (`LOCAL_DEV.md`, `run.command`, `.nvmrc`): `npm start` (= `vite --open`)
