@@ -36,8 +36,13 @@ const GEN_REWARD = {
 };
 for (let i = LADDER.length; i < 75; i++) {
   const type = GEN_TYPES[Math.min(GEN_TYPES.length - 1, Math.floor((i - 10) / 10))];
-  const count = 1 + (i % 4); // waves of 1-4
-  const escorts = i % 3 === 0 ? Math.min(4, 1 + Math.floor(i / 25)) : 0;
+  // Playtest: "the game is really easy — it took me 23 minutes to complete."
+  // Bigger waves that keep growing with depth (2-6 of the rung's class),
+  // escorts on most rungs instead of every third.
+  const count = Math.min(6, 2 + (i % 3) + Math.floor((i - 10) / 20));
+  const escorts = i % 2 === 0
+    ? Math.min(6, 2 + Math.floor(i / 20))
+    : Math.min(3, Math.floor(i / 25));
   const ships = new Array(count).fill(type).concat(new Array(escorts).fill('scout'));
   const label = count > 1
     ? `Destroy a squadron of ${count} ${GEN_NAMES[type]}s${escorts ? ` (+${escorts} escorts)` : ''}`

@@ -34,6 +34,14 @@ const STREAM_INTERVAL = 0.6; // seconds between launches while under cap
 // First fill is FAST (the shell must already be swarming when the player
 // arrives from a warp drop ~19 km out); losses refill at the normal pace.
 const FILL_INTERVAL = 0.12;
+// Fortress veterans (playtest: "I defeated the Leviathan in minutes — make
+// the ships more aggressive, shoot harder, kill you"): every guard carries
+// a private stats copy that hits harder, shoots faster, aims better, and
+// detects intruders across fortress space.
+const GUARD_DAMAGE = 1.5; // × on top of the global enemy buff
+const GUARD_TOUGHNESS = 1.4;
+const GUARD_DETECT = 9000; // shell guards light up ~16 km from the hub
+const ALARM_TIME = 25; // seconds the whole garrison stays enraged per hit
 
 // Endless-supply mix — scout-heavy, echoing the design ratios (1,000 lv10 /
 // 50 lv30–40 / 25 lv50–60 / 10 of each capital class) at simulatable scale.
@@ -131,7 +139,14 @@ export class Leviathan {
     this._announced = false;
     this._fallen = false;
     this._filled = false;
+    this._alarm = 0;
     this._dir = new THREE.Vector3();
+
+    // ALARM: land a single hit on the fortress or any of its guards and the
+    // ENTIRE garrison drops patrol and attacks ("they protect it hard").
+    game.events.on('combat:hit-confirmed', ({ target }) => {
+      if (target === this.hub || target?.hubGuard) this._alarm = ALARM_TIME;
+    });
   }
 
   update(dt) {
@@ -164,12 +179,21 @@ export class Leviathan {
       this.guards.length = 0;
       this._announced = false;
       this._filled = false; // next visit re-fills the shell fast again
+      this._alarm = 0;
       return;
     }
 
     if (!this._announced && dist < ACTIVE_RANGE) {
       this._announced = true;
       game.events.emit('leviathan:contact');
+    }
+
+    // While the alarm rings, no guard sits in patrol — everything attacks.
+    if (this._alarm > 0) {
+      this._alarm -= dt;
+      for (const g of this.guards) {
+        if (g.state === 'patrol') g.state = 'chase';
+      }
     }
 
     // Missions are private fights — the stream holds while one is live.
@@ -232,6 +256,26 @@ export class Leviathan {
 
     const guard = game.enemies.spawn(type, spawnPos, hub.position, patrolRadius);
     guard.hubGuard = true; // outside the ambient encounter/reinforcement economy
+    // Fortress veterans: harder-hitting, faster-firing, sharper, tougher,
+    // and they see intruders across fortress space (private stats copy —
+    // ENEMY_TYPES itself is shared by every other spawn in the game).
+    guard.stats = {
+      ...guard.stats,
+      damage: Math.round(guard.stats.damage * GUARD_DAMAGE),
+      fireInterval: guard.stats.fireInterval * 0.8,
+      accuracy: Math.min(0.95, (guard.stats.accuracy ?? 0.7) + 0.1),
+      detectRange: Math.max(guard.stats.detectRange, GUARD_DETECT),
+    };
+    guard.hullMax = guard.hull = Math.round(guard.hullMax * GUARD_TOUGHNESS);
+    guard.shieldMax = guard.shield = Math.round(guard.shieldMax * GUARD_TOUGHNESS);
+    guard.fearless = true; // garrison ships never retreat
+    // Born angry when the intruder is already at the walls (or the alarm is
+    // up) — replacements fly straight out of the hangar into the fight.
+    const player = game.player;
+    if (this._alarm > 0
+      || (player && player.position.distanceTo(hub.position) < 8000)) {
+      guard.state = 'chase';
+    }
     guard.velocity.copy(this._dir).multiplyScalar(70);
     this.guards.push(guard);
   }

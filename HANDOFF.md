@@ -4,7 +4,7 @@ _This is the **single, current** handoff — it supersedes and folds in the two
 earlier `HANDOFF.md` files (see lineage below). Everything here was read out of
 the source, not remembered. Branch `claude/spaceship-assets-integration-57k8bu`,
 also fast-forwarded onto the default branch `claude/3d-space-exploration-game-ogrezx`;
-working tree clean, everything committed. **Current build: BUILD 23.**_
+working tree clean, everything committed. **Current build: BUILD 24.**_
 
 > **Handoff lineage — the three handoffs (this one replaces the other two).**
 > 1. **Original** developer handoff (pre-model era): lives in git history around
@@ -405,6 +405,32 @@ Three fixes:
   drop), then `STREAM_INTERVAL` 0.6 s for refills; reaching cap arms the full
   0.6 s delay so a kill is never replaced instantly. Stand-down resets to
   fast fill for the next visit.
+
+### BUILD 24 — difficulty pass (playtest: "really easy, beat it in 23 min")
+- **+25% enemy power**: `ENEMY_TYPES` hull/shield/damage scaled ×1.25 once at
+  module load in `EnemyShip.js` — every spawn path inherits it.
+- **Victim system** (`EnemyShip.victim`, `_pickVictim`): hostiles hunt the
+  player OR an allied ship (escorts + traffic). Score = distanceSq × bias²;
+  every third ship (`id % 3 === 0`) is an ally-hunter (bias 0.55), the rest
+  prefer the player (allies at 1.6×). Sticky ~1.2–2 s re-pick; apex always
+  hunts the player. The whole FSM (chase/attack/kite/retreat/evade/lead) and
+  `WeaponSystem._updateEnemyFire` now aim at `victim` — movement and gunfire
+  agree, so blue ships genuinely die. The old 55%-random fire-share block in
+  WeaponSystem was REPLACED by victim-based targeting.
+- **Defender leash** (`EscortShip`): `DEFENDER_LEASH = 750` — defenders drop
+  any target (sticky or V-ordered) farther than that from the flagship and
+  fall back to the shell ("guard ships still leave my side" fix).
+- **Harder generated missions**: rungs 11–75 waves of 2–6 (+depth), escorts
+  on most rungs — final rung is an 11-ship raid. First 10 handcrafted rungs
+  untouched.
+- **Fortress veterans** ("I defeated the Leviathan in minutes"): every
+  garrison ship gets a PRIVATE stats copy (never mutate shared ENEMY_TYPES):
+  damage ×1.5, fireInterval ×0.8, accuracy +0.1 (cap 0.95), detectRange ≥
+  9000; hull/shield ×1.4; `fearless = true` (never retreats — checked in the
+  EnemyShip retreat rule); born in `chase` when the player is within 8 km or
+  the alarm is up. **ALARM**: any `combat:hit-confirmed` on the hub or a
+  guard sets a 25 s garrison-wide rage (all patrol → chase), refreshed per
+  hit, cleared on stand-down.
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally
@@ -1105,8 +1131,8 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   (`.mode-btn` buttons; keyboard **Enter/Space** = Survival, **C** = Creative). The chosen
   button calls `launch(creative)`, which sets **`game.creative`**, unlocks audio, unpauses,
   and emits `game:started`. Contains the **BUILD stamp**. ⚠️ **The build stamp is a
-  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 23 —
-  the Leviathan is findable: red ☠ marker + [B] warp lock'`) — no build-time injection; bump it manually per
+  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 24 —
+  enemies +25%, they hunt your allies, defenders hold, deadly fortress'`) — no build-time injection; bump it manually per
   playtest.
 - **Shop** (`ui/Shop.js`): pause-the-game modal, hailed with **`T`** (interim — no physical
   station yet). Tabs: **Sell Ore** (per-tier, Sell All), **Upgrades** (engine/weapon/shield,
@@ -1173,8 +1199,8 @@ means editing those strings too.
   `NODE_VERSION="22"`, `NPM_FLAGS="--include=dev"` (so Vite, a devDependency, always
   installs). Connect the repo in the browser → Deploy; the default branch is deploy-ready.
   Full click-by-click in **`DEPLOY.md`**. Alternative: drag
-  `builds/starfall-frontier-build23.zip` into Netlify Drop.
-- **`builds/starfall-frontier-build23.zip`** (~10 MB): a committed ready-to-serve `dist`
+  `builds/starfall-frontier-build24.zip` into Netlify Drop.
+- **`builds/starfall-frontier-build24.zip`** (~10 MB): a committed ready-to-serve `dist`
   (index.html + JS/CSS + the 12 GLBs). Convention: one zip per published build, old one
   deleted. **Don't gitignore `builds/` or `public/models-glb/`.**
 - **Local dev** (`LOCAL_DEV.md`, `run.command`, `.nvmrc`): `npm start` (= `vite --open`)

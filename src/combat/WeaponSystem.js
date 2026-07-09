@@ -309,40 +309,15 @@ export class WeaponSystem {
     const player = this.game.player;
     if (!enemies || !player) return;
 
-    const escorts = this.game.fleet?.escorts;
-
     for (const enemy of enemies.enemies) {
       if (!enemy.alive || !enemy.triggerHeld || enemy.fireCooldown > 0) continue;
 
       enemy.fireCooldown = enemy.stats.fireInterval * (0.85 + Math.random() * 0.3);
 
-      // Target selection: the player by default, but a closer deployed
-      // escort draws fire about half the time — fleets share the heat.
-      let target = player;
-      {
-        // Every allied combatant is a candidate: deployed wing craft AND
-        // ambient traffic allies (playtest: "the good ships never die" —
-        // now they genuinely trade fire and take losses).
-        let nearest = null;
-        let nearestSq = Infinity;
-        for (const esc of escorts ?? []) {
-          if (!esc.alive) continue;
-          const d = esc.position.distanceToSquared(enemy.position);
-          if (d < nearestSq) { nearestSq = d; nearest = esc; }
-        }
-        for (const ally of this.game.traffic?.ships ?? []) {
-          if (!ally.alive) continue;
-          const d = ally.position.distanceToSquared(enemy.position);
-          if (d < nearestSq) { nearestSq = d; nearest = ally; }
-        }
-        // An ally at comparable range draws fire more often than not —
-        // dogfighting wingmen genuinely share the heat.
-        if (nearest
-          && nearestSq < enemy.position.distanceToSquared(player.position) * 1.7
-          && Math.random() < 0.55) {
-          target = nearest;
-        }
-      }
+      // Fire at whoever the AI is hunting (the victim system): the player
+      // by default, or the allied ship this hostile has locked — movement
+      // and gunfire agree, so blue ships genuinely get hunted and killed.
+      const target = enemy.victim?.alive ? enemy.victim : player;
 
       const hardpoint = enemy.hardpoints[Math.floor(Math.random() * enemy.hardpoints.length)];
       this._muzzle.copy(hardpoint).applyQuaternion(enemy.quaternion).add(enemy.position);

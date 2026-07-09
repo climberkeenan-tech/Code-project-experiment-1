@@ -23,6 +23,7 @@ import { clamp, damp } from '../core/math/noise.js';
 
 const COMMAND_RANGE = 5000; // ordered (V) targets are pursued much further
 const CHASE_LEASH = 5200; // drop a locked target only past this far from the player
+const DEFENDER_LEASH = 750; // defenders NEVER chase past this from the flagship
 const GUARD_SELF_RANGE = 800; // guards engage hostiles this close to themselves…
 const GUARD_DEFEND_RANGE = 1200; // …or anything this close to the flagship
 const SCOUT_HUNT_RANGE = 2800; // scouts hunt anything this close to their patrol
@@ -225,15 +226,23 @@ export class EscortShip extends ShipBase {
   _acquire() {
     const fleet = this.game.fleet;
     const player = this.game.player;
+    // Focus orders and sticky locks respect the defender's short leash:
+    // playtest "the guard ships still leave my side when I need protecting"
+    // — a defender that picked up a doorstep threat used to chase it 5 km
+    // out. Now defenders drop anything that strays from the flagship and
+    // fall back to the shell.
     const ordered = fleet?.focusTarget;
     if (ordered?.alive
-      && ordered.position.distanceToSquared(this.position) < COMMAND_RANGE * COMMAND_RANGE) {
+      && ordered.position.distanceToSquared(this.position) < COMMAND_RANGE * COMMAND_RANGE
+      && (!this.defender
+        || ordered.position.distanceToSquared(player.position) < DEFENDER_LEASH * DEFENDER_LEASH)) {
       return ordered;
     }
 
     // Sticky lock: stay on the same hostile until it is destroyed.
+    const leash = this.defender ? DEFENDER_LEASH : CHASE_LEASH;
     if (this.target?.alive
-      && this.target.position.distanceToSquared(player.position) < CHASE_LEASH * CHASE_LEASH) {
+      && this.target.position.distanceToSquared(player.position) < leash * leash) {
       return this.target;
     }
     this.target = null;

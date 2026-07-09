@@ -85,6 +85,15 @@ export const ENEMY_TYPES = {
   },
 };
 
+// Playtest: "the game is really easy — make the enemy ships more dangerous,
+// raise their power by 25%." A flat buff to every hostile's hull, shield,
+// and gun, applied once at load so every spawn path gets it.
+for (const stats of Object.values(ENEMY_TYPES)) {
+  stats.hull = Math.round(stats.hull * 1.25);
+  stats.shield = Math.round(stats.shield * 1.25);
+  stats.damage = Math.round(stats.damage * 1.25);
+}
+
 /** AI states — see `_updateAI` for the transition graph. */
 const State = {
   PATROL: 'patrol',
@@ -144,6 +153,15 @@ export class EnemyShip extends ShipBase {
 
     /** Weapon system (Phase 4) reads this to spawn bolts. */
     this.triggerHeld = false;
+
+    /**
+     * Who this ship is hunting: the player, a deployed escort, or an allied
+     * traffic ship (playtest: "have them be killing some blue ships and even
+     * my ships"). A third of every class prefers the blue ships; re-picked
+     * every second or two so locks stay sticky but never stale.
+     */
+    this.victim = null;
+    this._victimTimer = this.rng.range(0, 1.2);
 
     /** Encounter-director region this ship belongs to (null = scripted). */
     this.region = null;
@@ -215,10 +233,47 @@ export class EnemyShip extends ShipBase {
     }
   }
 
+  /**
+   * Choose who to hunt. The player is the default prey, but allied ships
+   * are fair game: each candidate is scored by distance with a per-ship
+   * bias — ally-hunters (every third ship) see blue ships as "closer",
+   * everyone else needs an ally to be genuinely nearer to switch. The apex
+   * only ever hunts the player.
+   */
+  _pickVictim(dt, playerAlive) {
+    const game = this.game;
+    const player = game.player;
+    if (this.stats.apex) {
+      this.victim = playerAlive ? player : null;
+      return this.victim;
+    }
+    this._victimTimer -= dt;
+    const current = this.victim;
+    const currentValid = current
+      && (current === player ? playerAlive : current.alive);
+    if (currentValid && this._victimTimer > 0) return current;
+    if (!currentValid) this.victim = null;
+    this._victimTimer = 1.2 + this.rng.range(0, 0.8);
+
+    const allyBias = this.id % 3 === 0 ? 0.55 : 1.6;
+    let best = playerAlive ? player : null;
+    let bestScore = playerAlive
+      ? this.position.distanceToSquared(player.position) : Infinity;
+    const consider = (ship) => {
+      if (!ship || !ship.alive) return;
+      const score = this.position.distanceToSquared(ship.position) * allyBias * allyBias;
+      if (score < bestScore) { bestScore = score; best = ship; }
+    };
+    for (const esc of game.fleet?.escorts ?? []) consider(esc);
+    for (const ally of game.traffic?.ships ?? []) consider(ally);
+    this.victim = best;
+    return best;
+  }
+
   _startEvade() {
     // Dodge perpendicular to the line of sight, random handedness.
-    const player = this.game.player;
-    this._toTarget.copy(player.position).sub(this.position).normalize();
+    const from = this.victim ?? this.game.player;
+    this._toTarget.copy(from.position).sub(this.position).normalize();
     const [ux, uy, uz] = this.rng.unitVector();
     this._evadeDir.set(ux, uy, uz).cross(this._toTarget);
     if (this._evadeDir.lengthSq() < 0.05) this._evadeDir.set(0, 1, 0);
@@ -241,11 +296,12 @@ export class EnemyShip extends ShipBase {
 
     const player = this.game.player;
     const playerAlive = player && player.alive;
-    const distToPlayer = playerAlive
-      ? this._toTarget.copy(player.position).sub(this.position).length()
+    const victim = this._pickVictim(dt, playerAlive);
+    const distToVictim = victim
+      ? this._toTarget.copy(victim.position).sub(this.position).length()
       : Infinity;
 
-    this._updateAI(dt, distToPlayer, playerAlive);
+    this._updateAI(dt, distToVictim, !!victim);
 
     // Common integration + defense.
     this.integrate(dt);
@@ -261,18 +317,20 @@ export class EnemyShip extends ShipBase {
    *  ATTACK/CHASE --hit & skilled--> EVADE  --timer--> CHASE
    *  any --hull < 28%--> RETREAT --safe distance--> PATROL
    */
-  _updateAI(dt, distToPlayer, playerAlive) {
+  _updateAI(dt, distToVictim, victimAlive) {
     const stats = this.stats;
-    const player = this.game.player;
+    const victim = this.victim;
     this.triggerHeld = false;
 
     // The apex never patrols, never loses you, never retreats.
-    if (stats.apex && playerAlive && this.state === State.PATROL) {
+    if (stats.apex && victimAlive && this.state === State.PATROL) {
       this._setState(State.CHASE);
     }
 
-    // Universal retreat check (apex excluded: it does not know fear).
-    if (!stats.apex && this.state !== State.RETREAT && this.hull / this.hullMax < 0.28) {
+    // Universal retreat check (apex excluded: it does not know fear; the
+    // Leviathan's garrison sets `fearless` — it defends to the death).
+    if (!stats.apex && !this.fearless
+      && this.state !== State.RETREAT && this.hull / this.hullMax < 0.28) {
       this._setState(State.RETREAT);
       this.game.events.emit('enemy:retreating', this);
     }
@@ -283,7 +341,7 @@ export class EnemyShip extends ShipBase {
     switch (this.state) {
       case State.PATROL: {
         if (this.position.distanceTo(this.waypoint) < 60) this._pickPatrolWaypoint();
-        if (playerAlive && distToPlayer < stats.detectRange) {
+        if (victimAlive && distToVictim < stats.detectRange) {
           this._setState(State.CHASE);
           this.game.events.emit('enemy:detected-player', this);
         }
@@ -291,11 +349,11 @@ export class EnemyShip extends ShipBase {
       }
 
       case State.CHASE: {
-        if (!playerAlive) { this._setState(State.PATROL); break; }
-        target = player.position;
+        if (!victimAlive) { this._setState(State.PATROL); break; }
+        target = victim.position;
         speedFactor = 1;
-        // Lose interest if the player outruns detection for a while.
-        if (distToPlayer > stats.detectRange * 1.8) {
+        // Lose interest if the prey outruns detection for a while.
+        if (distToVictim > stats.detectRange * 1.8) {
           this._lostSightTime += dt;
           if (this._lostSightTime > 5) {
             this._lostSightTime = 0;
@@ -305,7 +363,7 @@ export class EnemyShip extends ShipBase {
           this._lostSightTime = 0;
         }
         // Turret ships open fire from any angle; gunships must line up first.
-        if (distToPlayer < stats.fireRange && (stats.turret || this._isAlignedWithPlayer(0.93))) {
+        if (distToVictim < stats.fireRange && (stats.turret || this._isAlignedWith(victim, 0.93))) {
           this._setState(State.ATTACK);
           this._attackRunTime = stats.attackRunTime;
         }
@@ -313,8 +371,8 @@ export class EnemyShip extends ShipBase {
       }
 
       case State.ATTACK: {
-        if (!playerAlive) { this._setState(State.PATROL); break; }
-        target = player.position;
+        if (!victimAlive) { this._setState(State.PATROL); break; }
+        target = victim.position;
         this._attackRunTime -= dt;
 
         if (stats.weapon === 'missile') {
@@ -322,25 +380,25 @@ export class EnemyShip extends ShipBase {
           // Aim is forgiving because the missile does the tracking; turret
           // hulls launch from any facing.
           const kite = stats.kiteRange || 600;
-          speedFactor = distToPlayer < kite ? 0.45 : 0.85;
-          this.triggerHeld = distToPlayer < stats.fireRange
-            && (stats.turret || this._isAlignedWithPlayer(0.72));
+          speedFactor = distToVictim < kite ? 0.45 : 0.85;
+          this.triggerHeld = distToVictim < stats.fireRange
+            && (stats.turret || this._isAlignedWith(victim, 0.72));
           if (this._attackRunTime <= 0) this._startEvade();
-          else if (distToPlayer > stats.fireRange * 1.4) this._setState(State.CHASE);
+          else if (distToVictim > stats.fireRange * 1.4) this._setState(State.CHASE);
         } else if (stats.turret) {
           // Turret gun platforms: hold station near kite range, fire freely.
           const kite = stats.kiteRange || 400;
-          speedFactor = distToPlayer < kite ? 0.3 : 0.7;
-          this.triggerHeld = distToPlayer < stats.fireRange;
-          if (distToPlayer > stats.fireRange * 1.5) this._setState(State.CHASE);
+          speedFactor = distToVictim < kite ? 0.3 : 0.7;
+          this.triggerHeld = distToVictim < stats.fireRange;
+          if (distToVictim > stats.fireRange * 1.5) this._setState(State.CHASE);
         } else {
           // Gunships close in and strafe. Bleed speed near the merge.
-          speedFactor = clamp(distToPlayer / 220, 0.35, 1);
+          speedFactor = clamp(distToVictim / 220, 0.35, 1);
           // Loosened from 0.988 so enemies actually land shots (playtest fix).
-          this.triggerHeld = this._isAlignedWithPlayer(0.965) && distToPlayer < stats.fireRange;
-          if (distToPlayer < 70 || this._attackRunTime <= 0) {
+          this.triggerHeld = this._isAlignedWith(victim, 0.965) && distToVictim < stats.fireRange;
+          if (distToVictim < 70 || this._attackRunTime <= 0) {
             this._startEvade();
-          } else if (distToPlayer > stats.fireRange * 1.35) {
+          } else if (distToVictim > stats.fireRange * 1.35) {
             this._setState(State.CHASE);
           }
         }
@@ -364,14 +422,14 @@ export class EnemyShip extends ShipBase {
       case State.EVADE: {
         speedFactor = 1;
         if (this.stateTime > this._evadeDuration) {
-          this._setState(playerAlive ? State.CHASE : State.PATROL);
+          this._setState(victimAlive ? State.CHASE : State.PATROL);
         }
         break;
       }
 
       case State.RETREAT: {
         speedFactor = 1.1; // adrenaline
-        if (!playerAlive || distToPlayer > 1400) {
+        if (!victimAlive || distToVictim > 1400) {
           this._setState(State.PATROL);
           this._pickPatrolWaypoint();
         }
@@ -381,19 +439,19 @@ export class EnemyShip extends ShipBase {
 
     // --- Desired direction ---
     const kiteAway = this.state === State.ATTACK && stats.weapon === 'missile'
-      && playerAlive && distToPlayer < (stats.kiteRange || 600) * 0.8;
+      && victimAlive && distToVictim < (stats.kiteRange || 600) * 0.8;
     if (this.state === State.EVADE) {
       this._desired.copy(this._evadeDir);
-    } else if ((this.state === State.RETREAT || kiteAway) && playerAlive) {
-      this._desired.copy(this.position).sub(player.position).normalize();
+    } else if ((this.state === State.RETREAT || kiteAway) && victimAlive) {
+      this._desired.copy(this.position).sub(victim.position).normalize();
     } else {
       this._desired.copy(target).sub(this.position);
       const dist = this._desired.length();
       if (dist > 1e-3) this._desired.divideScalar(dist);
       else this._desired.set(0, 0, -1);
-      // Lead the player slightly while attacking so bolts connect.
-      if (this.state === State.ATTACK && playerAlive) {
-        this._desired.addScaledVector(player.velocity, clamp(dist / 900, 0, 0.4) / 900)
+      // Lead the prey slightly while attacking so bolts connect.
+      if (this.state === State.ATTACK && victimAlive) {
+        this._desired.addScaledVector(victim.velocity, clamp(dist / 900, 0, 0.4) / 900)
           .normalize();
       }
     }
@@ -403,11 +461,10 @@ export class EnemyShip extends ShipBase {
     this._applyThrust(speedFactor, dt);
   }
 
-  /** True when the nose points near the player. */
-  _isAlignedWithPlayer(minDot) {
-    const player = this.game.player;
+  /** True when the nose points near the given ship. */
+  _isAlignedWith(ship, minDot) {
     this.getForward(this._fwd);
-    this._toTarget.copy(player.position).sub(this.position).normalize();
+    this._toTarget.copy(ship.position).sub(this.position).normalize();
     return this._fwd.dot(this._toTarget) > minDot;
   }
 

@@ -50,7 +50,7 @@ export class Screens {
         <span class="ml-bar"><span class="ml-fill"></span></span>
       </div>
       <div class="reset-save">Reset progress</div>
-      <div class="build-tag">BUILD 23 — the Leviathan is findable: red ☠ marker + [B] warp lock</div>
+      <div class="build-tag">BUILD 24 — enemies +25%, they hunt your allies, defenders hold, deadly fortress</div>
     `;
     this.root.appendChild(el);
 
