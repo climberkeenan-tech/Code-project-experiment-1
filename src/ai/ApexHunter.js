@@ -37,6 +37,9 @@ export class ApexHunter {
     const game = this.game;
     const player = game.player;
     if (!player || !player.alive) return;
+    // The hunt waits while a mission contract is live (a hunter already in
+    // play keeps hunting — only NEW arrivals pause).
+    if (game.missions?.active && !this.hunter) return;
 
     // Detect death/removal (the manager splices it out of the live list).
     if (this.hunter && (!this.hunter.alive || !game.enemies.enemies.includes(this.hunter))) {

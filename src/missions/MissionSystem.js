@@ -54,12 +54,27 @@ export class MissionSystem {
     return !!(def?.requiresShip && this.game.player?.ships.active !== def.requiresShip);
   }
 
+  /**
+   * Remove hostiles that gate-crashed the contract (e.g. fighters deployed
+   * by a mission carrier) so post-mission space is clean. Anything that
+   * existed BEFORE the mission is left alone.
+   */
+  _sweepUninvited() {
+    const enemies = this.game.enemies;
+    if (!enemies || !this._preExisting) return;
+    for (const e of [...enemies.enemies]) {
+      if (!this._preExisting.has(e)) enemies.remove(e);
+    }
+    this._preExisting = null;
+  }
+
   /** Spawn the current rung's target group ahead of the player. */
   start() {
     const game = this.game;
     if (this.active || this.completedAll || !game.player?.alive) return false;
     const def = LADDER[this.index];
     if (this.wrongShip()) return false;
+    this._preExisting = new Set(game.enemies?.enemies ?? []);
     game.player.getForward(this._fwd);
     const remaining = new Set();
     def.ships.forEach((type, i) => {
@@ -82,6 +97,7 @@ export class MissionSystem {
     for (const ship of this.active.remaining) {
       if (!this.game.enemies.enemies.includes(ship) && ship.alive) {
         this.active = null;
+        this._sweepUninvited();
         this.game.events.emit('mission:lost');
         return;
       }
@@ -92,6 +108,7 @@ export class MissionSystem {
     const game = this.game;
     const { def } = this.active;
     this.active = null;
+    this._sweepUninvited();
     this.index += 1;
     game.player.credits += def.reward;
     game.events.emit('mission:completed', { reward: def.reward, label: def.label });

@@ -4,7 +4,7 @@ _This is the **single, current** handoff — it supersedes and folds in the two
 earlier `HANDOFF.md` files (see lineage below). Everything here was read out of
 the source, not remembered. Branch `claude/spaceship-assets-integration-57k8bu`,
 also fast-forwarded onto the default branch `claude/3d-space-exploration-game-ogrezx`;
-working tree clean, everything committed. **Current build: BUILD 20.**_
+working tree clean, everything committed. **Current build: BUILD 21.**_
 
 > **Handoff lineage — the three handoffs (this one replaces the other two).**
 > 1. **Original** developer handoff (pre-model era): lives in git history around
@@ -333,6 +333,16 @@ The start screen now **blocks launch until every GLB hull is loaded**
 Player, enemies, escorts and traffic therefore always spawn on their REAL
 models — the procedural stand-ins can no longer render first. The hot-swap
 path remains only as recovery for a failed download.
+
+### BUILD 21 — mission isolation (no gate-crashers)
+While a contract is live (`missions.active`): the **EncounterDirector spawns
+nothing**, **Reinforcements never queue** (mission kills aren't "revenge"
+kills — guard runs before MissionSystem completes, listener order matters),
+and a not-yet-spawned **ApexHunter waits**. `MissionSystem` snapshots the
+pre-mission enemy list; on completion/loss `_sweepUninvited()` despawns any
+hostile that appeared during the fight and wasn't part of it (e.g. fighters a
+mission carrier deployed) — pre-existing ambient enemies are left alone, and
+normal spawning resumes the moment the contract ends.
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally
@@ -1033,8 +1043,8 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   (`.mode-btn` buttons; keyboard **Enter/Space** = Survival, **C** = Creative). The chosen
   button calls `launch(creative)`, which sets **`game.creative`**, unlocks audio, unpauses,
   and emits `game:started`. Contains the **BUILD stamp**. ⚠️ **The build stamp is a
-  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 20 —
-  no more old-model flash: ships fully load before launch'`) — no build-time injection; bump it manually per
+  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 21 —
+  missions are private fights: no random enemies crash them'`) — no build-time injection; bump it manually per
   playtest.
 - **Shop** (`ui/Shop.js`): pause-the-game modal, hailed with **`T`** (interim — no physical
   station yet). Tabs: **Sell Ore** (per-tier, Sell All), **Upgrades** (engine/weapon/shield,
@@ -1101,8 +1111,8 @@ means editing those strings too.
   `NODE_VERSION="22"`, `NPM_FLAGS="--include=dev"` (so Vite, a devDependency, always
   installs). Connect the repo in the browser → Deploy; the default branch is deploy-ready.
   Full click-by-click in **`DEPLOY.md`**. Alternative: drag
-  `builds/starfall-frontier-build20.zip` into Netlify Drop.
-- **`builds/starfall-frontier-build20.zip`** (~7.6 MB): a committed ready-to-serve `dist`
+  `builds/starfall-frontier-build21.zip` into Netlify Drop.
+- **`builds/starfall-frontier-build21.zip`** (~7.6 MB): a committed ready-to-serve `dist`
   (index.html + JS/CSS + the 4 GLBs). Convention: one zip per published build, old one
   deleted. **Don't gitignore `builds/` or `public/models-glb/`.**
 - **Local dev** (`LOCAL_DEV.md`, `run.command`, `.nvmrc`): `npm start` (= `vite --open`)

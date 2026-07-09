@@ -34,6 +34,8 @@ export class Reinforcements {
 
     game.events.on('enemy:killed', (ship) => {
       if (!ship?.stats || ship.stats.apex) return;
+      // Mission kills don't call for revenge — the contract is the fight.
+      if (game.missions?.active) return;
       const type = REPLACEMENT[ship.type] ?? ship.type;
       const firstWave = this.queue.length === 0;
       for (let i = 0; i < 2; i++) {

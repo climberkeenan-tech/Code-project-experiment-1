@@ -147,6 +147,10 @@ export class EncounterDirector {
     if (this._checkTimer > 0) return;
     this._checkTimer = CHECK_INTERVAL;
 
+    // Mission fights are curated: no ambient territorial spawns while a
+    // contract is live — random hostiles resume the moment it ends.
+    if (this.game.missions?.active) return;
+
     const game = this.game;
     const player = game.player;
     const enemies = game.enemies;
