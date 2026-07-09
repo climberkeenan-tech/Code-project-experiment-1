@@ -57,7 +57,8 @@ export class AsteroidField {
 
     this.meshes = variants.map((geometry) => {
       const mesh = new THREE.InstancedMesh(geometry, material, perVariant);
-      mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+      // Dynamic: every rock tumbles in place, so matrices re-upload often.
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       // Start every slot at zero scale so unassigned instances (from ceil
       // rounding) can never appear as stray rocks at the field center.
       matrix.makeScale(0, 0, 0);
@@ -92,10 +93,15 @@ export class AsteroidField {
       const slot = Math.floor(i / this.meshes.length);
       mesh.setMatrixAt(slot, matrix);
 
+      const axis = new THREE.Vector3(rng.range(-1, 1), rng.range(-1, 1), rng.range(-1, 1));
+      if (axis.lengthSq() < 1e-4) axis.set(0, 1, 0);
+      axis.normalize();
       this.rocks.push({
         x: position.x, y: position.y, z: position.z, r: scale * 1.05,
         hp: 55 + scale * 16, // shootable: a few bolts crack a small rock
         mesh, slot, dead: false,
+        // Tumble state: each rock spins in place around its own fixed axis.
+        q: quaternion.clone(), scale, axis, rate: rng.range(0.06, 0.45),
       });
     }
     for (const mesh of this.meshes) {
@@ -140,12 +146,19 @@ export class AsteroidField {
     this._playerCooldown = 0;
     this._zeroMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
 
+    // Tumble scratch (compose is re-run per touched rock, never allocated).
+    this._tumbleCursor = 0;
+    this._tumbleQ = new THREE.Quaternion();
+    this._tumbleM = new THREE.Matrix4();
+    this._tumbleP = new THREE.Vector3();
+    this._tumbleS = new THREE.Vector3();
+
     // --- Drifters: a few free-roaming rocks that wander the field ---
     // (playtest: "there should be asteroids that move around"). Individual
     // meshes, so they can actually translate; shoot them to break them.
     /** @type {Array<object>} local-space records, also probed by sphereHit */
     this.drifters = [];
-    const driftCount = Math.min(6, Math.floor((this.rocks.length || 0) / 30));
+    const driftCount = Math.min(10, Math.floor((this.rocks.length || 0) / 18));
     for (let d = 0; d < driftCount; d++) {
       const r = rng.range(6, 14);
       const mesh = new THREE.Mesh(variants[d % variants.length], material);
@@ -239,6 +252,31 @@ export class AsteroidField {
   }
 
   update(dt) {
+    // Tumble: every rock spins in place (playtest: "the space rocks aren't
+    // moving"). Amortized — a third of the field per frame, and only while
+    // the player is close enough to watch — keeps hundreds of rocks cheap.
+    const playerPos = this.game.player?.position;
+    if (playerPos && this.rocks.length) {
+      const distSq = this._local.copy(playerPos).sub(this.group.position).lengthSq();
+      const wake = this.radius + 5000;
+      if (distSq < wake * wake) {
+        const slice = Math.ceil(this.rocks.length / 3);
+        const step = dt * 3; // each rock is touched every third frame
+        for (let n = 0; n < slice; n++) {
+          this._tumbleCursor = (this._tumbleCursor + 1) % this.rocks.length;
+          const rock = this.rocks[this._tumbleCursor];
+          if (rock.dead) continue;
+          this._tumbleQ.setFromAxisAngle(rock.axis, rock.rate * step);
+          rock.q.premultiply(this._tumbleQ).normalize();
+          this._tumbleP.set(rock.x, rock.y, rock.z);
+          this._tumbleS.setScalar(rock.scale);
+          this._tumbleM.compose(this._tumbleP, rock.q, this._tumbleS);
+          rock.mesh.setMatrixAt(rock.slot, this._tumbleM);
+          rock.mesh.instanceMatrix.needsUpdate = true;
+        }
+      }
+    }
+
     // Drifters wander slowly, tumbling; they turn back at the field edge.
     for (const d of this.drifters) {
       if (d.dead) continue;

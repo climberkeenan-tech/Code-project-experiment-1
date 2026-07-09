@@ -77,6 +77,16 @@ export class HUD {
       <div class="entry-glow" data-el="entryGlow"></div>
       <div class="underwater" data-el="underwater"></div>
       <div class="air-meter" data-el="airMeter"></div>
+      <div class="reinforce-popup fleetcall-popup" data-el="fleetcallPopup">
+        <div class="rp-title">Summon Your Fleet</div>
+        <div class="rp-sub">Pick the ships that answer (max 50 total)</div>
+        <div class="fc-rows" data-el="fleetcallRows"></div>
+        <div class="rp-sub" data-el="fleetcallTotal">0 / 50 ships</div>
+        <div class="rp-row">
+          <button class="rp-btn primary" data-el="fleetcallGo">Summon</button>
+          <button class="rp-btn" data-el="fleetcallCancel">Cancel</button>
+        </div>
+      </div>
       <div class="reinforce-popup" data-el="reinforcePopup">
         <div class="rp-title">Call Reinforcements</div>
         <div class="rp-sub">How many allied ships should answer? (1–40)</div>
@@ -115,6 +125,12 @@ export class HUD {
     game.events.on('combat:contact', ({ count }) => {
       this.showBanner('Hostile Contacts', `${count} signatures approaching`, 3);
     });
+    game.events.on('leviathan:contact', () => {
+      this.showBanner('⚠ OBSIDIAN LEVIATHAN ⚠', 'enemy fortress — its garrison is endless', 5);
+    });
+    game.events.on('leviathan:destroyed', () => {
+      this.showBanner('★ THE LEVIATHAN HAS FALLEN ★', 'the enemy hub is destroyed', 6);
+    });
     game.events.on('combat:reward', ({ credits, name }) => {
       if (credits > 0) this.showBanner(`+${credits} cr`, `${name} destroyed`, 1.6);
     });
@@ -139,6 +155,59 @@ export class HUD {
         this.showBanner('Fleet Ready', 'press G — your ships deploy as a protective fleet around you', 3.6);
       }
     });
+    // Star Destroyer: the G-key fleet-composition call (pick ships, max 50).
+    const FLEET_ROWS = [
+      ['aethelred', 'SF-200 Aethelred', 1], ['carrier', 'SF-110 Vanguard', 3],
+      ['battleship', 'SF-85 Dreadnought', 5], ['sovereign', 'SF-100 Sovereign', 20],
+      ['battlecruiser', 'SF-70 Bastion', 20], ['frigate', 'SF-50 Aegis', 20],
+      ['explorer', 'SF-20 Gunship', 25], ['starter', 'SF-10 Sentinel', 50],
+    ];
+    this.refs.fleetcallRows.innerHTML = FLEET_ROWS.map(([id, name, max]) => `
+      <label class="fc-row"><span>${name} <small>(max ${max})</small></span>
+        <input type="number" min="0" max="${max}" value="0" data-fleet="${id}" data-max="${max}">
+      </label>`).join('');
+    const fcInputs = [...this.refs.fleetcallRows.querySelectorAll('input')];
+    const fcTotal = () => fcInputs.reduce((sum, inp) => {
+      const max2 = parseInt(inp.dataset.max, 10);
+      const v = Math.max(0, Math.min(max2, parseInt(inp.value, 10) || 0));
+      return sum + v;
+    }, 0);
+    const fcRefresh = () => {
+      const t = fcTotal();
+      this.refs.fleetcallTotal.textContent = `${t} / 50 ships${t > 50 ? ' — TOO MANY' : ''}`;
+      this.refs.fleetcallTotal.style.color = t > 50 ? '#ff5d6c' : '';
+    };
+    for (const inp of fcInputs) inp.addEventListener('input', fcRefresh);
+    game.events.on('fleetcall:prompt', () => {
+      this.refs.fleetcallPopup.classList.add('visible');
+      game.paused = true;
+      fcRefresh();
+    });
+    const closeFleetcall = () => {
+      this.refs.fleetcallPopup.classList.remove('visible');
+      game.paused = false;
+    };
+    this.refs.fleetcallGo.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const variants = [];
+      let budget = 50;
+      for (const inp of fcInputs) {
+        const max2 = parseInt(inp.dataset.max, 10);
+        let v = Math.max(0, Math.min(max2, parseInt(inp.value, 10) || 0));
+        v = Math.min(v, budget);
+        budget -= v;
+        for (let i = 0; i < v; i++) variants.push(inp.dataset.fleet);
+      }
+      if (!variants.length) { closeFleetcall(); return; }
+      closeFleetcall();
+      game.events.emit('fleetcall:call', { variants });
+      this.showBanner('Fleet Answering', `${variants.length} ships jumping to your position`, 3.2);
+    });
+    this.refs.fleetcallCancel.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      closeFleetcall();
+    });
+
     // Night Hawk: the G-key reinforcement call popup.
     game.events.on('reinforce:prompt', () => {
       this.refs.reinforcePopup.classList.add('visible');
@@ -161,7 +230,10 @@ export class HUD {
       closeReinforce();
     });
     game.events.on('mission:allcomplete', () => {
-      this.showBanner('★ NIGHT HAWK UNLOCKED ★', 'all missions complete — your free Night Hawk is in the Ships tab', 6);
+      this.showBanner('★ ALL 75 MISSIONS COMPLETE ★', 'the entire reward hangar is yours', 6);
+    });
+    game.events.on('mission:shipunlock', ({ name }) => {
+      this.showBanner(`★ ${name.toUpperCase()} UNLOCKED ★`, 'your free ship is waiting in the Ships tab', 6);
     });
     game.events.on('mission:progress', ({ left, total }) => {
       this.showBanner('Mission Progress', `${total - left}/${total} targets destroyed`, 1.6);

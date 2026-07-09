@@ -78,7 +78,10 @@ export class FleetSystem {
     const game = this.game;
 
     if (game.mode === 'flight' && game.input.consumeFleet()) {
-      if (game.player.statMult?.reinforce) {
+      if (game.player.statMult?.fleetCall) {
+        // Star Destroyer special: G opens the fleet-composition call.
+        game.events.emit('fleetcall:prompt');
+      } else if (game.player.statMult?.reinforce) {
         // Night Hawk special: G calls in allied reinforcements instead.
         game.events.emit('reinforce:prompt');
       } else if (this.deployed) this.recall(false);

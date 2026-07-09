@@ -4,7 +4,7 @@ _This is the **single, current** handoff — it supersedes and folds in the two
 earlier `HANDOFF.md` files (see lineage below). Everything here was read out of
 the source, not remembered. Branch `claude/spaceship-assets-integration-57k8bu`,
 also fast-forwarded onto the default branch `claude/3d-space-exploration-game-ogrezx`;
-working tree clean, everything committed. **Current build: BUILD 21.**_
+working tree clean, everything committed. **Current build: BUILD 22.**_
 
 > **Handoff lineage — the three handoffs (this one replaces the other two).**
 > 1. **Original** developer handoff (pre-model era): lives in git history around
@@ -343,6 +343,49 @@ pre-mission enemy list; on completion/loss `_sweepUninvited()` despawns any
 hostile that appeared during the fight and wasn't part of it (e.g. fighters a
 mission carrier deployed) — pre-existing ambient enemies are left alone, and
 normal spawning resumes the moment the contract ends.
+
+### BUILD 22 — fleet call, 4 new hulls, the Obsidian Leviathan, tumbling rocks
+Four new Meshy GLBs in `public/models-glb/` (same compress pipeline):
+**stardestroyer** (SF-150, `fleetCall`, mission-25 reward, `noLanding`),
+**falcon** (SF-60, mission-40 reward), **wedge** (SF-55 Void Wedge, level 50,
+mission-50 reward), **leviathan** (targetLength 2600 — not a player hull).
+Aethelred moved up to **level 75 / mission-75 reward** ("overpowered" per
+playtest). All flyables have measured `anchors`; **leviathan.glb has inverted
+winding** — `HubFortress` sets `THREE.DoubleSide` on its materials or it's
+invisible from outside (bit us once; don't remove).
+
+**Missions**: ladder auto-generates to **75 deterministic rungs**;
+`_complete()` grants any catalog ship with `unlockAt === index` FREE and emits
+`mission:shipunlock` (HUD banner). Shop shows 🔒 rows with progress bars for
+`unlockAt` hulls; `_buyShip` refuses early buys — **creative mode bypasses all
+locks** (everything visible/buyable/free).
+
+**Fleet call** (Star Destroyer): G emits `fleetcall:prompt` → HUD popup with 8
+ship rows (max 1 aethelred / 3 carrier / 5 battleship / 20 sovereign / 20
+battlecruiser / 20 frigate / 25 explorer / 50 starter), running total, budget
+trimmed to **50 total** → `fleetcall:call {variants}` →
+`FriendlyTraffic.spawnFleet` (200 s tours, never leave mid-fight). G routing in
+FleetSystem: `fleetCall` → popup, else `reinforce` (Night Hawk) → popup, else
+normal launch/recall.
+
+**Obsidian Leviathan** (`src/ai/Leviathan.js`): the enemy HUB — a
+planet-scale (radius ≈ 1083) stationary fortress at absolute
+`(430000, 26000, -380000)`, **150,000 hull**, no shield. It's a pseudo-enemy
+pushed into `enemies.enemies` (player/ally bolts hit it; radar rim-arc via
+`stats.apex`; kill pays 150,000 cr) AND into `game.obstacles` (AI steers
+around; enemy bolts die on it). Garrison: endless stream out of the hull —
+GUARD_CAP 70 live, 0.6 s interval, scout-heavy mix (48 scouts / 6+6
+fighter+heavy / 4 cruiser / 2+2+2 capitals at cap), scouts screen 4200–6600
+out, the rest wrap the hull "boreto" style. Guards carry `hubGuard = true`:
+**EncounterDirector never despawns them** and **Reinforcements never escalate
+off their kills**. Stream pauses during missions; garrison stands down (self-
+despawns) when the player leaves (34 km); everything dies with the fortress
+(`leviathan:contact` / `leviathan:destroyed` HUD banners).
+
+**Asteroids move** (playtest: "the space rocks aren't moving"): every rock
+tumbles in place — per-rock quaternion + axis/rate in the rock record,
+amortized ⅓ of the field per frame, distance-gated (radius + 5 km),
+`DynamicDrawUsage`; drifter count raised to `min(10, rocks/18)`.
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally
@@ -1043,8 +1086,8 @@ are fully silent. Up to 1.5 s of progress can be lost on a hard crash.
   (`.mode-btn` buttons; keyboard **Enter/Space** = Survival, **C** = Creative). The chosen
   button calls `launch(creative)`, which sets **`game.creative`**, unlocks audio, unpauses,
   and emits `game:started`. Contains the **BUILD stamp**. ⚠️ **The build stamp is a
-  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 21 —
-  missions are private fights: no random enemies crash them'`) — no build-time injection; bump it manually per
+  hand-edited `<div class="build-tag">` string in `Screens.js`** (currently `'BUILD 22 —
+  fleet call, 4 new hulls, the Obsidian Leviathan, tumbling rocks'`) — no build-time injection; bump it manually per
   playtest.
 - **Shop** (`ui/Shop.js`): pause-the-game modal, hailed with **`T`** (interim — no physical
   station yet). Tabs: **Sell Ore** (per-tier, Sell All), **Upgrades** (engine/weapon/shield,
@@ -1111,9 +1154,9 @@ means editing those strings too.
   `NODE_VERSION="22"`, `NPM_FLAGS="--include=dev"` (so Vite, a devDependency, always
   installs). Connect the repo in the browser → Deploy; the default branch is deploy-ready.
   Full click-by-click in **`DEPLOY.md`**. Alternative: drag
-  `builds/starfall-frontier-build21.zip` into Netlify Drop.
-- **`builds/starfall-frontier-build21.zip`** (~7.6 MB): a committed ready-to-serve `dist`
-  (index.html + JS/CSS + the 4 GLBs). Convention: one zip per published build, old one
+  `builds/starfall-frontier-build22.zip` into Netlify Drop.
+- **`builds/starfall-frontier-build22.zip`** (~10 MB): a committed ready-to-serve `dist`
+  (index.html + JS/CSS + the 12 GLBs). Convention: one zip per published build, old one
   deleted. **Don't gitignore `builds/` or `public/models-glb/`.**
 - **Local dev** (`LOCAL_DEV.md`, `run.command`, `.nvmrc`): `npm start` (= `vite --open`)
   runs the game on a Mac with hot-reload and a LAN URL for iPhone testing — no deploy.

@@ -34,6 +34,9 @@ export class Reinforcements {
 
     game.events.on('enemy:killed', (ship) => {
       if (!ship?.stats || ship.stats.apex) return;
+      // Leviathan garrison kills don't escalate — the fortress itself is
+      // already streaming endless replacements out of its hangars.
+      if (ship.hubGuard) return;
       // Mission kills don't call for revenge — the contract is the fight.
       if (game.missions?.active) return;
       const type = REPLACEMENT[ship.type] ?? ship.type;

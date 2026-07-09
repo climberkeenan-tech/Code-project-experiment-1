@@ -153,7 +153,8 @@ export class Shop {
     if (s.gunnerHangar) parts.push(`+${s.gunnerHangar} gunner-ship bays`);
     if (s.reinforce) parts.push('SPECIAL: press G to call 1-40 allied reinforcements');
     if (s.noLanding) parts.push('too large to land');
-    if (s.missionLocked) parts.push('mission reward — first one free');
+    if (s.fleetCall) parts.push('SPECIAL: press G to summon a hand-picked fleet (up to 50 ships)');
+    if (s.unlockAt) parts.push(`mission ${s.unlockAt} reward — first one free`);
     return parts.join(' · ');
   }
 
@@ -164,15 +165,17 @@ export class Shop {
       const owned = player.ships.owned.includes(s.id);
       const active = player.ships.active === s.id;
       const afford = this._afford(s.cost);
-      // Mission-locked hulls show a progress bar until the ladder is done.
-      if (s.missionLocked && !owned && missions && !missions.completedAll) {
-        const pct = Math.round((missions.index / missions.ladder.length) * 100);
+      // Mission-locked hulls show a progress bar toward their unlock rung.
+      // Creative mode ignores locks entirely (sandbox: fly everything).
+      if (s.unlockAt && !owned && !this.game.creative
+        && missions && missions.index < s.unlockAt) {
+        const pct = Math.round((missions.index / s.unlockAt) * 100);
         return `
       <div class="shop-row locked" title="${this._shipFeatures(s)}">
         <span class="shop-row-name">🔒 ${s.name}</span>
-        <span class="shop-row-meta">complete ALL missions to unlock — first one FREE
+        <span class="shop-row-meta">complete mission ${s.unlockAt} to unlock — first one FREE
           <span class="ship-progress"><span class="ship-progress-fill" style="width:${pct}%"></span></span>
-          ${missions.index}/${missions.ladder.length} missions
+          ${missions.index}/${s.unlockAt} missions
         </span>
         <button class="shop-btn disabled">Locked</button>
       </div>`;
@@ -393,6 +396,9 @@ export class Shop {
     const player = this.game.player;
     const variant = PLAYER_SHIPS.find((s) => s.id === id);
     if (!variant || player.ships.owned.includes(id)) return;
+    // Mission-locked hulls can't be bought early (creative is exempt).
+    if (variant.unlockAt && !this.game.creative
+      && (this.game.missions?.index ?? 0) < variant.unlockAt) { this._deny(); return; }
     if (!this._afford(variant.cost)) { this._deny(); return; }
     this._spend(variant.cost);
     player.ships.owned.push(id);

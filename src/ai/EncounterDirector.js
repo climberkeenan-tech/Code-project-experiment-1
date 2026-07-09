@@ -158,8 +158,10 @@ export class EncounterDirector {
 
     // Despawn stragglers the player has left behind. The apex hunter is
     // exempt: it lives outside the encounter economy and never despawns.
+    // Leviathan hub guards are exempt too — their own system spawns them at
+    // the fortress (often beyond DESPAWN_RANGE) and stands them down itself.
     for (const enemy of [...enemies.enemies]) {
-      if (enemy.stats?.apex) continue;
+      if (enemy.stats?.apex || enemy.hubGuard) continue;
       if (enemy.position.distanceTo(player.position) > DESPAWN_RANGE) {
         enemies.remove(enemy);
       }

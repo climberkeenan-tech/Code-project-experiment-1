@@ -50,7 +50,7 @@ export class Screens {
         <span class="ml-bar"><span class="ml-fill"></span></span>
       </div>
       <div class="reset-save">Reset progress</div>
-      <div class="build-tag">BUILD 21 — missions are private fights: no random enemies crash them</div>
+      <div class="build-tag">BUILD 22 — fleet call, 4 new hulls, the Obsidian Leviathan, tumbling rocks</div>
     `;
     this.root.appendChild(el);
 

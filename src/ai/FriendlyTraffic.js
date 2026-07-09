@@ -206,6 +206,29 @@ export class FriendlyTraffic {
 
     // The Night Hawk's special power: a called wave of allied ships.
     game.events.on('reinforce:call', ({ count }) => this.spawnReinforcements(count));
+    // The Star Destroyer's power: a HAND-PICKED fleet (list of variant ids).
+    game.events.on('fleetcall:call', ({ variants }) => this.spawnFleet(variants));
+  }
+
+  /** Summon an exact fleet composition (Star Destroyer's call, ≤50 ships). */
+  spawnFleet(variants) {
+    const game = this.game;
+    const list = (variants ?? []).slice(0, 50);
+    list.forEach((variantId, i) => {
+      const ship = new TrafficShip(game, variantId, 'Fleet');
+      ship.reinforcement = true;
+      ship.life = 200;
+      const ang = (i / Math.max(1, list.length)) * Math.PI * 2;
+      const r = 240 + ship.radius * 1.6 + (i % 5) * 80;
+      ship.position.copy(game.player.position);
+      ship.position.x += Math.cos(ang) * r;
+      ship.position.y += ((i % 3) - 1) * 90;
+      ship.position.z += Math.sin(ang) * r;
+      ship.waypoint.copy(ship.position);
+      ship._retarget = 0;
+      this.ships.push(ship);
+    });
+    game.audio?.playTone?.({ type: 'sine', freq: 300, freqEnd: 760, duration: 0.7, gain: 0.22 });
   }
 
   /**

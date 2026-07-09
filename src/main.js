@@ -8,6 +8,7 @@ import { loadModelShips, onModelLoaded } from './ship/ModelShips.js';
 import { EnemyManager } from './ai/EnemyManager.js';
 import { EncounterDirector } from './ai/EncounterDirector.js';
 import { ApexHunter } from './ai/ApexHunter.js';
+import { Leviathan } from './ai/Leviathan.js';
 import { Reinforcements } from './ai/Reinforcements.js';
 import { FriendlyTraffic } from './ai/FriendlyTraffic.js';
 import { WeaponSystem } from './combat/WeaponSystem.js';
@@ -105,6 +106,9 @@ game.addSystem('enemies', enemies);
 const apex = new ApexHunter(game);
 game.apexSystem = apex;
 game.addSystem('apex', apex);
+
+// --- The enemy HUB: the Obsidian Leviathan fortress + its endless garrison ---
+game.addSystem('leviathan', new Leviathan(game));
 
 // --- Escalation: every kill calls in two replacements; warp out to escape ---
 const reinforcements = new Reinforcements(game);

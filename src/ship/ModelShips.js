@@ -84,6 +84,40 @@ const MODELS = {
     // Thruster anchors measured from the mesh (rear-facing vertex clusters).
     anchors: [[-1.52, 0.62, 5.6], [1.52, 0.62, 5.6], [0, -0.6, 5.43]],
   },
+  // "Imperial Star Destroyer" — mission-25 reward with the FLEET CALL power.
+  stardestroyer: {
+    url: 'models-glb/stardestroyer.glb',
+    targetLength: 120,
+    yaw: -Math.PI / 2, // Meshy convention: authored nose along -X
+    pitch: 0,
+    // Thruster anchors measured from the mesh (rear-facing vertex clusters).
+    anchors: [[-12.2, 7.3, 56], [12.2, 7.3, 56], [-3.05, -6.6, 51.4], [3.05, -6.6, 51.4], [0, 6.7, 53.5]],
+  },
+  // "Millennium Falcon" — mission-40 reward freighter.
+  falcon: {
+    url: 'models-glb/falcon.glb',
+    targetLength: 13,
+    yaw: -Math.PI / 2, // Meshy convention: authored nose along -X
+    pitch: 0,
+    // The Falcon's iconic engine STRIP: a row of four across the stern.
+    anchors: [[-0.9, 0.1, 5.7], [-0.3, 0.1, 5.75], [0.3, 0.1, 5.75], [0.9, 0.1, 5.7]],
+  },
+  // "Wedge of the Void" — mission-50 reward strike ship.
+  wedge: {
+    url: 'models-glb/wedge.glb',
+    targetLength: 14,
+    yaw: -Math.PI / 2, // Meshy convention: authored nose along -X
+    pitch: 0,
+    // Thruster anchors measured from the mesh (rear-facing vertex clusters).
+    anchors: [[-0.7, 0.72, 6.68], [0.7, 0.72, 6.68], [-0.95, -0.35, 6.3], [0.95, -0.35, 6.3]],
+  },
+  // "Obsidian Leviathan" — the enemy HUB fortress (moon-sized, never moves).
+  leviathan: {
+    url: 'models-glb/leviathan.glb',
+    targetLength: 2600,
+    yaw: -Math.PI / 2, // Meshy convention: authored nose along -X
+    pitch: 0,
+  },
   // "Crimson Dreadnought" — the SF-70 Bastion gunner ship (player-authored).
   bastion: {
     url: 'models-glb/bastion.glb',

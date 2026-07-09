@@ -951,3 +951,21 @@
 .model-loading.done { color: #8fe1b0; }
 .model-loading.done .ml-fill { background: #8fe1b0; }
 .mode-btn.waiting { opacity: 0.35; pointer-events: none; }
+
+/* fleet-call composition rows */
+.fleetcall-popup { min-width: 320px; max-height: 80vh; overflow-y: auto; }
+.fc-rows { display: flex; flex-direction: column; gap: 5px; text-align: left; }
+.fc-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+.fc-row small { opacity: 0.55; }
+.fc-row input {
+  width: 64px;
+  font-size: 14px;
+  padding: 3px;
+}

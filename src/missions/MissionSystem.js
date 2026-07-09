@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { PLAYER_SHIPS } from '../ship/ShipFactory.js';
 
 /**
  * Bounty missions: a ladder of "destroy one marked hostile" contracts,
@@ -20,6 +21,30 @@ const LADDER = [
   { ships: ['redcarrier'], label: 'Destroy a Lv90 Carrier', reward: 9000 },
   { ships: ['destroyer'], label: 'Destroy the Lv100 Planet Destroyer', reward: 24000 },
 ];
+
+// Rungs 11-75: a generated, ever-escalating campaign. Deterministic (no RNG)
+// so every player sees the same ladder. Milestone rewards (ships with
+// `unlockAt`) land at 10 / 25 / 40 / 50 / 75.
+const GEN_TYPES = ['scout', 'fighter', 'heavy', 'cruiser', 'warship', 'redcarrier', 'destroyer'];
+const GEN_NAMES = {
+  scout: 'Scout', fighter: 'Fighter', heavy: 'Heavy Assault', cruiser: 'Gunner Ship',
+  warship: 'Warship', redcarrier: 'Carrier', destroyer: 'Planet Destroyer',
+};
+const GEN_REWARD = {
+  scout: 60, fighter: 150, heavy: 450, cruiser: 1400,
+  warship: 3600, redcarrier: 9000, destroyer: 24000,
+};
+for (let i = LADDER.length; i < 75; i++) {
+  const type = GEN_TYPES[Math.min(GEN_TYPES.length - 1, Math.floor((i - 10) / 10))];
+  const count = 1 + (i % 4); // waves of 1-4
+  const escorts = i % 3 === 0 ? Math.min(4, 1 + Math.floor(i / 25)) : 0;
+  const ships = new Array(count).fill(type).concat(new Array(escorts).fill('scout'));
+  const label = count > 1
+    ? `Destroy a squadron of ${count} ${GEN_NAMES[type]}s${escorts ? ` (+${escorts} escorts)` : ''}`
+    : `Destroy a ${GEN_NAMES[type]}${escorts ? ` and its ${escorts} escorts` : ''}`;
+  const reward = Math.round((GEN_REWARD[type] * count * 0.8 + escorts * 60) / 10) * 10;
+  LADDER.push({ ships, label, reward });
+}
 
 export class MissionSystem {
   /** @param {import('../core/Game.js').Game} game */
@@ -113,11 +138,15 @@ export class MissionSystem {
     game.player.credits += def.reward;
     game.events.emit('mission:completed', { reward: def.reward, label: def.label });
     game.audio?.playTone?.({ type: 'triangle', freq: 660, freqEnd: 1180, duration: 0.4, gain: 0.22 });
-    // Finishing the WHOLE ladder unlocks the Night Hawk — the first is free.
-    if (this.completedAll) {
-      const owned = game.player.ships.owned;
-      if (!owned.includes('nighthawk')) owned.push('nighthawk');
-      game.events.emit('mission:allcomplete');
+    // Milestone rewards: any catalog ship with `unlockAt === index just
+    // reached` joins the collection FREE (replacements cost credits).
+    const owned = game.player.ships.owned;
+    for (const s of PLAYER_SHIPS) {
+      if (s.unlockAt === this.index && !owned.includes(s.id)) {
+        owned.push(s.id);
+        game.events.emit('mission:shipunlock', { id: s.id, name: s.name });
+      }
     }
+    if (this.completedAll) game.events.emit('mission:allcomplete');
   }
 }

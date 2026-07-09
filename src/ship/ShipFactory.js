@@ -227,8 +227,24 @@ export const PLAYER_SHIPS = [
   // allied ships (1-40) warp in and fight for you.
   { id: 'nighthawk', name: 'SF-45 Night Hawk', level: 45, cost: 1400,
     hull: 2.0, shield: 1.9, engine: 1.42, crew: 3, weapon: 1.4,
-    model: 'nighthawk', reinforce: true, missionLocked: true,
+    model: 'nighthawk', reinforce: true, unlockAt: 10,
     scale: 1.2, hullColor: 0x2a3242, accentColor: 0x101722, glow: [2.4, 1.1, 5.8] },
+  // Mission-50 reward: the "Wedge of the Void" strike ship.
+  { id: 'wedge', name: 'SF-55 Void Wedge', level: 50, cost: 2500,
+    hull: 2.3, shield: 2.2, engine: 1.4, crew: 3, weapon: 1.45,
+    model: 'wedge', unlockAt: 50,
+    scale: 1.25, hullColor: 0x3a2f4a, accentColor: 0x191024, glow: [3.5, 1.5, 5.5] },
+  // Mission-40 reward: the "Millennium Falcon" fast freighter.
+  { id: 'falcon', name: 'SF-60 Falcon', level: 55, cost: 5000,
+    hull: 2.6, shield: 2.5, engine: 1.65, crew: 4, weapon: 1.5,
+    model: 'falcon', unlockAt: 40,
+    scale: 1.3, hullColor: 0xb8bcc4, accentColor: 0x3a4048, glow: [2.0, 2.4, 5.0] },
+  // Mission-25 reward: the Imperial Star Destroyer with the FLEET CALL —
+  // G opens a popup to summon a hand-picked allied fleet (up to 50 ships).
+  { id: 'stardestroyer', name: 'SF-150 Star Destroyer', level: 90, cost: 30000,
+    hull: 9, shield: 7, engine: 0.9, crew: 8, turrets: 3, weapon: 2.0,
+    model: 'stardestroyer', fleetCall: true, unlockAt: 25, noLanding: true,
+    scale: 1, hullColor: 0x9aa2b0, accentColor: 0x2c3442, glow: [1.0, 2.6, 5.0] },
   // SF-50 / SF-70: the "gunner ship" line, each on its own player-authored
   // hull, with a heavier gun (catalog `weapon` — a multiplier on the player's
   // bolt damage). SF-50 = 1.5x, SF-70 = 2x.
@@ -266,10 +282,11 @@ export const PLAYER_SHIPS = [
   // the fleet, ~3x the carrier's length (targetLength 300 vs 100), too vast to
   // land. Deploys a MIXED wing out of its lower-side bays: 15 light fighters
   // (hangar) + 5 gunner ships (gunnerHangar). Heaviest gun of any hull.
-  { id: 'aethelred', name: 'SF-200 Aethelred', level: 150, cost: 90000,
+  // Mission-75 reward (playtest: "it seems overpowered" — so it's earned).
+  { id: 'aethelred', name: 'SF-200 Aethelred', level: 75, cost: 90000,
     hull: 16, shield: 12, engine: 0.8, crew: 12, turrets: 4,
     hangar: 15, gunnerHangar: 5, capital: 'carrier', launchPort: 'lowerside',
-    model: 'aethelred', noLanding: true, weapon: 2.5,
+    model: 'aethelred', noLanding: true, weapon: 2.5, unlockAt: 75,
     scale: 1, hullColor: 0x9fb0c4, accentColor: 0x2a4a5a, glow: [0.9, 2.4, 4.8] },
 ];
 
