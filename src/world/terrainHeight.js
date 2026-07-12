@@ -39,16 +39,6 @@ export function createTerrainSampler(descriptor) {
   const craters = generateCraters(descriptor);
 
   /**
-   * Player-authored SCULPT strokes (World Editor terrain brushes), applied
-   * after every procedural layer. Mutable by design: the editor pushes live
-   * strokes and the store loads saved ones — later samples see them
-   * immediately, which keeps visuals and collision in perfect agreement.
-   * Each stroke: {x,y,z: unit dir, cr: chord radius, r2: cr², amt: raise(+)/
-   * lower(−) world units, flat: bool, h0: flatten target height}.
-   */
-  const sculpts = [];
-
-  /**
    * Height above sea level (world units) at a unit direction.
    * @param {number} x @param {number} y @param {number} z unit vector
    */
@@ -125,20 +115,6 @@ export function createTerrainSampler(descriptor) {
     // --- High-frequency detail ---
     h += detailNoise.fbm(x * t.detailFreq, y * t.detailFreq, z * t.detailFreq, 3)
       * t.detailAmp * relief;
-
-    // --- Sculpt layer: World Editor brush strokes, in stroke order ---
-    for (let i = 0; i < sculpts.length; i++) {
-      const s = sculpts[i];
-      const dx = x - s.x;
-      const dy = y - s.y;
-      const dz = z - s.z;
-      const d2 = dx * dx + dy * dy + dz * dz;
-      if (d2 >= s.r2) continue;
-      const f = 1 - Math.sqrt(d2) / s.cr;
-      const w = f * f * (3 - 2 * f); // smooth falloff to the brush edge
-      if (s.flat) h += (s.h0 - h) * w;
-      else h += s.amt * w;
-    }
 
     return h;
   }
@@ -237,7 +213,7 @@ export function createTerrainSampler(descriptor) {
     return target;
   }
 
-  return { height, normal, color, craters, sculpts };
+  return { height, normal, color, craters };
 }
 
 /** Quantize x (0..1) into `steps` terraces with smoothed risers. */

@@ -300,9 +300,6 @@ export class HUD {
     game.events.on('onfoot:entered', (planet) => {
       this.showBanner('Disembarked', `Exploring ${planet.descriptor.name} on foot`, 2.5);
     });
-    game.events.on('nature:full', () => {
-      this.showBanner('Planet Full', 'this world has reached its 500-prop limit — X removes props', 2.5);
-    });
     game.events.on('onfoot:left', () => {
       this.setPrompt('');
       this.showBanner('Aboard', 'Systems nominal', 1.8);

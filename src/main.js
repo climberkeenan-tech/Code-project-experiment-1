@@ -26,8 +26,6 @@ import { createSpaceEnvironment } from './environment/SpaceEnvMap.js';
 import { Universe } from './world/Universe.js';
 import { generateUniverse } from './world/UniverseGenerator.js';
 import { OnFootController } from './onfoot/OnFootController.js';
-import { NatureEditor } from './world/NatureEditor.js';
-import { WorldEditor } from './editor/WorldEditor.js';
 import { WarpSystem } from './warp/WarpSystem.js';
 import { LandingSystem } from './ship/LandingSystem.js';
 import { ApproachScatter } from './world/ApproachScatter.js';
@@ -79,9 +77,6 @@ game.addSystem('universe', universe);
 
 // --- On-foot: disembark, walk a planet surface in first person, mine ---
 game.addSystem('onfoot', new OnFootController(game));
-
-// --- Nature editor: on foot, P opens a palette — plant trees/rocks/grass ---
-game.addSystem('nature', new NatureEditor(game));
 
 // --- Warp: directional hyperdrive (steer it; drops at planets ahead) ---
 game.addSystem('warp', new WarpSystem(game));
@@ -154,9 +149,6 @@ game.addSystem('sun', sun);
 // --- Camera, then camera-relative dressing ---
 const chaseCamera = new ChaseCamera(game);
 game.addSystem('camera', chaseCamera);
-
-// --- World editor: start-screen tool; overrides the camera when active ---
-game.addSystem('world-editor', new WorldEditor(game));
 
 game.addSystem('starfield', new Starfield(game));
 game.addSystem('nebulas', new Nebulas(game));

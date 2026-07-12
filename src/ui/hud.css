@@ -691,7 +691,7 @@
 /* The hidden shop's buttons force pointer-events:auto, overriding the
    parent's none — the INVISIBLE panel kept hit-testing over the middle of
    the screen and its cancelled pointerdowns suppressed the game's mouse
-   events beneath it (World Editor "can't place things"). Kill it hard. */
+   events beneath it. Kill it hard. */
 .shop-screen.hidden * { pointer-events: none !important; }
 
 .shop-panel {
@@ -975,90 +975,3 @@
   padding: 3px;
 }
 
-/* --- Nature editor palette (on foot, P) --- */
-.nature-bar {
-  position: fixed;
-  left: 50%;
-  bottom: 8px;
-  transform: translateX(-50%) translateY(20px);
-  background: rgba(6, 14, 22, 0.88);
-  border: 1px solid rgba(134, 231, 255, 0.35);
-  border-radius: 10px;
-  padding: 6px 10px;
-  max-width: 96vw;
-  z-index: 40;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.18s ease, transform 0.18s ease;
-  text-align: center;
-  font-family: 'Share Tech Mono', 'Courier New', monospace;
-  color: #cfeefc;
-}
-.nature-bar.visible {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateX(-50%) translateY(0);
-}
-.nb-title {
-  font-size: 9px;
-  letter-spacing: 0.26em;
-  color: #86e7ff;
-  margin-bottom: 4px;
-}
-.nb-row { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
-.nb-item {
-  background: rgba(18, 34, 48, 0.9);
-  border: 1px solid rgba(134, 231, 255, 0.25);
-  border-radius: 8px;
-  color: #cfeefc;
-  font: inherit;
-  font-size: 9px;
-  letter-spacing: 0.04em;
-  padding: 3px 5px;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
-  min-width: 44px;
-}
-.nb-item .nb-icon { font-size: 14px; }
-.nb-item.active {
-  border-color: #8fe1b0;
-  box-shadow: 0 0 10px rgba(143, 225, 176, 0.4);
-  color: #8fe1b0;
-}
-.nb-hint {
-  margin-top: 4px;
-  font-size: 9px;
-  letter-spacing: 0.05em;
-  opacity: 0.75;
-}
-
-/* --- World editor top row (planet nav / count / speed / exit) --- */
-.we-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  margin-bottom: 4px;
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  flex-wrap: wrap;
-}
-.we-planet { color: #8fe1b0; letter-spacing: 0.14em; min-width: 110px; }
-.we-meta { opacity: 0.7; font-size: 9px; }
-.we-btn {
-  background: rgba(18, 34, 48, 0.9);
-  border: 1px solid rgba(134, 231, 255, 0.25);
-  border-radius: 6px;
-  color: #cfeefc;
-  font: inherit;
-  font-size: 10px;
-  padding: 3px 7px;
-  cursor: pointer;
-}
-.we-btn:hover { border-color: #86e7ff; }
-.we-exit { border-color: rgba(255, 93, 108, 0.5); color: #ff9aa5; }
-.mode-btn.editor .mode-name { color: #8fe1b0; }
-.editor-mode #game-canvas { cursor: crosshair; }

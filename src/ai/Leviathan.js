@@ -151,7 +151,6 @@ export class Leviathan {
 
   update(dt) {
     const game = this.game;
-    if (game.editorMode) return; // world editor: the fortress sleeps
     if (this._fallen) return;
 
     if (!this.hub) {

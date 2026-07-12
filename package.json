@@ -11,8 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "three": "^0.170.0",
-    "three-low-poly": "^1.0.1"
+    "three": "^0.170.0"
   },
   "devDependencies": {
     "@gltf-transform/cli": "^4.4.1",
