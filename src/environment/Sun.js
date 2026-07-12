@@ -24,7 +24,10 @@ export class Sun {
 
     this.light = new THREE.DirectionalLight(0xfff0dc, 3.4);
     this.light.castShadow = true;
-    this.light.shadow.mapSize.set(1024, 1024);
+    // Desktop gets a 2K map — leaf shadows need the texel density; the
+    // mobile GPU budget keeps the original 1K.
+    const shadowRes = game.engine.isMobile ? 1024 : 2048;
+    this.light.shadow.mapSize.set(shadowRes, shadowRes);
     const shadowCam = this.light.shadow.camera;
     // Box widened to ±90 so the much larger flagship (≈100u) still casts and
     // receives its own shadow without clipping at the frustum edge.

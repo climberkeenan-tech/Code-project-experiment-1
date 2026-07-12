@@ -35,6 +35,9 @@ const browser = await chromium.launch({
 
 const [vw, vh] = (process.env.VIEWPORT ?? '900x500').split('x').map(Number);
 const page = await browser.newPage({ viewport: { width: vw, height: vh } });
+// Forest scenes push millions of triangles through SwiftShader — frames can
+// take seconds each, so give every playwright call generous headroom.
+page.setDefaultTimeout(180000);
 
 const logs = [];
 page.on('console', (msg) => logs.push(`[${msg.type()}] ${msg.text()}`));

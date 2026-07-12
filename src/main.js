@@ -26,6 +26,7 @@ import { createSpaceEnvironment } from './environment/SpaceEnvMap.js';
 import { Universe } from './world/Universe.js';
 import { generateUniverse } from './world/UniverseGenerator.js';
 import { OnFootController } from './onfoot/OnFootController.js';
+import { getForestAssets } from './world/forest/ForestAssets.js';
 import { WarpSystem } from './warp/WarpSystem.js';
 import { LandingSystem } from './ship/LandingSystem.js';
 import { ApproachScatter } from './world/ApproachScatter.js';
@@ -189,6 +190,10 @@ onModelLoaded((id) => {
   if (variant?.model === id) player.refreshShip();
   enemies.refreshModels();
 });
+
+// Photoreal forest scans stream in the background (not start-gated like the
+// ship hulls — the first landing joins this load if it's still in flight).
+getForestAssets().load();
 
 game.start();
 

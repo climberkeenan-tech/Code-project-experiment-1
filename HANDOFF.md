@@ -1,14 +1,14 @@
 # Starfall Frontier — Complete Developer Handoff
 
 _The **single, current** handoff for everything built so far. **Current build:
-BUILD 28.** Development branch `claude/handoff-consolidation-review-uvwo4e`;
+BUILD 29.** Development branch `claude/handoff-md-verify-uxi68e`;
 every published build is also pushed to the default branch
 `claude/3d-space-exploration-game-ogrezx`, whose workflow publishes to
 `gh-pages`. This file has three parts:_
 
 - **PART A — The complete game**: everything that exists right now, by topic,
   with current numbers. Read this to understand the game.
-- **PART B — Build-by-build history** (base game → BUILD 28): the full
+- **PART B — Build-by-build history** (base game → BUILD 29): the full
   changelog with per-build rationale and the playtest quotes that drove it.
 - **PART C — Deep architecture reference**: the code-level documentation
   (ship system, services, save schema, event catalogue…). Written around
@@ -27,7 +27,7 @@ A browser space game (Vite + three.js r170, all JavaScript, no plugins, no
 login): fly a 6-DOF ship through a procedurally generated multi-star universe,
 descend through atmospheres to planet surfaces **with no loading screens**,
 walk on foot, mine, trade, fight, command fleets, raid the enemy fortress —
-and design the planets yourself in a built-in world editor.
+through photorealistic photogrammetry forests (BUILD 29).
 
 **Publish ritual** (how every build reaches the player): bump the build stamp
 in `src/ui/Screens.js` → `npm run build` → zip `dist/` to
@@ -36,8 +36,8 @@ dev branch → push `HEAD:claude/3d-space-exploration-game-ogrezx` → wait for 
 new `gh-pages` SHA (`git ls-remote origin gh-pages`) → hand out the pinned link
 `https://rawcdn.githack.com/climberkeenan-tech/Code-project-experiment-1/<gh-pages-SHA>/index.html`.
 The SHA-pinned link defeats CDN caching; the player confirms the stamp on the
-start screen. localStorage is shared across builds (same origin), so saves and
-world designs survive updates.
+start screen. localStorage is shared across builds (same origin), so saves
+survive updates.
 
 ## A2. Game modes (start screen)
 
@@ -45,7 +45,9 @@ world designs survive updates.
 |------|------------|
 | **▶ Survival** | The full game: start with the SF-10 and 0 credits, mine/trade/fight to progress. Enter/Space starts it. |
 | **✦ Creative** | Unlimited credits, every ship unlocked (mission locks bypassed), purchases free. Saves are sandboxed: creative never writes the survival save. Key `C`. |
-| **🛠 World Editor** | A standalone design tool (BUILD 26–28), *not* a game mode: free-fly camera, terrain sculpting, prop placement. No enemies, no shop, no HUD. See A11. |
+
+_(The BUILD 26–28 World Editor was REMOVED in BUILD 29 — tree quality was
+prioritized over designer tooling; see A11 and PART B.)_
 
 Also on the start screen: the model-loading gate (the game cannot start until
 all 12 GLB hulls are loaded — no stand-in flash), **Reset progress**
@@ -216,36 +218,43 @@ with an air meter (bubbles, drowning drops your ore in a recoverable surface
 bag), on-screen arrows back to your ship and to nearby ore, `N` toggles nav
 markers. Boarding requires walking back to the ship.
 
-## A11. The World Editor + world-design pipeline
+## A11. The photoreal forest (BUILD 29)
 
-Launched from the start screen (BUILD 26, made actually-usable in 28). An
-engine-viewport tool over the real universe:
+Every tree in the game is a **real photogrammetry scan** (Poly Haven, CC0 —
+`docs/ASSET_LICENSES.md`): fir conifer (45k tris), two island broadleafs,
+jacaranda (66k tris), quiver tree, standing snag, fallen log, stump, fern,
+plus the ez-tree MIT grass card. Meshopt GLBs in `public/models-glb/trees/`
+(~24 MB, streamed in the background at game start — NOT start-gated).
 
-- **Camera**: RIGHT-DRAG or ARROW KEYS look, WASD fly, E/Q up/down, SHIFT ×5,
-  WHEEL fly speed. `[` `]` hop planets (arriving day-side). A green ground
-  cursor follows the mouse (self-contained ray from the editor's own pose —
-  never trust `camera.matrixWorld`, see PART B BUILD 28).
-- **Tools** (`T` cycles): **PLACE** (click plants the selected prop),
-  **RAISE / LOWER / FLATTEN** terrain brushes (hold to sculpt, WHEEL sizes the
-  brush 10–400 m, flatten anchors at first touch; lowering below sea level
-  floods into lakes), **DELETE** (click a prop). **CLEAR** wipes the planet
-  (two-click confirm). **X** deletes nearest; **1–9** pick props.
-- **Props** (9): three-low-poly prefabs (Tree/Rock/Boulder/Mossy Rock,
-  bounding-box-normalized) + hand-built merged-geometry pine/palm/bush/
-  flowers/grass. 500/planet cap, single draw call each.
-- **Sculpting** rides a `sculpts` layer inside the terrain sampler, so
-  rendering, walking, landing, and AI collision agree instantly;
-  `QuadtreeSphere.invalidateRegion` rebuilds touched patches in frames.
-  400 strokes/planet.
-- **Persistence & shipping designs**: props → `starfall.props.v1`, sculpts →
-  `starfall.sculpt.v1` (localStorage, independent of the save slot — designs
-  appear in survival AND creative). **💾 SAVE FILE** downloads
-  `starfall-world-design.json`; paste a player's file into
-  `src/world/worldDesign.json` and rebuild to **ship their design to every
-  player** (it's the bundled per-planet fallback).
-- The editor suppresses all combat/traffic (`game.editorMode`), pins the
-  invisible player ship to the camera (LOD/origin anchors keep working), and
-  the Shop can never open inside it.
+- **`src/world/forest/ForestAssets.js`** — lazy singleton loader. Each GLB
+  carries LOD0 + a simplified LOD1 as sibling nodes (shared textures). All
+  materials are patched once with an instancing-safe WIND vertex shader
+  (trunk sway + leaf flutter, phase from the instance translation; bark and
+  leaves share the sway term so canopies never tear off trunks) and the
+  planet haze (with an instanceMatrix fix — the stock injection ignores
+  instancing). ⚠️ meshopt-quantized positions are normalized int16: they are
+  converted to float32 BEFORE node transforms are baked, or every mesh
+  clamps into a unit box (bit us once). Impostors: each tree species is
+  rendered once into a 256² RT and applied to a cross-quad (4 tris/tree).
+- **`SurfaceScatter._buildForest`** — trees live on a DETERMINISTIC 8 m
+  lattice in planet-local space (cell hash → existence/species/size/yaw/
+  tint), so every rebuild reproduces the same forest. Three rings around
+  the patch center: LOD0 ≤ 70 m (casts shadows), LOD1 ≤ 200 m, impostors to
+  420 m. Walking > 90 m from the center re-centers the rings (same trees,
+  upgraded detail). Density = the SAME biome-noise forest mask that paints
+  the orbital forest bands — the woods you land in are the woods you saw
+  from space. Per-archetype recipes (`FOREST_PLANS`): terran/ocean dense
+  mixed forest + shore quiver trees; ice frosted firs; desert quiver/snags;
+  volcanic ash-tinted deadwood. One 877k-tri HERO scan per landing site
+  (THREE.LOD swap at 150 m).
+- Undergrowth (vegetated worlds): fern + grass lattices clustered by the
+  forest mask. Grass sprite is grayscale — tinted `0x55803a` at load.
+- Trunk colliders keep the old contract ({local, r} in `scatter.colliders`);
+  ferns/grass/logs are walk-through. Ore rocks and wildlife are unchanged.
+- Shadows: desktop shadow map 1024→2048 (`Sun.js`); only the LOD0 ring casts.
+- Dev harness: `tools/preview.html` renders any species GLB standalone
+  (`?asset=fir&lod=1`); screenshot harness default timeout is 180 s because
+  SwiftShader pushes millions of triangles per frame.
 
 ## A12. Economy, progression, persistence
 
@@ -263,13 +272,10 @@ stored ships and banked credits survive; respawn in the cheapest owned hull.
 | key | contents |
 |-----|----------|
 | save slot (v3, `SaveGame.js`) | credits, resources, inventory, crew, owned/active ships, **per-ship upgrades**, hangar stock, missionIndex, POI discoveries |
-| `starfall.props.v1` | placed nature props per planet (planet-local coords) |
-| `starfall.sculpt.v1` | terrain sculpt strokes per planet |
-| bundled `src/world/worldDesign.json` | shipped world design (fallback for planets with no local edits) |
 
-Creative never writes the save slot; world design keys are shared on purpose.
-Autosave fires on the significant events list (kills, purchases, missions,
-fleet losses…).
+Creative never writes the save slot. Autosave fires on the significant events
+list (kills, purchases, missions, fleet losses…). Stale `starfall.props.v1` /
+`starfall.sculpt.v1` keys from the removed World Editor are ignored (harmless).
 
 ## A13. UI, HUD, audio
 
@@ -292,9 +298,6 @@ launch/recall (or Night Hawk / Star Destroyer popups) · V focus fire ·
 N nav markers · Esc close popups.
 **On foot**: WASD walk · mouse/arrows look · Space jump · Shift sprint ·
 E mine/recover/board.
-**World Editor**: RIGHT-DRAG/arrows look · WASD fly · E/Q up/down · Shift
-fast · wheel speed/brush · click use tool · 1–9 props · T tool · X delete ·
-[ ] planet · buttons: SAVE FILE / CLEAR / EXIT.
 
 ## A15. Dev workflow
 
@@ -312,24 +315,24 @@ fast · wheel speed/brush · click use tool · 1–9 props · T tool · X delete
   → drop in `public/models-glb/` → register in `MODELS` (+ measure thruster
   anchors for flyables) → catalog entry. Models are gated behind the
   start-screen loader.
-- **Network reality of this workspace**: npm registry and raw GitHub work;
-  kenney.nl / quaternius.com / polyhaven.com / jsdelivr / unpkg are blocked;
-  Unreal marketplace assets are UE-only by licence and format. Real scanned
-  assets must arrive as user-uploaded GLBs.
-- `three-low-poly` is installed `--legacy-peer-deps` (wants three ≥ 0.180, we
-  pin 0.170; it only uses stable APIs). Don't upgrade three casually — custom
-  shader chunks (haze, logdepth) are keyed to r170 internals.
+- **Network reality of this workspace**: npm registry, raw.githubusercontent.com
+  and media.githubusercontent.com (Git-LFS) work for ANY public repo;
+  kenney.nl / quaternius.com / polyhaven.com / jsdelivr / unpkg / huggingface
+  are blocked; Unreal marketplace assets are UE-only by licence and format.
+  BUILD 29 sourced Poly Haven CC0 photogrammetry via public GitHub mirrors of
+  the CC0 originals (legal — see `docs/ASSET_LICENSES.md`); user-uploaded
+  Meshy GLBs remain the other channel.
+- Don't upgrade three casually — custom shader chunks (haze, logdepth, forest
+  wind) are keyed to r170 internals.
 
 ## A16. Known gaps & pending
 
-- **Waiting on user assets**: Emerald Canopy tree (needs a smaller Meshy
-  re-export), animal replacements, ore models, any nature GLBs for the editor
-  palette; the user's `starfall-world-design.json` export to bake into
-  `worldDesign.json`.
-- Placed props have no collision (walk-through) and don't reflow when terrain
-  under them is re-sculpted.
+- **Waiting on user assets**: animal replacements, ore models.
+- Forest impostor ring uses static cross-quads (no camera facing) — fine at
+  200 m+, revisit if a telephoto camera is ever added.
+- Wildlife and ore rocks are still primitive procedural meshes — next
+  photoreal candidates after trees.
 - `sovereign` still flies the procedural hull (reserved for a future model).
-- Old prop factories (`oakParts`/`rockParts`/`boulderParts`) are dead code.
 - The Leviathan doesn't persist its destruction (respawns next session) —
   arguably a feature (endless raid target).
 - PART C's tables predate BUILD 22+ (see its corrections block).
@@ -356,6 +359,7 @@ fast · wheel speed/brush · click use tool · 1–9 props · T tool · X delete
 | 26 | standalone World Editor · aggression pass 2 |
 | 27 | terrain sculpting (raise/lower/flatten) · three-low-poly prefabs |
 | 28 | editor made real: horizon-freeze cap, hidden-shop click eater, stale-matrix ray · DELETE/CLEAR/SAVE FILE · bundled worldDesign.json |
+| 29 | **photoreal forests**: World Editor + sculpting REMOVED · Poly Haven photogrammetry trees (CC0) · deterministic lattice + LOD rings + impostors · wind shader · hero 877k-tri tree |
 
 Full details for every build: PART B below.
 
@@ -864,6 +868,48 @@ paste a player's exported file there to SHIP their design to everyone),
 editor bar (the tall centered bar used to cover mid-screen and swallow
 clicks on small windows).
 
+### BUILD 29 — photoreal forests (the World Editor is gone)
+Direction change: "the current trees are not realistic enough, and the
+environment needs to reach AAA quality before any other development
+continues. Remove the World Editor completely."
+
+**Removed** (BUILD 26–28 tooling and everything only it used):
+`src/editor/WorldEditor.js`, `NatureEditor.js` (placed-prop store +
+three-low-poly palette), `sculptStore.js`, `worldDesign.json`, the terrain
+sampler's sculpt layer, `QuadtreeSphere.invalidateRegion`, the start-screen
+editor button + `editor:enter` event, all `editorMode` guards (Shop + 5 AI
+spawners), the `nature:full` banner, ~90 lines of editor CSS, and the
+`three-low-poly` dependency (also killed the duplicate three.js instance it
+pulled in). Old localStorage design keys are simply ignored.
+
+**Replaced the cone-and-blob vegetation with real photogrammetry** — see
+A11 for the full architecture. Highlights: Poly Haven CC0 scans (fir /
+island broadleafs / jacaranda / quiver / snags / log / stump / fern) sourced
+via reachable GitHub mirrors, compressed to meshopt GLB with EMBEDDED LOD1
+nodes (`tools`-side pipeline; ~24 MB total); a deterministic planet-local
+8 m tree lattice (hash → species/size/yaw/tint) so patch rebuilds never
+reshuffle the forest; three detail rings (LOD0 ≤ 70 m / LOD1 ≤ 200 m /
+4-tri baked impostors to 420 m) re-centered when the player walks 90 m; an
+instancing-safe wind shader (sway + leaf flutter — the library default
+breaks InstancedMesh); haze patched with an instanceMatrix fix; forest
+density driven by the SAME biome mask as the orbital forest bands; one
+877k-triangle hero scan per landing site; ferns + tinted grass undergrowth;
+desktop shadows 1024→2048.
+
+**Hard-won lessons**: (1) meshopt-quantized GLB positions are normalized
+int16 — baking node transforms into them clamps every vertex to [-1,1] and
+the whole forest renders as unit BOXES; convert positions to float32 first.
+(2) On a 3.2 km-radius planet the on-foot horizon is ~100 m — density inside
+that radius is all that matters on the ground, while the impostor ring is
+what makes low flight read as unbroken canopy. (3) Flat impostor quads catch
+full sun where a real canopy self-occludes — bake them dark (×0.43) and dim
+the material again (×0.6) or the far ring glows.
+
+Verified via the harness: forest builds on landing (zero console errors),
+wind confirmed by frame-diff (only foliage silhouettes moved), trunk
+collision push-out exact (r + avatar radius), patch disposal on boarding,
+LOD counts per ring, aerial + ground screenshots reviewed.
+
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally
 (`npm start`) with no deploy, incl. iPhone-over-Wi-Fi testing. On a locked-down
@@ -897,23 +943,23 @@ deploy once via Netlify (browser-only) and play the resulting URL in any browser
 >   detectRange ×1.3) and the AI hunts a **victim** (player OR allied ship),
 >   not hard-wired to the player. Missiles: speed 680, life 9 s, turn 2.2,
 >   fuse 8, true axis-angle steering.
-> - **Modes**: `game.mode` is `'flight' | 'onfoot' | 'editor'`; a new
->   `game.editorMode` flag suppresses director/apex/reinforcements/traffic/
->   Leviathan and the Shop.
-> - **System order** now: `player → asteroids:* → universe → onfoot → nature →
+> - **Modes**: `game.mode` is `'flight' | 'onfoot'` again — BUILD 29 removed
+>   the World Editor (and `game.editorMode`) entirely.
+> - **System order** now: `player → asteroids:* → universe → onfoot →
 >   warp → landing → approach → settlements → poi → director → enemies →
 >   apex → leviathan → reinforcements → traffic → weapons → combat → crew →
->   fleet → missions → explosions → pickups → sun → camera → world-editor →
+>   fleet → missions → explosions → pickups → sun → camera →
 >   starfield → nebulas → ship-sounds → music → hud → radar → targets → shop`
->   (SpaceDust removed; nature/leviathan/world-editor added).
+>   (SpaceDust removed; nature/world-editor came in BUILD 25–26 and went
+>   away again in BUILD 29).
 > - **New systems not documented below** (see PART A + PART B):
->   `ai/Leviathan.js`, `world/NatureEditor.js`, `world/sculptStore.js`,
->   `world/worldDesign.json`, `editor/WorldEditor.js`, the terrain sampler's
->   `sculpts` layer + `QuadtreeSphere.invalidateRegion`, MissionSystem's
+>   `ai/Leviathan.js`, `world/forest/ForestAssets.js` + the BUILD 29
+>   photoreal forest in `SurfaceScatter`, MissionSystem's
 >   75-rung ladder + `unlockAt` grants, HUD's fleet-call/reinforce popups,
->   FriendlyTraffic's `spawnReinforcements`/`spawnFleet`.
+>   FriendlyTraffic's `spawnReinforcements`/`spawnFleet`. The BUILD 25–28
+>   nature/sculpt/editor systems were removed in BUILD 29.
 > - **Save schema** is **v3** (per-ship upgrades `upgradesByShip`, hangar
->   stock, missionIndex), not v2. World-design keys are separate (A12).
+>   stock, missionIndex), not v2.
 > - **Universe**: 13 home planets + two neighbour systems (`game.starSystems`),
 >   not a single 9-planet system.
 > - **Storage**: creative mode never writes the save slot ("creative save

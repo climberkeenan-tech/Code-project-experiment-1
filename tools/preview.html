@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<!-- Dev-only asset previewer: renders each forest GLB (LOD0 + LOD1) in a grid
+     with the game's renderer settings. Serve via `npm run dev`, then open
+     /tools/preview.html?asset=fir (or no param for the full grid). -->
+<html>
+<head><meta charset="utf-8"><style>body{margin:0;background:#223}</style></head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+
+const IDS = ['fir', 'island1', 'island2', 'jacaranda', 'hero', 'quiver', 'snag', 'log', 'stump', 'fern', 'grass'];
+const params = new URLSearchParams(location.search);
+const only = params.get('asset');
+const lod = params.get('lod') ?? '0';
+const ids = only ? [only] : IDS;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9db8d2);
+const sun = new THREE.DirectionalLight(0xfff0dc, 3.4);
+sun.position.set(40, 60, 30);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = sun.shadow.camera.bottom = -60;
+sun.shadow.camera.right = sun.shadow.camera.top = 60;
+sun.shadow.camera.far = 300;
+sun.shadow.bias = -0.0006;
+sun.shadow.normalBias = 0.5;
+scene.add(sun);
+scene.add(new THREE.HemisphereLight(0xbdd4ee, 0x3a3f2e, 0.8));
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(400, 400),
+  new THREE.MeshStandardMaterial({ color: 0x53613f, roughness: 1 }),
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const loader = new GLTFLoader();
+loader.setMeshoptDecoder(MeshoptDecoder);
+
+let x = 0;
+const report = [];
+for (const id of ids) {
+  const gltf = await loader.loadAsync(`/models-glb/trees/${id}.glb`);
+  const root = gltf.scene;
+  let tris0 = 0, tris1 = 0, height = 0;
+  const box = new THREE.Box3();
+  root.updateMatrixWorld(true);
+  root.traverse((n) => {
+    if (!n.isMesh) return;
+    const t = (n.geometry.index ? n.geometry.index.count : n.geometry.attributes.position.count) / 3;
+    const inLod1 = n.name === 'LOD1' || n.parent?.name === 'LOD1' || n.name.includes('lod1');
+    if (inLod1) { tris1 += t; n.visible = lod === '1'; }
+    else { tris0 += t; n.visible = lod !== '1'; }
+    n.castShadow = true;
+    n.receiveShadow = true;
+  });
+  box.setFromObject(root);
+  height = box.max.y - box.min.y;
+  const width = Math.max(box.max.x - box.min.x, box.max.z - box.min.z);
+  root.position.set(x + width / 2, -box.min.y, 0);
+  x += width + 2;
+  scene.add(root);
+  report.push(`${id}: LOD0 ${Math.round(tris0).toLocaleString()} tris, LOD1 ${Math.round(tris1).toLocaleString()} tris, ${height.toFixed(1)}m tall, ${width.toFixed(1)}m wide`);
+}
+console.log('ASSETS\n' + report.join('\n'));
+
+const cx = x / 2;
+const camDist = Math.max(x * 0.62, 8);
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 2000);
+const camH = Number(params.get('camh') ?? Math.max(6, camDist * 0.3));
+camera.position.set(cx, camH, camDist);
+camera.lookAt(cx, Math.min(8, camDist * 0.15), 0);
+
+renderer.setAnimationLoop(() => renderer.render(scene, camera));
+window.__ready = true;
+</script>
+</body>
+</html>

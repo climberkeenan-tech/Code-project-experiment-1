@@ -1,10 +1,14 @@
 import * as THREE from 'three';
 import { RARITIES, RARITY_COLOR, rollRarity } from '../economy/Rarity.js';
+import { SimplexNoise, smoothstep } from '../core/math/noise.js';
+import { getForestAssets, SPECIES } from '../world/forest/ForestAssets.js';
 
 /**
- * Procedural surface dressing spawned around the player when they disembark:
- * mineable ore rocks (rarity-tiered) plus instanced trees and grass so a
- * planet reads as "teeming with life" up close.
+ * Surface dressing spawned around the player when they disembark: mineable
+ * ore rocks (rarity-tiered) plus a PHOTOREALISTIC instanced forest — Poly
+ * Haven photogrammetry scans (see src/world/forest/ForestAssets.js) placed
+ * by the same biome noise that paints the forest bands visible from orbit,
+ * so the woods you land in are the woods you saw from space.
  *
  * Everything is parented to `planet.group`, so it inherits the planet's
  * floating-origin shifts (and any future rotation) for free — no separate
@@ -15,9 +19,91 @@ import { RARITIES, RARITY_COLOR, rollRarity } from '../economy/Rarity.js';
 
 const SCATTER_RADIUS = 420; // how far props spread around the landing point
 const ROCK_COUNT = 60;
-const TREE_COUNT = 560; // dense enough to read as a real forest (playtest)
-const PALM_COUNT = 90; // beach palms on hot shorelines
-const GRASS_COUNT = 1600; // thick ground cover (playtest: "more grass")
+const TREE_GRID = 8; // deterministic tree lattice pitch (m) — one slot per cell
+const RING0 = 70; // full-detail photogrammetry within this range of the center
+const RING1 = 200; // simplified LOD to here; baked impostors beyond
+const HERO_LOD_DIST = 150; // the 877k-tri hero swaps to its LOD past this
+const REBUILD_STRAY = 90; // walking this far from the patch center re-centers it
+
+/**
+ * Per-archetype forest recipes. Cell spawn probability =
+ * pFloor + pMask × (orbital forest-band mask) — vegetated worlds get dense
+ * woods inside the bands that are visible from space and open meadows
+ * between them. `mix` = weighted species table with altitude/shore gates
+ * (h01 = height / relief, matching the terrain colour bands).
+ */
+const FOREST_PLANS = {
+  terran: {
+    pFloor: 0.05, pMask: 0.68, hero: true, undergrowth: true,
+    mix: [
+      { id: 'fir', w: 24, minH01: 0.15 },
+      { id: 'island1', w: 26, maxH01: 0.36 },
+      { id: 'island2', w: 19, maxH01: 0.32 },
+      { id: 'jacaranda', w: 9, maxH01: 0.28 },
+      { id: 'quiver', w: 7, shoreOnly: true },
+      { id: 'snag', w: 6 },
+      { id: 'log', w: 7 },
+      { id: 'stump', w: 2 },
+    ],
+  },
+  ocean: {
+    pFloor: 0.05, pMask: 0.60, hero: true, undergrowth: true,
+    mix: [
+      { id: 'fir', w: 16, minH01: 0.18 },
+      { id: 'island1', w: 28, maxH01: 0.36 },
+      { id: 'island2', w: 22, maxH01: 0.32 },
+      { id: 'jacaranda', w: 8, maxH01: 0.28 },
+      { id: 'quiver', w: 12, shoreOnly: true },
+      { id: 'snag', w: 5 },
+      { id: 'log', w: 7 },
+      { id: 'stump', w: 2 },
+    ],
+  },
+  ice: {
+    pFloor: 0.14, pMask: 0, hero: false, undergrowth: false,
+    leafTint: [0.82, 0.92, 1.1], barkTint: [0.9, 0.95, 1.05],
+    mix: [{ id: 'fir', w: 68 }, { id: 'snag', w: 22 }, { id: 'log', w: 10 }],
+  },
+  desert: {
+    pFloor: 0.055, pMask: 0, hero: false, undergrowth: false,
+    mix: [{ id: 'quiver', w: 58 }, { id: 'snag', w: 26 }, { id: 'log', w: 16 }],
+  },
+  volcanic: {
+    pFloor: 0.04, pMask: 0, hero: false, undergrowth: false,
+    leafTint: [0.8, 0.76, 0.72], barkTint: [0.72, 0.7, 0.68],
+    mix: [{ id: 'snag', w: 48 }, { id: 'log', w: 30 }, { id: 'quiver', w: 22 }],
+  },
+  rocky: {
+    pFloor: 0.03, pMask: 0, hero: false, undergrowth: false,
+    mix: [{ id: 'quiver', w: 40 }, { id: 'snag', w: 35 }, { id: 'log', w: 25 }],
+  },
+};
+
+/** Integer hash of a planet-local lattice cell (deterministic tree slots). */
+function hashCell(x, y, z, seed) {
+  let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263)
+    + Math.imul(z, 1274126177) + seed) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1103515245);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+/** Tiny deterministic float stream (mulberry32) seeded from a cell hash. */
+function cellRng(seed) {
+  let a = seed | 0;
+  return () => {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** String → int seed for the cell hash. */
+function seedInt(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
+  return h | 0;
+}
 
 export class SurfaceScatter {
   /**
@@ -51,9 +137,14 @@ export class SurfaceScatter {
     }));
     this._rockGeo = new THREE.DodecahedronGeometry(1, 0);
 
+    /** Live forest meshes (instanced), torn down on dispose/re-center. */
+    this._forestMeshes = [];
+    this._disposed = false;
+    this._heroPlaced = false;
+
     this._buildRocks(centerWorld);
-    this._buildTrees(centerWorld);
-    this._buildGrass(centerWorld);
+    this._rockColliderCount = this.colliders.length;
+    this._buildForest(centerWorld);
     this._buildWildlife(centerWorld);
 
     this._tmp = new THREE.Vector3();
@@ -140,116 +231,316 @@ export class SurfaceScatter {
     }
   }
 
-  _buildTrees(centerWorld) {
-    if (!this.planet.descriptor.hasAtmosphere) return; // airless worlds: no forests
-    const trunkGeo = new THREE.CylinderGeometry(0.28, 0.42, 5, 5);
-    trunkGeo.translate(0, 2.5, 0); // base at origin
-    const leafGeo = new THREE.ConeGeometry(2.4, 6, 6);
-    leafGeo.translate(0, 7.2, 0);
-    const foliageTint = this.planet.descriptor.foliageColor
-      || pickFoliage(this.planet.descriptor);
-    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5a4632, roughness: 0.9, flatShading: true });
-    const leafMat = new THREE.MeshStandardMaterial({ color: foliageTint, roughness: 0.8, flatShading: true });
-
-    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, TREE_COUNT);
-    const leaves = new THREE.InstancedMesh(leafGeo, leafMat, TREE_COUNT);
-    trunks.castShadow = leaves.castShadow = true;
-
-    const scaleV = new THREE.Vector3();
-    const mat4 = new THREE.Matrix4();
-    let placed = 0;
-    for (let i = 0; i < TREE_COUNT * 2 && placed < TREE_COUNT; i++) {
-      const s = this._sampleSurface(centerWorld, 14, SCATTER_RADIUS);
-      if (!s) continue;
-      const h = 0.75 + Math.random() * 0.8;
-      scaleV.set(h * (0.8 + Math.random() * 0.4), h, h * (0.8 + Math.random() * 0.4));
-      const localPoint = this._standMatrix(s.point, s.up, scaleV, mat4);
-      trunks.setMatrixAt(placed, mat4);
-      leaves.setMatrixAt(placed, mat4);
-      this.colliders.push({ local: localPoint.clone(), r: 0.75 * h });
-      placed++;
+  /**
+   * The photoreal forest. Tree slots live on a DETERMINISTIC 8 m lattice in
+   * planet-local space: each cell hashes to existence, species, size, yaw
+   * and tint, so any rebuild — walking past REBUILD_STRAY, low-flight patch
+   * hops, or re-landing — reproduces the exact same trees and only their
+   * detail representation changes. Three rings around the patch center:
+   * full photogrammetry scans (≤ RING0), meshopt-simplified LOD (≤ RING1),
+   * and 4-triangle baked impostors out to the patch edge — which is what
+   * lets the canopy read as an unbroken forest from the air. Density follows
+   * the SAME biome noise that paints the orbital forest bands, so the woods
+   * you land in are the woods you saw from space.
+   */
+  _buildForest(centerWorld) {
+    const d = this.planet.descriptor;
+    if (!d.hasAtmosphere) return; // airless worlds: no forests
+    const plan = FOREST_PLANS[d.archetype] ?? FOREST_PLANS.rocky;
+    const assets = getForestAssets();
+    if (!assets.ready) {
+      // First landing before the GLBs finish streaming: build when ready
+      // (the patch tolerates trees popping in a moment after touchdown).
+      const center = centerWorld.clone();
+      assets.load().then(() => { if (!this._disposed) this._buildForest(center); });
+      return;
     }
-    trunks.count = leaves.count = placed;
-    trunks.instanceMatrix.needsUpdate = leaves.instanceMatrix.needsUpdate = true;
-    this._group.add(trunks, leaves);
-    this._trees = [trunks, leaves];
+    assets.bindPlanet(this.planet);
+    assets.ensureImpostors(this.game.engine.renderer);
+    this._centerLocal = centerWorld.clone().sub(this.center);
+    this._plan = plan;
 
-    this._buildPalms(centerWorld);
+    const planet = this.planet;
+    const R = planet.radius;
+    const biomeNoise = this._biomeNoise
+      || (this._biomeNoise = new SimplexNoise(`${d.seed}:biome`));
+    const planetSeed = seedInt(d.seed ?? d.name);
+    const vegetated = d.archetype === 'terran' || d.archetype === 'ocean';
+    const hotShore = d.hasOcean
+      && (d.archetype === 'desert' || d.archetype === 'terran' || d.archetype === 'volcanic');
+    const totalW = plan.mix.reduce((a, e) => a + e.w, 0);
+    const barkBase = plan.barkTint ?? [1, 1, 1];
+    const leafBase = plan.leafTint ?? [1, 1, 1];
+
+    // Tangent frame at the patch center (planet-local).
+    const up0 = this._centerLocal.clone().normalize();
+    const t1 = new THREE.Vector3(0, 1, 0);
+    if (Math.abs(up0.dot(t1)) > 0.9) t1.set(1, 0, 0);
+    t1.crossVectors(up0, t1).normalize();
+    const t2 = new THREE.Vector3().crossVectors(up0, t1).normalize();
+
+    /** id → {recs0, recs1, recs2} — instance records per detail ring. */
+    const buckets = new Map();
+    const seen = new Set();
+    const lp = new THREE.Vector3();
+    const dir = new THREE.Vector3();
+    const surfLocal = new THREE.Vector3();
+
+    const n = Math.ceil(SCATTER_RADIUS / TREE_GRID);
+    for (let i = -n; i <= n; i++) {
+      for (let j = -n; j <= n; j++) {
+        const rr = Math.hypot(i, j) * TREE_GRID;
+        if (rr > SCATTER_RADIUS || rr < 7) continue; // keep the landing pad clear
+
+        // Quantize to the planet-local lattice — the cell key and everything
+        // derived from it is independent of where this patch is centered.
+        lp.copy(this._centerLocal)
+          .addScaledVector(t1, i * TREE_GRID)
+          .addScaledVector(t2, j * TREE_GRID);
+        const kx = Math.round(lp.x / TREE_GRID);
+        const ky = Math.round(lp.y / TREE_GRID);
+        const kz = Math.round(lp.z / TREE_GRID);
+        const key = `${kx},${ky},${kz}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const rand = cellRng(hashCell(kx, ky, kz, planetSeed));
+
+        // Jittered slot position inside the cell, projected onto the terrain.
+        lp.set(kx * TREE_GRID, ky * TREE_GRID, kz * TREE_GRID)
+          .addScaledVector(t1, (rand() - 0.5) * TREE_GRID * 0.9)
+          .addScaledVector(t2, (rand() - 0.5) * TREE_GRID * 0.9);
+        dir.copy(lp).normalize();
+        const h = planet.sampler.height(dir.x, dir.y, dir.z);
+        if (d.hasOcean && h <= 1.0) continue; // never in the sea
+        const h01 = Math.max(0, Math.min(1, h / d.relief));
+        const inShore = hotShore && h >= 1.0 && h <= 5.5;
+
+        // Density: orbital forest-band mask on vegetated worlds + floor.
+        let p = plan.pFloor;
+        if (vegetated && plan.pMask > 0) {
+          const mask = smoothstep(0.15, 0.6,
+            biomeNoise.noise3(dir.x * 7 + 41, dir.y * 7 + 41, dir.z * 7 + 41));
+          const band = smoothstep(0.03, 0.09, h01) * (1 - smoothstep(0.38, 0.58, h01));
+          p += plan.pMask * mask * band;
+        }
+        if (rand() > p) continue;
+
+        // Weighted species pick honoring altitude/shore gates.
+        let pick = null;
+        for (let tries = 0; tries < 4 && !pick; tries++) {
+          let roll = rand() * totalW;
+          let candidate = plan.mix[plan.mix.length - 1];
+          for (const e of plan.mix) { roll -= e.w; if (roll <= 0) { candidate = e; break; } }
+          if (candidate.shoreOnly && !inShore) continue;
+          if (candidate.minH01 !== undefined && h01 < candidate.minH01) continue;
+          if (candidate.maxH01 !== undefined && h01 > candidate.maxH01) continue;
+          pick = candidate;
+        }
+        if (!pick) continue;
+        const sp = assets.species[pick.id];
+        if (!sp) continue;
+
+        surfLocal.copy(dir).multiplyScalar(R + h);
+        const ring = rr <= RING0 ? 0 : (rr <= RING1 ? 1 : 2);
+        if (ring === 2 && !sp.impostor) continue; // no sprite → not worth a far slot
+        this._placeTree(pick.id, surfLocal, dir, ring, rand, buckets, barkBase, leafBase);
+      }
+    }
+
+    // Undergrowth: ferns + grass carpet the forest floor on vegetated
+    // worlds — their own finer lattices, clustered by the same forest mask.
+    if (plan.undergrowth) {
+      this._buildUndergrowth('fern', 9, 130, 45, 0.40, 0.06, planetSeed + 101,
+        t1, t2, biomeNoise, buckets, barkBase, leafBase);
+      this._buildUndergrowth('grass', 3.4, 68, 68, 0.55, 0.25, planetSeed + 202,
+        t1, t2, biomeNoise, buckets, barkBase, leafBase);
+    }
+
+    // One HERO tree per landing site: the full 877k-triangle photogrammetry
+    // master near the touchdown point. Survives re-centers (never re-placed).
+    if (plan.hero && assets.species.hero && !this._heroPlaced) {
+      this._placeHero(assets, centerWorld);
+    }
+
+    // Bake the buckets into InstancedMeshes (one per species-part-ring).
+    for (const [id, rings] of buckets) {
+      const sp = assets.species[id];
+      const lod1Parts = sp.parts1.length ? sp.parts1 : sp.parts0;
+      this._bakeRing(sp.parts0, rings.recs0, id !== 'grass');
+      this._bakeRing(lod1Parts, rings.recs1, false);
+      if (rings.recs2.length && sp.impostor) {
+        this._bakeRing(
+          [{ geometry: assets.impostorGeo, material: sp.impostor.material, leaf: true }],
+          rings.recs2, false,
+        );
+      }
+    }
   }
 
   /**
-   * Beach palms: on HOT worlds with an ocean (desert/terran/volcanic), the
-   * shoreline band gets leaning palms — a taller bare trunk with a drooping
-   * frond crown — so beaches read tropical.
+   * Undergrowth lattice: like the tree lattice but finer, radius-limited,
+   * with its own LOD split (full fern ≤ lodR, simplified beyond).
    */
-  _buildPalms(centerWorld) {
-    const d = this.planet.descriptor;
-    const hot = d.archetype === 'desert' || d.archetype === 'terran' || d.archetype === 'volcanic';
-    if (!hot || !d.hasOcean) return;
-
-    const trunkGeo = new THREE.CylinderGeometry(0.16, 0.3, 8.5, 5);
-    trunkGeo.translate(0, 4.25, 0);
-    // Crown: an inverted wide cone reads as drooping fronds from any angle.
-    const frondGeo = new THREE.ConeGeometry(3.4, 1.6, 7);
-    frondGeo.rotateX(Math.PI); // droop downward
-    frondGeo.translate(0, 8.9, 0);
-    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8a6a44, roughness: 0.9, flatShading: true });
-    const frondMat = new THREE.MeshStandardMaterial({ color: 0x3f9a52, roughness: 0.8, flatShading: true });
-
-    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, PALM_COUNT);
-    const fronds = new THREE.InstancedMesh(frondGeo, frondMat, PALM_COUNT);
-    trunks.castShadow = fronds.castShadow = true;
-
-    const scaleV = new THREE.Vector3();
-    const mat4 = new THREE.Matrix4();
-    let placed = 0;
-    for (let i = 0; i < PALM_COUNT * 6 && placed < PALM_COUNT; i++) {
-      const s = this._sampleSurface(centerWorld, 8, SCATTER_RADIUS);
-      if (!s) continue;
-      // Shore band only: just above the waterline.
-      const h = s.point.distanceTo(this.center) - this.planet.radius;
-      if (h < 1.0 || h > 5.5) continue;
-      const k = 0.8 + Math.random() * 0.5;
-      scaleV.set(k, k, k);
-      const localPoint = this._standMatrix(s.point, s.up, scaleV, mat4);
-      trunks.setMatrixAt(placed, mat4);
-      fronds.setMatrixAt(placed, mat4);
-      this.colliders.push({ local: localPoint.clone(), r: 0.6 * k });
-      placed++;
+  _buildUndergrowth(id, grid, maxR, lodR, pMask, pFloor, seed,
+    t1, t2, biomeNoise, buckets, barkBase, leafBase) {
+    const assets = getForestAssets();
+    if (!assets.species[id]) return;
+    const planet = this.planet;
+    const d = planet.descriptor;
+    const lp = new THREE.Vector3();
+    const dir = new THREE.Vector3();
+    const surfLocal = new THREE.Vector3();
+    const seen = new Set();
+    const n = Math.ceil(maxR / grid);
+    for (let i = -n; i <= n; i++) {
+      for (let j = -n; j <= n; j++) {
+        const rr = Math.hypot(i, j) * grid;
+        if (rr > maxR || rr < 3) continue;
+        lp.copy(this._centerLocal).addScaledVector(t1, i * grid).addScaledVector(t2, j * grid);
+        const kx = Math.round(lp.x / grid);
+        const ky = Math.round(lp.y / grid);
+        const kz = Math.round(lp.z / grid);
+        const key = `${kx},${ky},${kz}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const rand = cellRng(hashCell(kx, ky, kz, seed));
+        lp.set(kx * grid, ky * grid, kz * grid)
+          .addScaledVector(t1, (rand() - 0.5) * grid * 0.9)
+          .addScaledVector(t2, (rand() - 0.5) * grid * 0.9);
+        dir.copy(lp).normalize();
+        const h = planet.sampler.height(dir.x, dir.y, dir.z);
+        if (d.hasOcean && h <= 1.0) continue;
+        const h01 = Math.max(0, Math.min(1, h / d.relief));
+        const mask = smoothstep(0.15, 0.6,
+          biomeNoise.noise3(dir.x * 7 + 41, dir.y * 7 + 41, dir.z * 7 + 41));
+        const band = smoothstep(0.03, 0.09, h01) * (1 - smoothstep(0.38, 0.58, h01));
+        if (rand() > pFloor + pMask * mask * band) continue;
+        surfLocal.copy(dir).multiplyScalar(planet.radius + h);
+        this._placeTree(id, surfLocal, dir, rr <= lodR ? 0 : 1, rand, buckets, barkBase, leafBase);
+      }
     }
-    trunks.count = fronds.count = placed;
-    trunks.instanceMatrix.needsUpdate = fronds.instanceMatrix.needsUpdate = true;
-    this._group.add(trunks, fronds);
-    this._palms = [trunks, fronds];
   }
 
-  _buildGrass(centerWorld) {
-    if (!this.planet.descriptor.hasAtmosphere) return;
-    const bladeGeo = new THREE.ConeGeometry(0.14, 1.1, 3);
-    bladeGeo.translate(0, 0.55, 0);
-    const tint = this.planet.descriptor.foliageColor || pickFoliage(this.planet.descriptor);
-    const grassMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(tint).multiplyScalar(0.85),
-      roughness: 0.9,
-      flatShading: true,
-    });
-    const grass = new THREE.InstancedMesh(bladeGeo, grassMat, GRASS_COUNT);
-    const scaleV = new THREE.Vector3();
-    const mat4 = new THREE.Matrix4();
-    let placed = 0;
-    for (let i = 0; i < GRASS_COUNT * 2 && placed < GRASS_COUNT; i++) {
-      const s = this._sampleSurface(centerWorld, 4, SCATTER_RADIUS);
-      if (!s) continue;
-      const h = 0.6 + Math.random() * 1.1;
-      scaleV.set(1, h, 1);
-      this._standMatrix(s.point, s.up, scaleV, mat4);
-      grass.setMatrixAt(placed, mat4);
-      placed++;
+  /** Compose one deterministic instance record (matrix + tints + collider). */
+  _placeTree(id, surfLocal, up, ring, rand, buckets, barkBase, leafBase) {
+    const assets = getForestAssets();
+    const sp = assets.species[id];
+    const spec = SPECIES[id];
+    const targetH = spec.heights[0] + rand() * (spec.heights[1] - spec.heights[0]);
+    const k = targetH / sp.nativeH;
+
+    const q = this._q2 || (this._q2 = new THREE.Quaternion());
+    const spin = this._spin2 || (this._spin2 = new THREE.Quaternion());
+    q.setFromUnitVectors(UP, up);
+    spin.setFromAxisAngle(up, rand() * Math.PI * 2);
+    q.premultiply(spin);
+
+    const scaleV = this._scaleV || (this._scaleV = new THREE.Vector3());
+    if (ring === 2) {
+      // Impostor cross-quad: x/z carry the sprite's width, y its height.
+      scaleV.set(targetH * (sp.impostor?.aspect ?? 1), targetH, targetH * (sp.impostor?.aspect ?? 1));
+    } else {
+      scaleV.setScalar(k);
     }
-    grass.count = placed;
-    grass.instanceMatrix.needsUpdate = true;
-    this._group.add(grass);
-    this._grass = grass;
+
+    // Seat the base a touch below grade so root flares meet slopes cleanly.
+    const seated = surfLocal.clone().addScaledVector(up, -0.06 * Math.sqrt(targetH));
+    const mat4 = new THREE.Matrix4().compose(seated, q, scaleV);
+
+    // Natural per-instance variation: brightness on bark, hue on foliage.
+    const bv = 0.88 + rand() * 0.17;
+    const barkTint = new THREE.Color(barkBase[0] * bv, barkBase[1] * bv, barkBase[2] * bv);
+    const leafTint = new THREE.Color(
+      leafBase[0] * (0.82 + rand() * 0.28),
+      leafBase[1] * (0.88 + rand() * 0.24),
+      leafBase[2] * (0.8 + rand() * 0.25),
+    );
+
+    let bucket = buckets.get(id);
+    if (!bucket) { bucket = { recs0: [], recs1: [], recs2: [] }; buckets.set(id, bucket); }
+    (ring === 0 ? bucket.recs0 : ring === 1 ? bucket.recs1 : bucket.recs2)
+      .push({ mat4, barkTint, leafTint });
+
+    // Colliders only where the player can actually reach before a re-center.
+    if (spec.trunkR > 0 && ring < 2) {
+      this.colliders.push({ local: surfLocal.clone(), r: spec.trunkR * k });
+    }
+  }
+
+  /** Instantiate one detail ring of a species from its records. */
+  _bakeRing(parts, recs, castShadow) {
+    if (!recs.length) return;
+    for (const part of parts) {
+      const im = new THREE.InstancedMesh(part.geometry, part.material, recs.length);
+      for (let i = 0; i < recs.length; i++) {
+        im.setMatrixAt(i, recs[i].mat4);
+        im.setColorAt(i, part.leaf ? recs[i].leafTint : recs[i].barkTint);
+      }
+      im.castShadow = castShadow;
+      im.receiveShadow = true;
+      // Instances spread across the whole patch; the geometry's own bounds
+      // would cull them wrongly.
+      im.frustumCulled = false;
+      this._group.add(im);
+      this._forestMeshes.push(im);
+    }
+  }
+
+  /** The single full-resolution hero scan with a distance LOD swap. */
+  _placeHero(assets, centerWorld) {
+    const sp = assets.species.hero;
+    const spec = SPECIES.hero;
+    for (let i = 0; i < 20; i++) {
+      const s = this._sampleSurface(centerWorld, 18, 42);
+      if (!s) continue;
+      const targetH = spec.heights[0]
+        + Math.random() * (spec.heights[1] - spec.heights[0]);
+      const k = targetH / sp.nativeH;
+
+      const makeLevel = (parts) => {
+        const g = new THREE.Group();
+        for (const part of parts) {
+          const mesh = new THREE.Mesh(part.geometry, part.material);
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          g.add(mesh);
+        }
+        return g;
+      };
+      const lod = new THREE.LOD();
+      lod.addLevel(makeLevel(sp.parts0), 0);
+      if (sp.parts1.length) lod.addLevel(makeLevel(sp.parts1), HERO_LOD_DIST);
+
+      const localPoint = s.point.clone().sub(this.center);
+      lod.position.copy(localPoint);
+      lod.quaternion.setFromUnitVectors(UP, s.up);
+      lod.rotateY(Math.random() * Math.PI * 2);
+      lod.scale.setScalar(k);
+      this._group.add(lod);
+      this._heroMesh = lod;
+      this._heroPlaced = true;
+      this._heroCollider = { local: localPoint.clone(), r: spec.trunkR * k };
+      this.colliders.push(this._heroCollider);
+      return;
+    }
+  }
+
+  /**
+   * Re-center the forest on a new point (the avatar walked REBUILD_STRAY
+   * from the patch center). The lattice is deterministic, so every tree
+   * stays exactly where it was — only its detail ring can change.
+   */
+  _recenterForest(anchorWorld) {
+    for (const obj of this._forestMeshes) {
+      this._group.remove(obj);
+      if (obj.isInstancedMesh) obj.dispose();
+    }
+    this._forestMeshes.length = 0;
+    // Rock colliders sit at the front of the array (pushed first); forest
+    // colliders are everything after — truncate and re-add the hero's.
+    this.colliders.length = this._rockColliderCount;
+    if (this._heroCollider) this.colliders.push(this._heroCollider);
+    this._buildForest(anchorWorld);
   }
 
   _buildWildlife(centerWorld) {
@@ -306,6 +597,18 @@ export class SurfaceScatter {
    * @param {THREE.Vector3|null} avatarWorld
    */
   update(dt, avatarWorld = null) {
+    // Wind clock + per-frame haze mirror for the shared foliage materials.
+    getForestAssets().update(dt);
+
+    // Walked far from the patch center? Re-center the detail rings around
+    // the avatar (deterministic lattice: same trees, upgraded detail).
+    if (avatarWorld && this._centerLocal) {
+      this._tmp.copy(avatarWorld).sub(this.center);
+      if (this._tmp.distanceTo(this._centerLocal) > REBUILD_STRAY) {
+        this._recenterForest(avatarWorld);
+      }
+    }
+
     const R = this.planet.radius;
     for (const c of this.critters ?? []) {
       // Wander: drift the heading; flee: run from the avatar.
@@ -407,14 +710,18 @@ export class SurfaceScatter {
 
   /** Tear down all scattered geometry. */
   dispose() {
+    this._disposed = true;
     this.planet.group.remove(this._group);
     for (const rock of this.rocks) this._group.remove(rock.mesh);
     this.rocks.length = 0;
     this._rockGeo.dispose();
     this._rockMats.forEach((m) => m.dispose());
-    if (this._trees) this._trees.forEach((t) => { t.geometry.dispose(); t.material.dispose(); });
-    if (this._palms) this._palms.forEach((t) => { t.geometry.dispose(); t.material.dispose(); });
-    if (this._grass) { this._grass.geometry.dispose(); this._grass.material.dispose(); }
+    // Forest geometry/materials are SHARED singletons owned by ForestAssets;
+    // only the per-patch instance buffers are released here.
+    for (const obj of this._forestMeshes) {
+      if (obj.isInstancedMesh) obj.dispose();
+    }
+    this._forestMeshes.length = 0;
     if (this._critterAssets) this._critterAssets.forEach((a) => a.dispose());
     if (this._birdAssets) this._birdAssets.forEach((a) => a.dispose());
   }
@@ -422,13 +729,3 @@ export class SurfaceScatter {
 
 const UP = new THREE.Vector3(0, 1, 0);
 const FORWARD_Z = new THREE.Vector3(0, 0, 1);
-
-/** A pleasant foliage tint per planet archetype. */
-function pickFoliage(descriptor) {
-  switch (descriptor.archetype) {
-    case 'ice': return 0x8fb6c4;
-    case 'desert': return 0x9fa055;
-    case 'volcanic': return 0x6b5340;
-    default: return 0x3f8f4a;
-  }
-}

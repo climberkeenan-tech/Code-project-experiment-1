@@ -50,7 +50,7 @@ export class Screens {
         <span class="ml-bar"><span class="ml-fill"></span></span>
       </div>
       <div class="reset-save">Reset progress</div>
-      <div class="build-tag">BUILD 28 — editor fixed: move/place/delete/save all work now</div>
+      <div class="build-tag">BUILD 29 — photoreal forests: real photogrammetry trees, wind, dense woods</div>
     `;
     this.root.appendChild(el);
 
