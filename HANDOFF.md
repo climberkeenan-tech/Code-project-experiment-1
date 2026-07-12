@@ -1,63 +1,367 @@
-# Starfall Frontier — Developer Handoff (consolidated)
+# Starfall Frontier — Complete Developer Handoff
 
-_This is the **single, current** handoff — it supersedes and folds in the two
-earlier `HANDOFF.md` files (see lineage below). Everything here was read out of
-the source, not remembered. Branch `claude/spaceship-assets-integration-57k8bu`,
-also fast-forwarded onto the default branch `claude/3d-space-exploration-game-ogrezx`;
-working tree clean, everything committed. **Current build: BUILD 28.**_
+_The **single, current** handoff for everything built so far. **Current build:
+BUILD 28.** Development branch `claude/handoff-consolidation-review-uvwo4e`;
+every published build is also pushed to the default branch
+`claude/3d-space-exploration-game-ogrezx`, whose workflow publishes to
+`gh-pages`. This file has three parts:_
 
-> **Handoff lineage — the three handoffs (this one replaces the other two).**
-> 1. **Original** developer handoff (pre-model era): lives in git history around
->    commit `e99aabf`. Archival only — it even claimed "the bundle ships no
->    binary assets," no longer true.
-> 2. **Hand-modeled-ship-era** rewrite: lives at commit `d511ac8` on branch
->    `claude/focused-meitner-73h1gk`. This file began as that rewrite.
-> 3. **This file:** that rewrite, kept current through BUILD 9→12 and expanded
->    with the full change history ([§0](#0-change-history)),
->    creative mode, and the deploy/local-dev docs. **Read this one.**
+- **PART A — The complete game**: everything that exists right now, by topic,
+  with current numbers. Read this to understand the game.
+- **PART B — Build-by-build history** (base game → BUILD 28): the full
+  changelog with per-build rationale and the playtest quotes that drove it.
+- **PART C — Deep architecture reference**: the code-level documentation
+  (ship system, services, save schema, event catalogue…). Written around
+  BUILD 21 — read the **corrections block** at its top first.
 
-> **Everything that was built, at a glance:** [§0 Change history](#0-change-history)
-> is the complete changelog (base game → BUILD 12). Companion docs in the repo:
-> **`DEPLOY.md`** (deploy to Netlify, click-by-click), **`LOCAL_DEV.md`** (run &
-> test on a Mac, incl. iPhone-over-Wi-Fi), **`README.md`** (overview).
-
-> **Deployment-verification pass.** Every claim about the ship assets was
-> re-verified end-to-end, not assumed: all four GLBs are present and valid on
-> GitHub's default branch, `npm install && npm run build` produces a ~4.5 MB
-> `dist/` containing all four models, and the built game boots with **all four
-> `.glb` fetched HTTP 200, zero console errors**, each model-backed hull loading
-> its real geometry (40k–72k tris vs ~400 for the procedural-fallback slots).
-> See [§14](#14-build-deploy--the-test-harness) and `DEPLOY.md`.
-
-> **Ship system first.** The game loads four hand-authored ship models (GLB)
-> that hot-swap in over procedural hulls. Read [§1 The Ship System](#1-the-ship-system-read-this-first)
-> and [§2 Adding a New Spaceship](#2-adding-a-new-spaceship-the-exact-process)
-> before touching any hull, catalog entry, or model.
+Companion docs: `DEPLOY.md` (Netlify click-by-click), `LOCAL_DEV.md` (run on a
+Mac / iPhone-over-Wi-Fi), `README.md`.
 
 ---
 
-## Table of contents
-0. [Change history — what was built](#0-change-history)
-1. [The Ship System (read this first)](#1-the-ship-system-read-this-first)
-2. [Adding a New Spaceship — the exact process](#2-adding-a-new-spaceship-the-exact-process)
-3. [Project goal & current state](#3-project-goal--current-state)
-4. [Architecture & composition](#4-architecture--composition)
-5. [Core services](#5-core-services)
-6. [Save system (full schema)](#6-save-system-full-schema)
-7. [World, planets & terrain](#7-world-planets--terrain)
-8. [Environment & camera](#8-environment--camera)
-9. [Combat & FX](#9-combat--fx)
-10. [Enemy AI & population](#10-enemy-ai--population)
-11. [Gameplay systems](#11-gameplay-systems-on-foot-warp-crew-fleet-economy-poi-landing)
-12. [UI & audio](#12-ui--audio)
-13. [EventBus catalogue](#13-eventbus-catalogue)
-14. [Build, deploy & the test harness](#14-build-deploy--the-test-harness)
-15. [Known bugs, stale comments & debt](#15-known-bugs-stale-comments--debt)
-16. [Design decisions to respect](#16-design-decisions-to-respect)
-17. [ToDo (prioritized)](#17-todo-prioritized)
-18. [Instructions for the next developer](#18-instructions-for-the-next-developer)
+# PART A — THE COMPLETE GAME
+
+## A1. What this is & how it's played
+
+A browser space game (Vite + three.js r170, all JavaScript, no plugins, no
+login): fly a 6-DOF ship through a procedurally generated multi-star universe,
+descend through atmospheres to planet surfaces **with no loading screens**,
+walk on foot, mine, trade, fight, command fleets, raid the enemy fortress —
+and design the planets yourself in a built-in world editor.
+
+**Publish ritual** (how every build reaches the player): bump the build stamp
+in `src/ui/Screens.js` → `npm run build` → zip `dist/` to
+`builds/starfall-frontier-buildNN.zip` (delete the old zip) → commit → push the
+dev branch → push `HEAD:claude/3d-space-exploration-game-ogrezx` → wait for the
+new `gh-pages` SHA (`git ls-remote origin gh-pages`) → hand out the pinned link
+`https://rawcdn.githack.com/climberkeenan-tech/Code-project-experiment-1/<gh-pages-SHA>/index.html`.
+The SHA-pinned link defeats CDN caching; the player confirms the stamp on the
+start screen. localStorage is shared across builds (same origin), so saves and
+world designs survive updates.
+
+## A2. Game modes (start screen)
+
+| Mode | What it is |
+|------|------------|
+| **▶ Survival** | The full game: start with the SF-10 and 0 credits, mine/trade/fight to progress. Enter/Space starts it. |
+| **✦ Creative** | Unlimited credits, every ship unlocked (mission locks bypassed), purchases free. Saves are sandboxed: creative never writes the survival save. Key `C`. |
+| **🛠 World Editor** | A standalone design tool (BUILD 26–28), *not* a game mode: free-fly camera, terrain sculpting, prop placement. No enemies, no shop, no HUD. See A11. |
+
+Also on the start screen: the model-loading gate (the game cannot start until
+all 12 GLB hulls are loaded — no stand-in flash), **Reset progress**
+(two-tap confirm), and the hand-edited build stamp.
+
+## A3. The ships — 13 catalog entries, 12 hand-authored GLB hulls
+
+All flyable hulls are player-authored **Meshy** models, compressed to meshopt
+GLB (~0.5–1.2 MB each, `public/models-glb/`). Registry: `MODELS` in
+`src/ship/ModelShips.js` (url, `targetLength`, `yaw:-Math.PI/2` because Meshy
+authors the nose along −X, measured per-thruster `anchors`). Catalog:
+`PLAYER_SHIPS` in `src/ship/ShipFactory.js`.
+
+| id | name | Lv | cost | hull | shield | weapon | model | special |
+|----|------|---:|-----:|-----:|-------:|-------:|-------|---------|
+| `starter` | SF-10 Sentinel | 10 | 0 | 1 | 1 | 1 | starter | — |
+| `explorer` | SF-20 Nebula Gunship | 20 | 320 | 1.25 | 1.2 | 1 | gunship | — |
+| `interceptor` | SF-30 Kestrel | 30 | 800 | 1.5 | 1.45 | 1 | gunship ×1.18 | — |
+| `nighthawk` | SF-45 Night Hawk | 45 | 1,400 | 2.0 | 1.9 | 1.4 | nighthawk | **mission-10 reward**; G = call 1–40 allied reinforcements |
+| `frigate` | SF-50 Aegis Gunner | 50 | 2,080 | 2.2 | 2.1 | 1.5 | aegis | gunner line |
+| `wedge` | SF-55 Void Wedge | 50 | 2,500 | 2.3 | 2.2 | 1.45 | wedge | **mission-50 reward** |
+| `falcon` | SF-60 Falcon | 55 | 5,000 | 2.6 | 2.5 | 1.5 | falcon | **mission-40 reward** |
+| `battlecruiser` | SF-70 Bastion Gunner | 70 | 6,400 | 3.4 | 3.1 | 2.0 | bastion | gunner line |
+| `battleship` | SF-85 Obsidian Dreadnought | 85 | 12,800 | 7 | 5.5 | 1 | dreadnought | capital; turrets 4, hangar 4 (belly launch) |
+| `stardestroyer` | SF-150 Star Destroyer | 90 | 30,000 | 9 | 7 | 2.0 | stardestroyer | **mission-25 reward**; G = **fleet call** (A7); turrets 3; noLanding |
+| `sovereign` | SF-100 Sovereign | 100 | 20,800 | 5.2 | 4.6 | 1 | procedural | reserved for a future model |
+| `carrier` | SF-110 Vanguard | 110 | 40,000 | 11 | 8 | 1 | flagship | capital; turrets 2, **hangar 15** (flank launch); noLanding |
+| `aethelred` | SF-200 Aethelred | 75* | 90,000 | 16 | 12 | 2.5 | aethelred | **mission-75 reward**; hangar 15 + gunnerHangar 5 (lower-side launch); turrets 4; noLanding |
+
+_*Aethelred was deliberately moved to level 75 ("it just seems overpowered")
+and is the final mission prize. Mission-reward hulls show 🔒 + a progress bar
+in the shop until their mission is complete — the first copy is then FREE._
+
+Non-player hulls: `leviathan` (the enemy fortress, targetLength 2600) and the
+enemy fleet flies the same 12 hulls natural-coloured via `ENEMY_MODEL_MAP`
+(hostiles are identified by HUD brackets + red radar blips + reddish engine
+glow, never by a repaint).
+
+**Engine flames** are measured, not guessed: each model carries per-nozzle
+`anchors` measured from rear-facing vertex clusters, one flame per bell,
+sized by nozzle spacing (`modelEngineAnchors`). Engine anchors stay UNSCALED
+(EngineGlow is parented inside the scaled visual); hardpoints must be scaled
+(world-space math). Get this backwards and flames drift into the hull — it
+happened once (BUILD 17 fixed it).
+
+## A4. Flight, weapons, feel
+
+6-DOF flight (mouse steer + W/S throttle, A/D roll, Q/E strafe, Shift boost
+×2.4, X brake), base max speed 240 × engine multiplier, altitude-scaled speed
+in atmosphere, entry heat, gravity. Landing (`L`) auto-lands with full stop —
+you can't exit until the ship is stationary. Hyperdrive (`J`) is directional
+light-speed flight (steer with the nose, 42 km/s max) that auto-drops at any
+planet — or the Leviathan fortress — looming ahead; `B` cycles the nav lock.
+Weapons: pooled bolts with cursor aim + magnetic assist, heat/overheat, crew
+gunner turrets, `C` fires an anti-missile countermeasure. Enemy homing
+missiles fly 680 u/s for 9 s with true axis-angle tracking (2.2 rad/s) — they
+genuinely run you down; escape by boosting, out-turning at close range
+(turn radius ≈ 300 m), or shooting them with C.
+
+## A5. Enemies
+
+Eight classes (`ENEMY_TYPES`, `src/ai/EnemyShip.js`), all buffed at load by the
+two difficulty passes: **hull/shield/damage ×1.25, accuracy +0.08 (cap 0.97),
+fire interval ×0.9, detect range ×1.3**. Base (pre-buff) classes:
+
+| type | name | Lv | credits | weapon | notes |
+|------|------|---:|--------:|--------|-------|
+| scout | Scout | 10 | 20 | bolt | fast, evasive |
+| fighter | Fighter | 20 | 50 | bolt | |
+| heavy | Heavy Assault | 40 | 160 | bolt | |
+| cruiser | Missile Cruiser | 60 | 420 | missile | kites |
+| warship | Battlecruiser | 75 | 1,500 | bolt turret | capital |
+| redcarrier | Dreadcarrier | 90 | 4,000 | missile turret | deploys fighters |
+| destroyer | Planet Destroyer | 100 | 10,000 | missile | boss |
+| apex | Ravager Dreadnought | 120 | 25,000 | missile turret | the roaming hunter: always knows where you are, never retreats, radar rim-arc |
+
+**Victim system** (BUILD 24/26): every hostile hunts a chosen victim — the
+player, a deployed escort, or an allied traffic ship. Half of every class
+(`id % 2 === 0`) prefers blue ships (bias 0.45); the rest prefer the player
+but switch to a meaningfully closer ally (bias 1.25). The whole combat FSM
+*and* enemy gunfire follow the victim, so allies genuinely get hunted and
+killed. The apex only ever hunts the player. Ambient population comes from a
+territorial EncounterDirector (regions, cooldowns, despawn 14 km, global cap
+10) plus kill-escalation Reinforcements (2 replacements per kill, warp out to
+escape) — both suppressed during missions and in the editor.
+
+## A6. The Obsidian Leviathan — the enemy HUB (`src/ai/Leviathan.js`)
+
+A planet-scale stationary fortress (radius ≈ 1,083) at absolute
+`(430000, 26000, -380000)`: **150,000 hull**, no shield, can't land on it,
+never moves. It's a pseudo-enemy inside `enemies.enemies` (shootable, radar
+rim-arc via `stats.apex`, kill pays **150,000 cr**) and a nav obstacle (AI
+steers around it; enemy bolts die on the hull). ⚠️ Its GLB has inverted
+winding — `HubFortress` sets `THREE.DoubleSide` or it's invisible.
+
+**Finding it**: an always-on red **☠ LEVIATHAN <dist>** marker in the target
+overlay, and it's a hyperdrive destination (`Leviathan.navTarget`, a
+planet-shaped adapter) — lock with B, warp drops you ~19 km out.
+
+**The garrison**: an endless stream out of the hull — 70 live guards
+(scout-heavy mix echoing the 1,000-ship design ratios at simulatable scale),
+first fill fast (0.12 s/launch ≈ 9 s), losses refilled at 0.6 s forever.
+Guards are **fortress veterans** (private stats copies — never mutate the
+shared `ENEMY_TYPES`): damage ×1.5, fire ×1.25, accuracy +0.1, detect ≥ 9 km,
+hull/shield ×1.4, `fearless` (never retreat), born attacking inside 8 km, and
+`hubGuard` (exempt from director despawn and reinforcement escalation).
+**ALARM**: any hit on the hub or a guard enrages the entire garrison for 25 s
+(refreshed per hit). Scouts screen 4.2–6.6 km out; the rest wrap the hull in
+the same "boreto" sphere the player's fleet uses. The garrison stands down
+when you leave (34 km) and dies with the fortress.
+
+## A7. Fleet command
+
+- **Carrier wings** (G on a hangar hull): fighters stream out 2-at-a-time from
+  the real bay (flanks / belly / lower-side per hull), drawn from purchased
+  **hangar stock** (Shop → Hangar; losses are permanent). Roles: guards form a
+  Fibonacci-sphere shell around the flagship (defenders — every second guard —
+  **never chase past 750 m** and ignore far focus orders), scouts sweep wide
+  orbits. Lock-till-kill targeting spreads one-ship-per-enemy; `V` = focus
+  fire; recall = fly back and dock at the bay mouth. The mothership hull is
+  solid (keep-out sphere).
+- **Night Hawk** (`reinforce`): G opens a popup — call **1–40 allied ships**
+  that jump in, fight (they take real losses), and leave when done.
+- **Star Destroyer** (`fleetCall`): G opens the fleet-composition popup — pick
+  up to **50 total ships** across 8 classes (max 1 aethelred / 3 carrier /
+  5 battleship / 20 sovereign / 20 battlecruiser / 20 frigate / 25 explorer /
+  50 starter); the ask is budget-trimmed to 50 and the fleet jumps to you
+  (200 s tours, never leaves mid-fight).
+- **Ambient allies** (`FriendlyTraffic`, cap 5): blue-bracket civilians and
+  patrols that genuinely fight and die (see victim system).
+
+## A8. Missions — a 75-rung ladder (`src/missions/MissionSystem.js`)
+
+Started from the Shop's Missions tab; targets warp in ahead of you. Rungs 1–10
+are handcrafted (including a "fly the SF-10" contract); 11–75 generate
+deterministically with waves of 2–6 that grow with depth plus escorts on most
+rungs (rung 75 is an 11-ship raid). Missions are **private fights**: no
+ambient spawns, no reinforcements, and any gate-crasher that wasn't there at
+start is swept when the contract ends. Milestones grant ships FREE on
+completion (`unlockAt`): **10 → Night Hawk, 25 → Star Destroyer, 40 → Falcon,
+50 → Void Wedge, 75 → Aethelred** (banner + shop unlock). `missionIndex`
+persists in the save.
+
+## A9. The universe
+
+- **Three star systems**: the home system (13 planets, divisor-7 pinned
+  orbits) plus **Meridian Reach** and **Karyx Expanse** at ±1.5 M units, each
+  with its own sun and planets; "Entering/Leaving <system>" banners via
+  `Universe._updateSystemTransit` (0.64 hysteresis), nearest-star lighting.
+- **Planets** (`src/world/Planet.js`): quadtree cube-sphere LOD terrain from a
+  single seeded sampler (continents/hills/ridged mountains/plateaus/canyons/
+  craters/detail **+ the player's sculpt layer** — see A11), biome vertex
+  colours with forest bands visible from orbit, oceans (two LODs, scrolling
+  ripples, murky underwater), atmosphere + haze + fly-through clouds,
+  day/night as a sun sweep (terrain never rotates — collision assumes a
+  static frame), settlements on three worlds, wildlife, POIs
+  (stations/wrecks/caches/anomalies with guard squads).
+- **Asteroid fields**: instanced rocks that **tumble in place** (amortized ⅓
+  per frame, distance-gated), free-roaming drifters, all breakable (bolts
+  chip → break; salvage chance) and damaging on collision, multi-cell
+  spatial-hash collision.
+
+## A10. On foot
+
+Land, stop fully, `E` to disembark: first-person sphere-walking with radial
+gravity, jump/sprint, tiered ore mining (`E`), solid trees/rocks, swimming
+with an air meter (bubbles, drowning drops your ore in a recoverable surface
+bag), on-screen arrows back to your ship and to nearby ore, `N` toggles nav
+markers. Boarding requires walking back to the ship.
+
+## A11. The World Editor + world-design pipeline
+
+Launched from the start screen (BUILD 26, made actually-usable in 28). An
+engine-viewport tool over the real universe:
+
+- **Camera**: RIGHT-DRAG or ARROW KEYS look, WASD fly, E/Q up/down, SHIFT ×5,
+  WHEEL fly speed. `[` `]` hop planets (arriving day-side). A green ground
+  cursor follows the mouse (self-contained ray from the editor's own pose —
+  never trust `camera.matrixWorld`, see PART B BUILD 28).
+- **Tools** (`T` cycles): **PLACE** (click plants the selected prop),
+  **RAISE / LOWER / FLATTEN** terrain brushes (hold to sculpt, WHEEL sizes the
+  brush 10–400 m, flatten anchors at first touch; lowering below sea level
+  floods into lakes), **DELETE** (click a prop). **CLEAR** wipes the planet
+  (two-click confirm). **X** deletes nearest; **1–9** pick props.
+- **Props** (9): three-low-poly prefabs (Tree/Rock/Boulder/Mossy Rock,
+  bounding-box-normalized) + hand-built merged-geometry pine/palm/bush/
+  flowers/grass. 500/planet cap, single draw call each.
+- **Sculpting** rides a `sculpts` layer inside the terrain sampler, so
+  rendering, walking, landing, and AI collision agree instantly;
+  `QuadtreeSphere.invalidateRegion` rebuilds touched patches in frames.
+  400 strokes/planet.
+- **Persistence & shipping designs**: props → `starfall.props.v1`, sculpts →
+  `starfall.sculpt.v1` (localStorage, independent of the save slot — designs
+  appear in survival AND creative). **💾 SAVE FILE** downloads
+  `starfall-world-design.json`; paste a player's file into
+  `src/world/worldDesign.json` and rebuild to **ship their design to every
+  player** (it's the bundled per-planet fallback).
+- The editor suppresses all combat/traffic (`game.editorMode`), pins the
+  invisible player ship to the camera (LOD/origin anchors keep working), and
+  the Shop can never open inside it.
+
+## A12. Economy, progression, persistence
+
+**Shop** (Outpost Exchange, `T` or the TRADE button): Sell (ore, rarity-tiered
+incl. gold) · Upgrades (engine/weapon/shield — **per ship**, they die with the
+hull) · Ships (catalog + 🔒 mission locks with progress bars) · Missions ·
+Hangar (buy attack fighters / gunner ships for carrier bays) · Crew
+(engineer/gunners) · Repair. Creative mode: everything visible, buyable, free.
+
+**Death economy**: the active ship, its hold, and onboard crew are lost;
+stored ships and banked credits survive; respawn in the cheapest owned hull.
+
+**Persistence** (all localStorage, survives build updates):
+
+| key | contents |
+|-----|----------|
+| save slot (v3, `SaveGame.js`) | credits, resources, inventory, crew, owned/active ships, **per-ship upgrades**, hangar stock, missionIndex, POI discoveries |
+| `starfall.props.v1` | placed nature props per planet (planet-local coords) |
+| `starfall.sculpt.v1` | terrain sculpt strokes per planet |
+| bundled `src/world/worldDesign.json` | shipped world design (fallback for planets with no local edits) |
+
+Creative never writes the save slot; world design keys are shared on purpose.
+Autosave fires on the significant events list (kills, purchases, missions,
+fleet losses…).
+
+## A13. UI, HUD, audio
+
+DOM HUD (hull/shield, location/credits/cargo/fleet, speed/altitude, boost/
+weapon-heat meters, hyperdrive line with lock name + distance, alerts,
+banners for every major event), radar (blips + planet/apex/fortress rim
+arcs), canvas target overlay (enemy brackets with health, blue ally boxes,
+missile marks, off-screen arrows, warp marker, ☠ Leviathan marker, on-foot
+ship/ore arrows), damage vignette, hitmarkers, underwater/air-meter overlays,
+touch controls (virtual sticks + buttons), death/respawn screens.
+Audio is 100% synthesized WebAudio (engine loops, lasers, missiles,
+explosions, UI chimes, ambient music) — zero audio assets.
+
+## A14. Controls reference
+
+**Flight**: mouse steer · W/S throttle · A/D roll · Q/E strafe · R/F vertical
+· Shift boost · X brake · Space/LMB fire · C countermeasure · E interact ·
+T shop · J hyperdrive · B cycle warp target · L auto-land · G fleet
+launch/recall (or Night Hawk / Star Destroyer popups) · V focus fire ·
+N nav markers · Esc close popups.
+**On foot**: WASD walk · mouse/arrows look · Space jump · Shift sprint ·
+E mine/recover/board.
+**World Editor**: RIGHT-DRAG/arrows look · WASD fly · E/Q up/down · Shift
+fast · wheel speed/brush · click use tool · 1–9 props · T tool · X delete ·
+[ ] planet · buttons: SAVE FILE / CLEAR / EXIT.
+
+## A15. Dev workflow
+
+- **Test harness**: `node tools/screenshot.mjs <url> <png> <waitMs>
+  '<actionsJson>'` (headless Chromium; actions `tap/key/wait/eval/evalFile/
+  shot`; `window.__game` exposed; deterministic testing = `g.paused=true` +
+  manual `system.update(0.05)` loops). **Hard-won lesson (BUILD 28): also
+  drive REAL input** — `key` holds and positional `tap` clicks — because
+  synthetic `dispatchEvent`/direct method calls masked three shipping bugs
+  (the horizon freeze, the hidden-shop click eater, stale camera matrices).
+  Headless sim runs ~10× slower than wall clock; calibrate assertions.
+- **Meshy asset pipeline** (ships AND future props): user attaches a GLB in
+  chat → `gltf-transform resize --width 1024 --height 1024` → `gltf-transform
+  optimize --compress meshopt --texture-compress webp --simplify-error 0.001`
+  → drop in `public/models-glb/` → register in `MODELS` (+ measure thruster
+  anchors for flyables) → catalog entry. Models are gated behind the
+  start-screen loader.
+- **Network reality of this workspace**: npm registry and raw GitHub work;
+  kenney.nl / quaternius.com / polyhaven.com / jsdelivr / unpkg are blocked;
+  Unreal marketplace assets are UE-only by licence and format. Real scanned
+  assets must arrive as user-uploaded GLBs.
+- `three-low-poly` is installed `--legacy-peer-deps` (wants three ≥ 0.180, we
+  pin 0.170; it only uses stable APIs). Don't upgrade three casually — custom
+  shader chunks (haze, logdepth) are keyed to r170 internals.
+
+## A16. Known gaps & pending
+
+- **Waiting on user assets**: Emerald Canopy tree (needs a smaller Meshy
+  re-export), animal replacements, ore models, any nature GLBs for the editor
+  palette; the user's `starfall-world-design.json` export to bake into
+  `worldDesign.json`.
+- Placed props have no collision (walk-through) and don't reflow when terrain
+  under them is re-sculpted.
+- `sovereign` still flies the procedural hull (reserved for a future model).
+- Old prop factories (`oakParts`/`rockParts`/`boulderParts`) are dead code.
+- The Leviathan doesn't persist its destruction (respawns next session) —
+  arguably a feature (endless raid target).
+- PART C's tables predate BUILD 22+ (see its corrections block).
+
+## A17. Build history at a glance
+
+| build | headline |
+|------:|----------|
+| base→8 | seamless planetfall game: flight, combat, planets, on-foot, shop, crew, warp, capitals, saves |
+| 9–12 | GLB fast-loading ships · balance · fleet/flagship/flames · Survival/Creative |
+| 13 | natural-colour enemies · staggered bay launches |
+| 14 | Aethelred flagship + gunner-ship line + per-ship weapon mults |
+| 15 | allied traffic that fights + blue boxes |
+| 16 | fleet roles (guard shell + scouts) + lock-till-kill |
+| 17 | mega-update: flame anchors, water/swimming, per-ship upgrades, solid nature, asteroid damage, creative sandbox, on-foot arrows… |
+| 18 | 3 star systems · missions · fleet sphere · hangar economy |
+| 19 | Night Hawk (mission reward + 1–40 reinforcement call) |
+| 20 | model-loading gate |
+| 21 | mission isolation (private fights) |
+| 22 | fleet call · 4 new hulls · the Obsidian Leviathan · tumbling rocks |
+| 23 | Leviathan findable: ☠ marker + warp lock + fast garrison fill |
+| 24 | +25% enemies · victim system (allies die) · defender leash · harder missions · fortress veterans-lite |
+| 25 | homing missiles actually hunt · on-foot nature editor (v1) |
+| 26 | standalone World Editor · aggression pass 2 |
+| 27 | terrain sculpting (raise/lower/flatten) · three-low-poly prefabs |
+| 28 | editor made real: horizon-freeze cap, hidden-shop click eater, stale-matrix ray · DELETE/CLEAR/SAVE FILE · bundled worldDesign.json |
+
+Full details for every build: PART B below.
 
 ---
+
+# PART B — BUILD-BY-BUILD HISTORY
 
 ## 0. Change history
 
@@ -568,6 +872,54 @@ deploy once via Netlify (browser-only) and play the resulting URL in any browser
 (DuckDuckGo included — the game makes no third-party requests).
 
 ---
+
+
+---
+
+# PART C — DEEP ARCHITECTURE REFERENCE
+
+> ⚠️ **Corrections block — read first.** The sections below were written
+> around BUILD 21 and are accurate at the code level EXCEPT where later
+> builds moved things. Trust PART A / PART B (and the source) over these
+> tables where they disagree:
+>
+> - **Hulls**: the `MODELS` registry now has **12** entries, not 7 — add
+>   `nighthawk` (12), `stardestroyer` (120), `falcon` (13), `wedge` (14),
+>   `leviathan` (2600, fortress-only, needs DoubleSide) to §1.3's table. All
+>   flyables carry measured `anchors` (so §1.8's "no per-model anchor
+>   metadata" is obsolete — bounds formulas are only the fallback).
+> - **Catalog**: `PLAYER_SHIPS` has **13** entries, not 9 — see PART A A3 for
+>   the current table (nighthawk/wedge/falcon/stardestroyer added; aethelred
+>   is level **75** with `unlockAt: 75`; `unlockAt`, `reinforce`, `fleetCall`
+>   are new catalog fields).
+> - **Enemy stats** (§ enemy tables): `ENEMY_TYPES` are buffed at module load
+>   (hull/shield/damage ×1.25, accuracy +0.08 cap 0.97, fireInterval ×0.9,
+>   detectRange ×1.3) and the AI hunts a **victim** (player OR allied ship),
+>   not hard-wired to the player. Missiles: speed 680, life 9 s, turn 2.2,
+>   fuse 8, true axis-angle steering.
+> - **Modes**: `game.mode` is `'flight' | 'onfoot' | 'editor'`; a new
+>   `game.editorMode` flag suppresses director/apex/reinforcements/traffic/
+>   Leviathan and the Shop.
+> - **System order** now: `player → asteroids:* → universe → onfoot → nature →
+>   warp → landing → approach → settlements → poi → director → enemies →
+>   apex → leviathan → reinforcements → traffic → weapons → combat → crew →
+>   fleet → missions → explosions → pickups → sun → camera → world-editor →
+>   starfield → nebulas → ship-sounds → music → hud → radar → targets → shop`
+>   (SpaceDust removed; nature/leviathan/world-editor added).
+> - **New systems not documented below** (see PART A + PART B):
+>   `ai/Leviathan.js`, `world/NatureEditor.js`, `world/sculptStore.js`,
+>   `world/worldDesign.json`, `editor/WorldEditor.js`, the terrain sampler's
+>   `sculpts` layer + `QuadtreeSphere.invalidateRegion`, MissionSystem's
+>   75-rung ladder + `unlockAt` grants, HUD's fleet-call/reinforce popups,
+>   FriendlyTraffic's `spawnReinforcements`/`spawnFleet`.
+> - **Save schema** is **v3** (per-ship upgrades `upgradesByShip`, hangar
+>   stock, missionIndex), not v2. World-design keys are separate (A12).
+> - **Universe**: 13 home planets + two neighbour systems (`game.starSystems`),
+>   not a single 9-planet system.
+> - **Storage**: creative mode never writes the save slot ("creative save
+>   sandbox", BUILD 17).
+> - The changelog sections formerly at the top of this file now live in
+>   PART B, so §0 references still work — they just moved.
 
 ## 1. The Ship System (read this first)
 
