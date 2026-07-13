@@ -1,14 +1,14 @@
 # Starfall Frontier — Complete Developer Handoff
 
 _The **single, current** handoff for everything built so far. **Current build:
-BUILD 32.** Development branch `claude/handoff-md-verify-uxi68e`;
+BUILD 33.** Development branch `claude/handoff-md-verify-uxi68e`;
 every published build is also pushed to the default branch
 `claude/3d-space-exploration-game-ogrezx`, whose workflow publishes to
 `gh-pages`. This file has three parts:_
 
 - **PART A — The complete game**: everything that exists right now, by topic,
   with current numbers. Read this to understand the game.
-- **PART B — Build-by-build history** (base game → BUILD 32): the full
+- **PART B — Build-by-build history** (base game → BUILD 33): the full
   changelog with per-build rationale and the playtest quotes that drove it.
 - **PART C — Deep architecture reference**: the code-level documentation
   (ship system, services, save schema, event catalogue…). Written around
@@ -378,6 +378,7 @@ E mine/recover/board.
 | 30 | **dense forests**: ~120k-tuft grass carpet (no bare ground) · bush layer · thicker tree lattice · leaf-alpha recovery (solid-card fix) · foliage translucency · flight/full patch grades |
 | 31 | **grounded forests**: slope gate + slope-proportional sinking (no floaters) · far-ring LOD burial · slope-aware hero · density up again |
 | 32 | **living forests**: planetary daylight ambience (fixes blue-black foliage) · correlated leaf tints · jacaranda de-purpled · unlit day-scaled impostors · 3× grass, +80% trees · mobile detail tier |
+| 33 | **grounded shade**: instanced contact-shadow discs under every tree (the shadow map only covers ±90 m) · deep-forest soil floor · deadwood weights trimmed |
 
 Full details for every build: PART B below.
 
@@ -1002,6 +1003,18 @@ bushes grid 5.2 / floor 0.38; deadwood weights trimmed toward living
 broadleafs. **Mobile tier**: `engine.isMobile` shrinks the detail rings
 (LOD0 36 m / LOD1 95 m) and the grass carpet (20/clump, 130 m) so phones
 hold frame rate; rings are per-instance fields now, not consts.
+
+### BUILD 33 — grounded shade
+- **Contact-shadow discs**: one soft radial-gradient disc instanced under
+  every near/mid tree, bush and log (`ForestAssets._makeAoDisc`,
+  transparent unlit black, polygon-offset above the terrain). The real
+  shadow map only covers ±90 m around the player — beyond it trees looked
+  pasted on. One InstancedMesh per patch.
+- **Deep-forest floor**: terrain colour lerps toward leaf-litter soil
+  (0x241d12 × mask·band·0.38) under dense canopy, so grass peek-through
+  reads as earth.
+- Deadwood (quiver/snag/log) mix weights trimmed toward living broadleafs —
+  the shore band read as a wall of dead tan trees.
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally

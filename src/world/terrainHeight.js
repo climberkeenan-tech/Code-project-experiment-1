@@ -160,6 +160,7 @@ export function createTerrainSampler(descriptor) {
   // so biomes read clearly from orbit (playtest: "can't see forests from
   // space"). Seeded noise keeps the pattern deterministic per planet.
   const _forest = new THREE.Color(0x1c4a24);
+  const _soil = new THREE.Color(0x241d12);
   const vegetated = descriptor.archetype === 'terran' || descriptor.archetype === 'ocean';
 
   /**
@@ -196,6 +197,9 @@ export function createTerrainSampler(descriptor) {
         biomeNoise.noise3(dir.x * 7 + 41, dir.y * 7 + 41, dir.z * 7 + 41));
       const band = smoothstep(0.03, 0.09, h01) * (1 - smoothstep(0.38, 0.58, h01));
       target.lerp(_forest, mask * band * 0.7);
+      // Deep-forest floor: under a dense canopy the ground is leaf-litter
+      // brown, not bright green — any grass peek-through reads as soil.
+      target.lerp(_soil, mask * band * 0.38);
       // Grassland mottle: mid-frequency luminance breakup so open ground
       // reads as living meadow instead of a flat green plane — darkened
       // toward soil inside the grass band so the carpet's peek-through

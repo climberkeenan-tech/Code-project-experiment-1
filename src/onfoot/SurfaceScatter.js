@@ -310,6 +310,8 @@ export class SurfaceScatter {
 
     /** id → {recs0, recs1, recs2} — instance records per detail ring. */
     const buckets = new Map();
+    /** Contact-shadow discs: one per near/mid tree. */
+    this._aoRecs = [];
     const seen = new Set();
     const lp = new THREE.Vector3();
     const dir = new THREE.Vector3();
@@ -404,6 +406,18 @@ export class SurfaceScatter {
     // master near the touchdown point. Survives re-centers (never re-placed).
     if (plan.hero && this._mode === 'full' && assets.species.hero && !this._heroPlaced) {
       this._placeHero(assets, centerWorld);
+    }
+
+    // Contact-shadow discs (they ground trees beyond the shadow map).
+    if (this._aoRecs.length && assets.aoDiscGeo) {
+      const im = new THREE.InstancedMesh(assets.aoDiscGeo, assets.aoDiscMat, this._aoRecs.length);
+      for (let i = 0; i < this._aoRecs.length; i++) im.setMatrixAt(i, this._aoRecs[i]);
+      im.castShadow = false;
+      im.receiveShadow = false;
+      im.frustumCulled = false;
+      im.renderOrder = 2;
+      this._group.add(im);
+      this._forestMeshes.push(im);
     }
 
     // Bake the buckets into InstancedMeshes (one per species-part-ring).
@@ -555,6 +569,19 @@ export class SurfaceScatter {
     // Colliders only where the player can actually reach before a re-center.
     if (spec.trunkR > 0 && ring < 2) {
       this.colliders.push({ local: surfLocal.clone(), r: spec.trunkR * k });
+    }
+
+    // Contact-shadow disc under anything tree-sized (near/mid rings).
+    if (ring < 2 && (spec.trunkR > 0 || id === 'bush' || id === 'log')) {
+      const discR = id === 'bush' ? targetH * 0.8
+        : id === 'log' ? 1.3 : Math.max(1.3, targetH * 0.16);
+      const dq = this._discQ || (this._discQ = new THREE.Quaternion());
+      dq.setFromUnitVectors(UP, up);
+      const dv = this._discS || (this._discS = new THREE.Vector3());
+      dv.set(discR, 1, discR);
+      this._aoRecs.push(new THREE.Matrix4().compose(
+        surfLocal.clone().addScaledVector(up, 0.12 + slope * 0.3), dq, dv,
+      ));
     }
   }
 

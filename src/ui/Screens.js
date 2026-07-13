@@ -50,7 +50,7 @@ export class Screens {
         <span class="ml-bar"><span class="ml-fill"></span></span>
       </div>
       <div class="reset-save">Reset progress</div>
-      <div class="build-tag">BUILD 32 — living forests: daylight ambience, green canopies, 3× grass</div>
+      <div class="build-tag">BUILD 33 — living forests: daylight ambience, grounded shade, 3× grass</div>
     `;
     this.root.appendChild(el);
 

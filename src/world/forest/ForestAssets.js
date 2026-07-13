@@ -125,8 +125,36 @@ class ForestAssets {
       } catch (err) {
         console.warn(`[forest] ${id} failed to load — species skipped`, err);
       }
-    })).then(() => { this.ready = true; });
+    })).then(() => { this._makeAoDisc(); this.ready = true; });
     return this._promise;
+  }
+
+  /**
+   * Soft contact-shadow disc instanced under every tree. The real shadow
+   * map only covers ±90 m around the player — beyond it, trees without
+   * this look pasted onto the ground.
+   */
+  _makeAoDisc() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(64, 64, 6, 64, 64, 64);
+    grad.addColorStop(0, 'rgba(255,255,255,0.95)');
+    grad.addColorStop(0.55, 'rgba(255,255,255,0.5)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 128, 128);
+    this.aoDiscGeo = new THREE.CircleGeometry(1, 20).rotateX(-Math.PI / 2);
+    this.aoDiscMat = new THREE.MeshBasicMaterial({
+      color: 0x06070a,
+      alphaMap: new THREE.CanvasTexture(c),
+      transparent: true,
+      opacity: 0.32,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
+    });
   }
 
   /**
