@@ -1,14 +1,14 @@
 # Starfall Frontier — Complete Developer Handoff
 
 _The **single, current** handoff for everything built so far. **Current build:
-BUILD 30.** Development branch `claude/handoff-md-verify-uxi68e`;
+BUILD 31.** Development branch `claude/handoff-md-verify-uxi68e`;
 every published build is also pushed to the default branch
 `claude/3d-space-exploration-game-ogrezx`, whose workflow publishes to
 `gh-pages`. This file has three parts:_
 
 - **PART A — The complete game**: everything that exists right now, by topic,
   with current numbers. Read this to understand the game.
-- **PART B — Build-by-build history** (base game → BUILD 30): the full
+- **PART B — Build-by-build history** (base game → BUILD 31): the full
   changelog with per-build rationale and the playtest quotes that drove it.
 - **PART C — Deep architecture reference**: the code-level documentation
   (ship system, services, save schema, event catalogue…). Written around
@@ -376,6 +376,7 @@ E mine/recover/board.
 | 28 | editor made real: horizon-freeze cap, hidden-shop click eater, stale-matrix ray · DELETE/CLEAR/SAVE FILE · bundled worldDesign.json |
 | 29 | **photoreal forests**: World Editor + sculpting REMOVED · Poly Haven photogrammetry trees (CC0) · deterministic lattice + LOD rings + impostors · wind shader · hero 877k-tri tree |
 | 30 | **dense forests**: ~120k-tuft grass carpet (no bare ground) · bush layer · thicker tree lattice · leaf-alpha recovery (solid-card fix) · foliage translucency · flight/full patch grades |
+| 31 | **grounded forests**: slope gate + slope-proportional sinking (no floaters) · far-ring LOD burial · slope-aware hero · density up again |
 
 Full details for every build: PART B below.
 
@@ -954,6 +955,22 @@ LOD counts per ring, aerial + ground screenshots reviewed.
 - Verified: ground-level coverage (no bare terrain in the near field),
   forest-interior and aerial screenshots, collision/disposal unchanged,
   zero console errors, production bundle smoke-tested.
+
+### BUILD 31 — grounded forests (playtest: "floating trees and bushes")
+Three float sources, three fixes (all in `SurfaceScatter`):
+1. **Hillside hover**: placements had no slope awareness — a tree's flat
+   root disc floats off the downhill side. Now `_slopeAt` probes the
+   gradient (2 extra height samples; ~8 m-block cache for ground cover):
+   slopes > 0.55 get no trees/bushes (cliffs stay bare, which also reads
+   right), and every placement sinks by `slope × (root-disc + clump
+   offset)`.
+2. **Clump-member float**: grass members reuse their cell's height sample —
+   the slope-proportional sink now hugs them to hillsides.
+3. **Far-terrain LOD mismatch**: trees sit on the ANALYTIC height, but the
+   rendered far terrain is a coarser quadtree mesh that can dip below it —
+   far rings sink extra (+0.3 m LOD1, +0.9 m impostors).
+The hero picks flat ground (slope ≤ 0.3) and beds its root flare in.
+Density up again per playtest: terran in-mask 0.84, bushes pFloor 0.30.
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally

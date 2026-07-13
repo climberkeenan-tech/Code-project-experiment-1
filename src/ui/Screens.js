@@ -50,7 +50,7 @@ export class Screens {
         <span class="ml-bar"><span class="ml-fill"></span></span>
       </div>
       <div class="reset-save">Reset progress</div>
-      <div class="build-tag">BUILD 30 — dense forests: full grass cover, bushes, thicker woods</div>
+      <div class="build-tag">BUILD 31 — grounded forests: every plant seated, denser packing</div>
     `;
     this.root.appendChild(el);
 

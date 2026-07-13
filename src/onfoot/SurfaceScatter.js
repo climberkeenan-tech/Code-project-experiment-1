@@ -38,7 +38,7 @@ const REBUILD_STRAY = 55;
  */
 const FOREST_PLANS = {
   terran: {
-    pFloor: 0.14, pMask: 0.78, hero: true, undergrowth: true,
+    pFloor: 0.16, pMask: 0.84, hero: true, undergrowth: true,
     mix: [
       { id: 'fir', w: 24, minH01: 0.15 },
       { id: 'island1', w: 26, maxH01: 0.36 },
@@ -51,7 +51,7 @@ const FOREST_PLANS = {
     ],
   },
   ocean: {
-    pFloor: 0.12, pMask: 0.70, hero: true, undergrowth: true,
+    pFloor: 0.14, pMask: 0.76, hero: true, undergrowth: true,
     mix: [
       { id: 'fir', w: 16, minH01: 0.18 },
       { id: 'island1', w: 28, maxH01: 0.36 },
@@ -241,6 +241,22 @@ export class SurfaceScatter {
   }
 
   /**
+   * Terrain slope (rise/run) at a planet-local unit direction, from two
+   * tangent probes. Trees and undergrowth use it to skip cliff faces and to
+   * sink their bases so nothing hovers on a hillside.
+   */
+  _slopeAt(dir, h, t1, t2) {
+    const R = this.planet.radius;
+    const e = 2.5;
+    const d = this._slopeDir || (this._slopeDir = new THREE.Vector3());
+    d.copy(dir).multiplyScalar(R).addScaledVector(t1, e).normalize();
+    const h1 = this.planet.sampler.height(d.x, d.y, d.z);
+    d.copy(dir).multiplyScalar(R).addScaledVector(t2, e).normalize();
+    const h2 = this.planet.sampler.height(d.x, d.y, d.z);
+    return Math.hypot(h1 - h, h2 - h) / e;
+  }
+
+  /**
    * The photoreal forest. Tree slots live on a DETERMINISTIC 8 m lattice in
    * planet-local space: each cell hashes to existence, species, size, yaw
    * and tint, so any rebuild — walking past REBUILD_STRAY, low-flight patch
@@ -349,12 +365,17 @@ export class SurfaceScatter {
         const sp = assets.species[pick.id];
         if (!sp) continue;
 
+        // Cliffs stay bare — and on walkable slopes the tree sinks with the
+        // gradient so its root disc never hovers off the downhill side.
+        const slope = this._slopeAt(dir, h, t1, t2);
+        if (slope > 0.55) continue;
+
         surfLocal.copy(dir).multiplyScalar(R + h);
         const ring = this._mode === 'flight'
           ? (rr <= FLIGHT_RING1 ? 1 : 2)
           : (rr <= RING0 ? 0 : (rr <= RING1 ? 1 : 2));
         if (ring === 2 && !sp.impostor) continue; // no sprite → not worth a far slot
-        this._placeTree(pick.id, surfLocal, dir, ring, rand, buckets, barkBase, leafBase);
+        this._placeTree(pick.id, surfLocal, dir, ring, rand, buckets, barkBase, leafBase, slope, 0);
       }
     }
 
@@ -363,7 +384,7 @@ export class SurfaceScatter {
     // terrain — clumps share one terrain sample per cell so the ~30k tufts
     // stay affordable to place.
     if (plan.undergrowth && this._mode === 'full') {
-      this._buildUndergrowth('bush', 6, 130, 55, 0.28, 0.22, planetSeed + 303,
+      this._buildUndergrowth('bush', 6, 130, 55, 0.28, 0.30, planetSeed + 303,
         t1, t2, biomeNoise, buckets, barkBase, leafBase);
       this._buildUndergrowth('fern', 9, 130, 45, 0.55, 0.14, planetSeed + 101,
         t1, t2, biomeNoise, buckets, barkBase, leafBase);
@@ -412,6 +433,8 @@ export class SurfaceScatter {
     const dir = new THREE.Vector3();
     const surfLocal = new THREE.Vector3();
     const seen = new Set();
+    const slopeCache = new Map(); // ~8 m blocks — plenty for ground cover
+    const maxSlope = id === 'grass' ? 0.85 : 0.55;
     const n = Math.ceil(maxR / grid);
     for (let i = -n; i <= n; i++) {
       for (let j = -n; j <= n; j++) {
@@ -436,6 +459,10 @@ export class SurfaceScatter {
           biomeNoise.noise3(dir.x * 7 + 41, dir.y * 7 + 41, dir.z * 7 + 41));
         const band = smoothstep(0.03, 0.09, h01) * (1 - smoothstep(hi0, hi1, h01));
         if (rand() > (pFloor + pMask * mask) * band) continue;
+        const bk = `${Math.round(kx * grid / 8)},${Math.round(ky * grid / 8)},${Math.round(kz * grid / 8)}`;
+        let slope = slopeCache.get(bk);
+        if (slope === undefined) { slope = this._slopeAt(dir, h, t1, t2); slopeCache.set(bk, slope); }
+        if (slope > maxSlope) continue;
         const ring = rr <= lodR ? 0 : 1;
         // Clump members share this cell's terrain sample (the species sink
         // hides the small slope error) — that is what makes a ~30k-instance
@@ -444,19 +471,23 @@ export class SurfaceScatter {
           : rr < 95 ? clumpN
             : rr < 150 ? Math.max(2, Math.round(clumpN / 3)) : 2;
         for (let c = 0; c < members; c++) {
-          memberLp.copy(lp)
-            .addScaledVector(t1, (rand() - 0.5) * 2 * clumpR)
-            .addScaledVector(t2, (rand() - 0.5) * 2 * clumpR);
+          const o1 = (rand() - 0.5) * 2 * clumpR;
+          const o2 = (rand() - 0.5) * 2 * clumpR;
+          memberLp.copy(lp).addScaledVector(t1, o1).addScaledVector(t2, o2);
           dir.copy(memberLp).normalize();
           surfLocal.copy(dir).multiplyScalar(planet.radius + h);
-          this._placeTree(id, surfLocal, dir, ring, rand, buckets, barkBase, leafBase);
+          // Members reuse the cell's height sample — sink by slope × offset
+          // so the carpet hugs hillsides instead of hovering off them.
+          this._placeTree(id, surfLocal, dir, ring, rand, buckets, barkBase,
+            leafBase, slope, Math.hypot(o1, o2));
         }
       }
     }
   }
 
   /** Compose one deterministic instance record (matrix + tints + collider). */
-  _placeTree(id, surfLocal, up, ring, rand, buckets, barkBase, leafBase) {
+  _placeTree(id, surfLocal, up, ring, rand, buckets, barkBase, leafBase,
+    slope = 0, offDist = 0) {
     const assets = getForestAssets();
     const sp = assets.species[id];
     const spec = SPECIES[id];
@@ -481,10 +512,16 @@ export class SurfaceScatter {
       scaleV.setScalar(k);
     }
 
-    // Seat the base below grade so root flares meet slopes cleanly (ground
-    // cover sinks further — clump members reuse their cell's height sample).
-    const seated = surfLocal.clone()
-      .addScaledVector(up, -(spec.sink ?? 0.06 * Math.sqrt(targetH)));
+    // Seat the base below grade so root flares meet slopes cleanly. Three
+    // extra burial terms kill floaters: slope × root-disc radius (hillside
+    // hover), slope × clump offset (members reuse their cell's height), and
+    // a flat term on the far rings (the rendered far terrain is a coarser
+    // LOD mesh that can sit below the analytic height trees are placed on).
+    const footR = Math.min(2, Math.max(0.4, targetH * 0.1));
+    let sink = (spec.sink ?? 0.06 * Math.sqrt(targetH))
+      + slope * (footR + offDist)
+      + (ring === 1 ? 0.3 : ring === 2 ? 0.9 : 0);
+    const seated = surfLocal.clone().addScaledVector(up, -sink);
     const mat4 = new THREE.Matrix4().compose(seated, q, scaleV);
 
     // Natural per-instance variation: brightness on bark, hue on foliage.
@@ -533,6 +570,12 @@ export class SurfaceScatter {
     for (let i = 0; i < 20; i++) {
       const s = this._sampleSurface(centerWorld, 18, 42);
       if (!s) continue;
+      // The showpiece gets flat ground: measure the local gradient and
+      // reject slopes; sink with what remains so the root flare beds in.
+      const dirLocal = s.point.clone().sub(this.center).normalize();
+      const h = s.point.distanceTo(this.center) - this.planet.radius;
+      const slope = this._slopeAt(dirLocal, h, this._t1, this._t2);
+      if (slope > 0.3 && i < 15) continue; // last tries take what they get
       const targetH = spec.heights[0]
         + Math.random() * (spec.heights[1] - spec.heights[0]);
       const k = targetH / sp.nativeH;
@@ -552,7 +595,8 @@ export class SurfaceScatter {
       if (sp.parts1.length) lod.addLevel(makeLevel(sp.parts1), HERO_LOD_DIST);
 
       const localPoint = s.point.clone().sub(this.center);
-      lod.position.copy(localPoint);
+      lod.position.copy(localPoint)
+        .addScaledVector(s.up, -(0.12 + slope * targetH * 0.12));
       lod.quaternion.setFromUnitVectors(UP, s.up);
       lod.rotateY(Math.random() * Math.PI * 2);
       lod.scale.setScalar(k);
