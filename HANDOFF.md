@@ -1,14 +1,14 @@
 # Starfall Frontier — Complete Developer Handoff
 
 _The **single, current** handoff for everything built so far. **Current build:
-BUILD 35.** Development branch `claude/handoff-md-verify-uxi68e`;
+BUILD 36.** Development branch `claude/handoff-md-verify-uxi68e`;
 every published build is also pushed to the default branch
 `claude/3d-space-exploration-game-ogrezx`, whose workflow publishes to
 `gh-pages`. This file has three parts:_
 
 - **PART A — The complete game**: everything that exists right now, by topic,
   with current numbers. Read this to understand the game.
-- **PART B — Build-by-build history** (base game → BUILD 35): the full
+- **PART B — Build-by-build history** (base game → BUILD 36): the full
   changelog with per-build rationale and the playtest quotes that drove it.
 - **PART C — Deep architecture reference**: the code-level documentation
   (ship system, services, save schema, event catalogue…). Written around
@@ -381,6 +381,7 @@ E mine/recover/board.
 | 33 | **grounded shade**: instanced contact-shadow discs under every tree (the shadow map only covers ±90 m) · deep-forest soil floor · deadwood weights trimmed |
 | 34 | **true colors**: stars/nebulas fade out in daylight · impostor haze instancing bug fixed (sprites fogged as if at the planet CENTER — the washed-out pale ring) |
 | 35 | **photo grade**: post-tonemap color grade (saturation 1.14 + gentle S-curve — kills the pastel wash) · taller broadleafs/bushes for overlapping canopies |
+| 36 | **living ground**: mottle frequencies fixed (×61 ≈ 330 m period — invisible in one view; now two octaves at ~30 m/~7 m) |
 
 Full details for every build: PART B below.
 
@@ -1036,6 +1037,14 @@ hold frame rate; rings are per-instance fields now, not consts.
   ACES alone read slightly pastel/washed — "game", not "photo".
 - Broadleafs + bushes grown ~15% so canopies overlap into a continuous
   mid-story (island1 6.5–11 m, island2 5–8.5 m, bush 1.4–2.8 m).
+
+### BUILD 36 — living ground
+Terrain colour noise frequencies are PER-RADIAN on the unit sphere: the
+grassland mottle at ×61 had a ~330 m wavelength on a 3,200 m planet —
+invisible within a single view, so ground between grass still read
+flat-colored. Now two octaves (×680 ≈ 30 m, ×2900 ≈ 7 m, ±11%) give the
+soil visible small-scale life. Rule of thumb for future colour noise:
+wavelength ≈ 2πR / frequency.
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally

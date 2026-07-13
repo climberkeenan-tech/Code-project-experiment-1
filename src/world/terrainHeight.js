@@ -200,12 +200,14 @@ export function createTerrainSampler(descriptor) {
       // Deep-forest floor: under a dense canopy the ground is leaf-litter
       // brown, not bright green — any grass peek-through reads as soil.
       target.lerp(_soil, mask * band * 0.38);
-      // Grassland mottle: mid-frequency luminance breakup so open ground
-      // reads as living meadow instead of a flat green plane — darkened
-      // toward soil inside the grass band so the carpet's peek-through
-      // reads as shadowed earth, never bright bare green.
-      const mottle = biomeNoise.noise3(dir.x * 61 + 7, dir.y * 61 + 7, dir.z * 61 + 7);
-      target.multiplyScalar((0.93 + mottle * 0.1) * (1 - band * 0.24));
+      // Grassland mottle: two octaves of luminance breakup at ~30 m and
+      // ~7 m wavelengths (frequencies are per-radian on the unit sphere —
+      // the old ×61 gave a ~330 m period, invisible inside one view, which
+      // left the ground reading flat-colored). Darkened toward soil inside
+      // the grass band so peek-through reads as shadowed earth.
+      const mottle = biomeNoise.noise3(dir.x * 680 + 7, dir.y * 680 + 7, dir.z * 680 + 7) * 0.6
+        + biomeNoise.noise3(dir.x * 2900 + 3, dir.y * 2900 + 3, dir.z * 2900 + 3) * 0.4;
+      target.multiplyScalar((0.92 + mottle * 0.11) * (1 - band * 0.24));
     }
 
     // Steep faces expose bare rock.
