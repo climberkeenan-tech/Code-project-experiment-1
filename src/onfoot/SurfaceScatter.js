@@ -397,9 +397,11 @@ export class SurfaceScatter {
         t1, t2, biomeNoise, buckets, barkBase, leafBase);
       // Grass climbs well past the treeline band (hi 0.6→0.85) — bare
       // crests above the woods still read as alpine meadow, not bald green.
+      // Grass is 6 tris/tuft — even phones afford a real carpet (the
+      // phone view is the one the playtests judge). ~34/clump ≈ 115k tufts.
       this._buildUndergrowth('grass', 3.0, mob ? 130 : 200, 200, 0.03, 0.97,
         planetSeed + 202, t1, t2, biomeNoise, buckets, barkBase, leafBase,
-        mob ? 20 : 48, 2.6, 0.6, 0.85);
+        mob ? 34 : 48, 2.6, 0.6, 0.85);
     }
 
     // One HERO tree per landing site: the full 877k-triangle photogrammetry

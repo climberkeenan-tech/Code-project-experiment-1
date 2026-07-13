@@ -1,14 +1,14 @@
 # Starfall Frontier — Complete Developer Handoff
 
 _The **single, current** handoff for everything built so far. **Current build:
-BUILD 36.** Development branch `claude/handoff-md-verify-uxi68e`;
+BUILD 37.** Development branch `claude/handoff-md-verify-uxi68e`;
 every published build is also pushed to the default branch
 `claude/3d-space-exploration-game-ogrezx`, whose workflow publishes to
 `gh-pages`. This file has three parts:_
 
 - **PART A — The complete game**: everything that exists right now, by topic,
   with current numbers. Read this to understand the game.
-- **PART B — Build-by-build history** (base game → BUILD 36): the full
+- **PART B — Build-by-build history** (base game → BUILD 37): the full
   changelog with per-build rationale and the playtest quotes that drove it.
 - **PART C — Deep architecture reference**: the code-level documentation
   (ship system, services, save schema, event catalogue…). Written around
@@ -382,6 +382,7 @@ E mine/recover/board.
 | 34 | **true colors**: stars/nebulas fade out in daylight · impostor haze instancing bug fixed (sprites fogged as if at the planet CENTER — the washed-out pale ring) |
 | 35 | **photo grade**: post-tonemap color grade (saturation 1.14 + gentle S-curve — kills the pastel wash) · taller broadleafs/bushes for overlapping canopies |
 | 36 | **living ground**: mottle frequencies fixed (×61 ≈ 330 m period — invisible in one view; now two octaves at ~30 m/~7 m) |
+| 37 | **phone forests**: mobile tier exercised end-to-end in the harness (force `engine.isMobile` before disembark) · mobile grass 20→34/clump (~115k tufts — the phone view is the judged view) |
 
 Full details for every build: PART B below.
 
@@ -1045,6 +1046,15 @@ invisible within a single view, so ground between grass still read
 flat-colored. Now two octaves (×680 ≈ 30 m, ×2900 ≈ 7 m, ±11%) give the
 soil visible small-scale life. Rule of thumb for future colour noise:
 wavelength ≈ 2πR / frequency.
+
+### BUILD 37 — phone forests
+The playtests happen on a PHONE, but every headless verification ran the
+desktop path. New harness trick: eval `game.engine.isMobile = true`
+BEFORE disembarking and the freshly-built scatter takes the mobile tier —
+verified clean (no errors, rings/counts correct). The mobile grass carpet
+at 20/clump left visible bare ground (exactly the playtest complaint), so
+mobile is now 34/clump (~115k tufts; grass is 6 tris/tuft — even phones
+afford a real carpet, and the QualityManager still owns resolution).
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally

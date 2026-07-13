@@ -50,7 +50,7 @@ export class Screens {
         <span class="ml-bar"><span class="ml-fill"></span></span>
       </div>
       <div class="reset-save">Reset progress</div>
-      <div class="build-tag">BUILD 36 — living ground: fine soil mottle, photo grade forests</div>
+      <div class="build-tag">BUILD 37 — phone forests: dense mobile grass, verified mobile tier</div>
     `;
     this.root.appendChild(el);
 
