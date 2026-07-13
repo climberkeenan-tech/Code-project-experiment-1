@@ -1,14 +1,14 @@
 # Starfall Frontier — Complete Developer Handoff
 
 _The **single, current** handoff for everything built so far. **Current build:
-BUILD 29.** Development branch `claude/handoff-md-verify-uxi68e`;
+BUILD 30.** Development branch `claude/handoff-md-verify-uxi68e`;
 every published build is also pushed to the default branch
 `claude/3d-space-exploration-game-ogrezx`, whose workflow publishes to
 `gh-pages`. This file has three parts:_
 
 - **PART A — The complete game**: everything that exists right now, by topic,
   with current numbers. Read this to understand the game.
-- **PART B — Build-by-build history** (base game → BUILD 29): the full
+- **PART B — Build-by-build history** (base game → BUILD 30): the full
   changelog with per-build rationale and the playtest quotes that drove it.
 - **PART C — Deep architecture reference**: the code-level documentation
   (ship system, services, save schema, event catalogue…). Written around
@@ -247,8 +247,23 @@ plus the ez-tree MIT grass card. Meshopt GLBs in `public/models-glb/trees/`
   mixed forest + shore quiver trees; ice frosted firs; desert quiver/snags;
   volcanic ash-tinted deadwood. One 877k-tri HERO scan per landing site
   (THREE.LOD swap at 150 m).
-- Undergrowth (vegetated worlds): fern + grass lattices clustered by the
-  forest mask. Grass sprite is grayscale — tinted `0x55803a` at load.
+- Undergrowth (vegetated worlds, BUILD 30): a BUSH layer (the island2 scan
+  at 1.2–2.4 m), ferns, and a ~120k-instance GRASS CARPET (24–30 tufts per
+  lattice cell sharing one terrain sample, broad non-uniform width, out to
+  200 m) — bare ground effectively never shows on foot. Grass sprite is
+  grayscale — tinted `0x55803a` at load. Terrain colour darkens toward soil
+  inside the grass band (+ a luminance mottle) so any peek-through reads as
+  shadowed earth, and leaf materials carry a day-gated translucency term
+  (`+albedo × 0.38 × dayFactor`) so backlit foliage never goes black.
+- ⚠️ The mirror GLBs had JPEG leaf textures — ALPHA WAS LOST and every leaf
+  card rendered as a solid rectangle. The pipeline regenerates alpha by
+  luminance-keying the black-background leaf photos (build-trees.mjs) and
+  sets alpha-MASK.
+- Patch grades: ApproachScatter builds 'flight' patches (LOD1 ≤ 120 m +
+  impostors, no undergrowth/hero — cheap under a moving ship); disembarking
+  upgrades to 'full' via `setFullDetail()` (deterministic lattice: same
+  trees, more detail). Full rebuilds cost ~150–250 ms every 55 m walked —
+  amortize if playtests complain.
 - Trunk colliders keep the old contract ({local, r} in `scatter.colliders`);
   ferns/grass/logs are walk-through. Ore rocks and wildlife are unchanged.
 - Shadows: desktop shadow map 1024→2048 (`Sun.js`); only the LOD0 ring casts.
@@ -360,6 +375,7 @@ E mine/recover/board.
 | 27 | terrain sculpting (raise/lower/flatten) · three-low-poly prefabs |
 | 28 | editor made real: horizon-freeze cap, hidden-shop click eater, stale-matrix ray · DELETE/CLEAR/SAVE FILE · bundled worldDesign.json |
 | 29 | **photoreal forests**: World Editor + sculpting REMOVED · Poly Haven photogrammetry trees (CC0) · deterministic lattice + LOD rings + impostors · wind shader · hero 877k-tri tree |
+| 30 | **dense forests**: ~120k-tuft grass carpet (no bare ground) · bush layer · thicker tree lattice · leaf-alpha recovery (solid-card fix) · foliage translucency · flight/full patch grades |
 
 Full details for every build: PART B below.
 
@@ -909,6 +925,35 @@ Verified via the harness: forest builds on landing (zero console errors),
 wind confirmed by frame-diff (only foliage silhouettes moved), trunk
 collision push-out exact (r + avatar radius), patch disposal on boarding,
 LOD counts per ring, aerial + ground screenshots reviewed.
+
+### BUILD 30 — dense forests (playtest: "so much grass you can't see the
+### ground… much more trees and bushes")
+- **Grass carpet**: the grass lattice now drops 24–30 tufts per accepted
+  cell (clumps share the cell's terrain sample — that's what keeps ~120k
+  instances placeable in ~100 ms), tufts widened (non-uniform `wide` scale),
+  p≈0.95 everywhere on vegetated land, radius 200 m with graded taper.
+  One InstancedMesh → one draw call, ~0.8 M tris.
+- **Bush layer**: the island2 scan re-registered at shrub scale (1.2–2.4 m),
+  own lattice to 130 m, everywhere (pFloor 0.22) and denser in the woods.
+- **Denser woods**: tree lattice 8 m → 7 m, in-mask cell probability 0.78
+  (+ scattered meadow trees pFloor 0.14); RING0 62 m / RING1 140 m with a
+  55 m re-center so the player always stands among LOD0 scans.
+- **Leaf-alpha recovery**: the mirror "forest" GLBs carried JPEG (alphaless)
+  leaf textures — leaf cards were solid black rectangles up close. The
+  pipeline keys alpha from the black-background leaf photos
+  (`max(r,g,b)` ramp) and sets MASK 0.35. Fixed fir twigs, both island
+  trees, jacaranda, and the hero's leaves.
+- **Foliage translucency**: `gl_FragColor.rgb += albedo × 0.38 × dayFactor`
+  injected into the haze block for leaf materials — backlit canopies and
+  grass read as light-transmitting instead of black; fades across the
+  terminator so nothing glows at night.
+- **Flight vs full patches**: ApproachScatter patches are 'flight'-grade
+  (LOD1 + impostors only); OnFoot adoption calls `setFullDetail()`.
+- **Terrain**: soil-dark multiplier `(1 − band × 0.24)` + luminance mottle
+  under the grass band; desktop keeps 2K shadows.
+- Verified: ground-level coverage (no bare terrain in the near field),
+  forest-interior and aerial screenshots, collision/disposal unchanged,
+  zero console errors, production bundle smoke-tested.
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally

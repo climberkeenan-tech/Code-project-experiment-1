@@ -19,11 +19,15 @@ import { getForestAssets, SPECIES } from '../world/forest/ForestAssets.js';
 
 const SCATTER_RADIUS = 420; // how far props spread around the landing point
 const ROCK_COUNT = 60;
-const TREE_GRID = 8; // deterministic tree lattice pitch (m) — one slot per cell
-const RING0 = 70; // full-detail photogrammetry within this range of the center
-const RING1 = 200; // simplified LOD to here; baked impostors beyond
+const TREE_GRID = 7; // deterministic tree lattice pitch (m) — one slot per cell
+const RING0 = 62; // full-detail photogrammetry within this range of the center
+const RING1 = 140; // simplified LOD to here; baked impostors beyond
+const FLIGHT_RING1 = 120; // flight-grade patches: LOD1 to here, no LOD0 at all
 const HERO_LOD_DIST = 150; // the 877k-tri hero swaps to its LOD past this
-const REBUILD_STRAY = 90; // walking this far from the patch center re-centers it
+// Walking this far from the patch center re-centers the detail rings. Must
+// stay under RING0 so the player never reaches simplified trees before the
+// rebuild fires.
+const REBUILD_STRAY = 55;
 
 /**
  * Per-archetype forest recipes. Cell spawn probability =
@@ -34,7 +38,7 @@ const REBUILD_STRAY = 90; // walking this far from the patch center re-centers i
  */
 const FOREST_PLANS = {
   terran: {
-    pFloor: 0.05, pMask: 0.68, hero: true, undergrowth: true,
+    pFloor: 0.14, pMask: 0.78, hero: true, undergrowth: true,
     mix: [
       { id: 'fir', w: 24, minH01: 0.15 },
       { id: 'island1', w: 26, maxH01: 0.36 },
@@ -47,7 +51,7 @@ const FOREST_PLANS = {
     ],
   },
   ocean: {
-    pFloor: 0.05, pMask: 0.60, hero: true, undergrowth: true,
+    pFloor: 0.12, pMask: 0.70, hero: true, undergrowth: true,
     mix: [
       { id: 'fir', w: 16, minH01: 0.18 },
       { id: 'island1', w: 28, maxH01: 0.36 },
@@ -110,10 +114,15 @@ export class SurfaceScatter {
    * @param {import('../core/Game.js').Game} game
    * @param {import('../world/Planet.js').Planet} planet
    * @param {THREE.Vector3} centerWorld world-space point to scatter around
+   * @param {'full'|'flight'} mode flight patches carry trees only (LOD1 +
+   *   impostors, no undergrowth/hero) — they are seen from the air and are
+   *   rebuilt every 300 m of flight; disembarking upgrades via
+   *   setFullDetail(). 'full' is the on-foot grade.
    */
-  constructor(game, planet, centerWorld) {
+  constructor(game, planet, centerWorld, mode = 'full') {
     this.game = game;
     this.planet = planet;
+    this._mode = mode;
     this.center = planet.group.position; // render-space planet center
 
     /** @type {Array<{mesh: THREE.Mesh, rarity: import('../economy/Rarity.js').Rarity, localPos: THREE.Vector3}>} */
@@ -341,32 +350,42 @@ export class SurfaceScatter {
         if (!sp) continue;
 
         surfLocal.copy(dir).multiplyScalar(R + h);
-        const ring = rr <= RING0 ? 0 : (rr <= RING1 ? 1 : 2);
+        const ring = this._mode === 'flight'
+          ? (rr <= FLIGHT_RING1 ? 1 : 2)
+          : (rr <= RING0 ? 0 : (rr <= RING1 ? 1 : 2));
         if (ring === 2 && !sp.impostor) continue; // no sprite → not worth a far slot
         this._placeTree(pick.id, surfLocal, dir, ring, rand, buckets, barkBase, leafBase);
       }
     }
 
-    // Undergrowth: ferns + grass carpet the forest floor on vegetated
-    // worlds — their own finer lattices, clustered by the same forest mask.
-    if (plan.undergrowth) {
-      this._buildUndergrowth('fern', 9, 130, 45, 0.40, 0.06, planetSeed + 101,
+    // Undergrowth (on-foot patches only): bushes between the trunks, ferns
+    // on the forest floor, and a grass carpet dense enough to hide the bare
+    // terrain — clumps share one terrain sample per cell so the ~30k tufts
+    // stay affordable to place.
+    if (plan.undergrowth && this._mode === 'full') {
+      this._buildUndergrowth('bush', 6, 130, 55, 0.28, 0.22, planetSeed + 303,
         t1, t2, biomeNoise, buckets, barkBase, leafBase);
-      this._buildUndergrowth('grass', 3.4, 68, 68, 0.55, 0.25, planetSeed + 202,
+      this._buildUndergrowth('fern', 9, 130, 45, 0.55, 0.14, planetSeed + 101,
         t1, t2, biomeNoise, buckets, barkBase, leafBase);
+      // Grass climbs well past the treeline band (hi 0.6→0.85) — bare
+      // crests above the woods still read as alpine meadow, not bald green.
+      this._buildUndergrowth('grass', 3.2, 200, 200, 0.05, 0.95, planetSeed + 202,
+        t1, t2, biomeNoise, buckets, barkBase, leafBase, 30, 2.4, 0.6, 0.85);
     }
 
     // One HERO tree per landing site: the full 877k-triangle photogrammetry
     // master near the touchdown point. Survives re-centers (never re-placed).
-    if (plan.hero && assets.species.hero && !this._heroPlaced) {
+    if (plan.hero && this._mode === 'full' && assets.species.hero && !this._heroPlaced) {
       this._placeHero(assets, centerWorld);
     }
 
     // Bake the buckets into InstancedMeshes (one per species-part-ring).
+    // Ground cover skips the shadow pass — its self-shadowing is noise at a
+    // 2K map and the instance counts are huge.
     for (const [id, rings] of buckets) {
       const sp = assets.species[id];
       const lod1Parts = sp.parts1.length ? sp.parts1 : sp.parts0;
-      this._bakeRing(sp.parts0, rings.recs0, id !== 'grass');
+      this._bakeRing(sp.parts0, rings.recs0, id !== 'grass' && id !== 'fern');
       this._bakeRing(lod1Parts, rings.recs1, false);
       if (rings.recs2.length && sp.impostor) {
         this._bakeRing(
@@ -382,12 +401,14 @@ export class SurfaceScatter {
    * with its own LOD split (full fern ≤ lodR, simplified beyond).
    */
   _buildUndergrowth(id, grid, maxR, lodR, pMask, pFloor, seed,
-    t1, t2, biomeNoise, buckets, barkBase, leafBase) {
+    t1, t2, biomeNoise, buckets, barkBase, leafBase, clumpN = 1, clumpR = 0,
+    hi0 = 0.38, hi1 = 0.58) {
     const assets = getForestAssets();
     if (!assets.species[id]) return;
     const planet = this.planet;
     const d = planet.descriptor;
     const lp = new THREE.Vector3();
+    const memberLp = new THREE.Vector3();
     const dir = new THREE.Vector3();
     const surfLocal = new THREE.Vector3();
     const seen = new Set();
@@ -405,18 +426,31 @@ export class SurfaceScatter {
         seen.add(key);
         const rand = cellRng(hashCell(kx, ky, kz, seed));
         lp.set(kx * grid, ky * grid, kz * grid)
-          .addScaledVector(t1, (rand() - 0.5) * grid * 0.9)
-          .addScaledVector(t2, (rand() - 0.5) * grid * 0.9);
+          .addScaledVector(t1, (rand() - 0.5) * grid * 1.4)
+          .addScaledVector(t2, (rand() - 0.5) * grid * 1.4);
         dir.copy(lp).normalize();
         const h = planet.sampler.height(dir.x, dir.y, dir.z);
         if (d.hasOcean && h <= 1.0) continue;
         const h01 = Math.max(0, Math.min(1, h / d.relief));
         const mask = smoothstep(0.15, 0.6,
           biomeNoise.noise3(dir.x * 7 + 41, dir.y * 7 + 41, dir.z * 7 + 41));
-        const band = smoothstep(0.03, 0.09, h01) * (1 - smoothstep(0.38, 0.58, h01));
-        if (rand() > pFloor + pMask * mask * band) continue;
-        surfLocal.copy(dir).multiplyScalar(planet.radius + h);
-        this._placeTree(id, surfLocal, dir, rr <= lodR ? 0 : 1, rand, buckets, barkBase, leafBase);
+        const band = smoothstep(0.03, 0.09, h01) * (1 - smoothstep(hi0, hi1, h01));
+        if (rand() > (pFloor + pMask * mask) * band) continue;
+        const ring = rr <= lodR ? 0 : 1;
+        // Clump members share this cell's terrain sample (the species sink
+        // hides the small slope error) — that is what makes a ~30k-instance
+        // grass carpet placeable in milliseconds. Density tapers past 95 m.
+        const members = clumpN === 1 ? 1
+          : rr < 95 ? clumpN
+            : rr < 150 ? Math.max(2, Math.round(clumpN / 3)) : 2;
+        for (let c = 0; c < members; c++) {
+          memberLp.copy(lp)
+            .addScaledVector(t1, (rand() - 0.5) * 2 * clumpR)
+            .addScaledVector(t2, (rand() - 0.5) * 2 * clumpR);
+          dir.copy(memberLp).normalize();
+          surfLocal.copy(dir).multiplyScalar(planet.radius + h);
+          this._placeTree(id, surfLocal, dir, ring, rand, buckets, barkBase, leafBase);
+        }
       }
     }
   }
@@ -439,12 +473,18 @@ export class SurfaceScatter {
     if (ring === 2) {
       // Impostor cross-quad: x/z carry the sprite's width, y its height.
       scaleV.set(targetH * (sp.impostor?.aspect ?? 1), targetH, targetH * (sp.impostor?.aspect ?? 1));
+    } else if (spec.wide) {
+      // Ground cover spreads broad — width scales past height for coverage.
+      const w = k * (spec.wide[0] + rand() * (spec.wide[1] - spec.wide[0]));
+      scaleV.set(w, k, w);
     } else {
       scaleV.setScalar(k);
     }
 
-    // Seat the base a touch below grade so root flares meet slopes cleanly.
-    const seated = surfLocal.clone().addScaledVector(up, -0.06 * Math.sqrt(targetH));
+    // Seat the base below grade so root flares meet slopes cleanly (ground
+    // cover sinks further — clump members reuse their cell's height sample).
+    const seated = surfLocal.clone()
+      .addScaledVector(up, -(spec.sink ?? 0.06 * Math.sqrt(targetH)));
     const mat4 = new THREE.Matrix4().compose(seated, q, scaleV);
 
     // Natural per-instance variation: brightness on bark, hue on foliage.
@@ -541,6 +581,16 @@ export class SurfaceScatter {
     this.colliders.length = this._rockColliderCount;
     if (this._heroCollider) this.colliders.push(this._heroCollider);
     this._buildForest(anchorWorld);
+  }
+
+  /**
+   * Upgrade a flight-grade patch to the on-foot grade at the landing point:
+   * same deterministic trees, plus the LOD0 ring, undergrowth and the hero.
+   */
+  setFullDetail(anchorWorld) {
+    if (this._mode === 'full' || this._disposed) return;
+    this._mode = 'full';
+    this._recenterForest(anchorWorld);
   }
 
   _buildWildlife(centerWorld) {

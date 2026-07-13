@@ -44,6 +44,11 @@ export const SPECIES = {
     url: 'models-glb/trees/island2.glb', heights: [4, 7.5], trunkR: 0.25,
     wind: { sway: 0.24, flutter: 0.08 },
   },
+  // The island2 scan again at shrub size — the understory bush layer.
+  bush: {
+    url: 'models-glb/trees/island2.glb', heights: [1.2, 2.4], trunkR: 0,
+    wind: { sway: 0.05, flutter: 0.08 }, sink: 0.12, wide: [1.0, 1.3],
+  },
   jacaranda: {
     url: 'models-glb/trees/jacaranda.glb', heights: [14, 20], trunkR: 0.7,
     wind: { sway: 0.45, flutter: 0.10 },
@@ -70,11 +75,11 @@ export const SPECIES = {
   },
   fern: {
     url: 'models-glb/trees/fern.glb', heights: [0.35, 0.7], trunkR: 0,
-    wind: { sway: 0, flutter: 0.06 },
+    wind: { sway: 0, flutter: 0.06 }, sink: 0.18, wide: [1.1, 1.5],
   },
   grass: {
-    url: 'models-glb/trees/grass.glb', heights: [0.7, 1.3], trunkR: 0,
-    wind: { sway: 0, flutter: 0.09 },
+    url: 'models-glb/trees/grass.glb', heights: [0.65, 1.2], trunkR: 0,
+    wind: { sway: 0, flutter: 0.09 }, sink: 0.3, wide: [1.5, 2.1],
   },
 };
 
@@ -237,6 +242,16 @@ class ForestAssets {
         #endif
         vHazeWorldPos = (modelMatrix * hazeWP).xyz;`,
       );
+      if (leaf) {
+        // Translucency approximation: thin foliage transmits daylight, so
+        // backlit leaves must never go black. Piggyback on the haze block's
+        // dayFactor (fades to zero across the terminator — no night glow).
+        shader.fragmentShader = shader.fragmentShader.replace(
+          'vec3 sunsetTint = vec3(0.9, 0.45, 0.22);',
+          `gl_FragColor.rgb += diffuseColor.rgb * (0.38 * dayFactor);
+          vec3 sunsetTint = vec3(0.9, 0.45, 0.22);`,
+        );
+      }
     };
     mat.customProgramCacheKey = () => `foliage:${treeH}:${sway}:${flutter}:${leaf}`;
     mat.needsUpdate = true;

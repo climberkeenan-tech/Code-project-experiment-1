@@ -57,13 +57,13 @@ export class ApproachScatter {
     this._point.addScaledVector(this._dir, -alt);
 
     if (!this.scatter) {
-      this.scatter = new SurfaceScatter(game, planet, this._point);
+      this.scatter = new SurfaceScatter(game, planet, this._point, 'flight');
       this.planet = planet;
       this._center.copy(this._point);
     } else if (this._point.distanceTo(this._center) > REBUILD_DIST) {
       // Moved on: rebuild the patch under the new position.
       this.scatter.dispose();
-      this.scatter = new SurfaceScatter(game, planet, this._point);
+      this.scatter = new SurfaceScatter(game, planet, this._point, 'flight');
       this._center.copy(this._point);
     }
   }

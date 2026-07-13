@@ -243,8 +243,11 @@ export class OnFootController {
     this.planet = planet;
     // Adopt the flight-time vegetation patch when we land inside one (no
     // double forests, no pop); otherwise build fresh around the landing site.
+    // Adopted patches are flight-grade (trees only) — upgrade to the full
+    // on-foot forest (LOD0 ring, undergrowth, hero) at the landing spot.
     const adopted = game.approach?.adopt?.() ?? null;
     this.scatter = adopted || new SurfaceScatter(game, planet, a.position);
+    if (adopted) adopted.setFullDetail(a.position);
 
     this._active = true;
     game.mode = 'onfoot';
