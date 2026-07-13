@@ -174,5 +174,7 @@ export class Sun {
     this.fill.color.copy(this._spaceSky).lerp(this._daySky, ambience);
     this.fill.groundColor.copy(this._spaceGround).lerp(this._dayGround, ambience);
     this.fill.intensity = 0.55 + ambience * 0.85;
+    /** 0 = deep space/night … 1 = full daylight; Starfield/Nebulas fade on it. */
+    this.daylight = ambience;
   }
 }

@@ -70,7 +70,20 @@ export class Nebulas {
     game.origin.onShift((delta) => this.group.position.sub(delta));
   }
 
+  _collectSprites() {
+    const out = [];
+    this.group?.traverse?.((o) => {
+      if (o.isSprite) out.push({ material: o.material, base: o.material.opacity });
+    });
+    return out;
+  }
+
   update() {
+    // Nebulas wash out inside a daylit atmosphere, same as the stars.
+    const daylight = this.game?.sun?.daylight ?? 0;
+    for (const s of this._fadeSprites ?? (this._fadeSprites = this._collectSprites())) {
+      s.material.opacity = s.base * (1 - daylight * 0.95);
+    }
     this.group.position.copy(this.game.engine.camera.position);
   }
 }

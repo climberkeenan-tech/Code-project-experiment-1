@@ -369,6 +369,18 @@ class ForestAssets {
       const hazeHook = mat.onBeforeCompile;
       mat.onBeforeCompile = (shader) => {
         hazeHook(shader);
+        // Same instancing fix as the tree materials — without it every
+        // sprite fogs as if it sat at the planet-group ORIGIN (the planet
+        // center, kilometres away): ~40% haze wash + garbage dayFactor.
+        // That was the pale washed-out impostor ring.
+        shader.vertexShader = shader.vertexShader.replace(
+          'vHazeWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;',
+          `vec4 hazeWP = vec4(transformed, 1.0);
+          #ifdef USE_INSTANCING
+            hazeWP = instanceMatrix * hazeWP;
+          #endif
+          vHazeWorldPos = (modelMatrix * hazeWP).xyz;`,
+        );
         shader.fragmentShader = shader.fragmentShader.replace(
           'vec3 sunsetTint = vec3(0.9, 0.45, 0.22);',
           `gl_FragColor.rgb *= (0.22 + 0.85 * dayFactor);

@@ -20,6 +20,7 @@ const VERT = /* glsl */ `
   attribute float aPhase;
   uniform float uTime;
   uniform float uPixelRatio;
+  uniform float uDaylight;
   varying vec3 vColor;
   varying float vAlpha;
 
@@ -29,7 +30,9 @@ const VERT = /* glsl */ `
     float tw = 0.78
       + 0.14 * sin(uTime * 1.7 + aPhase * 13.0)
       + 0.08 * sin(uTime * 3.3 + aPhase * 29.0);
-    vAlpha = tw;
+    // Stars are invisible from inside a daylit atmosphere — a starry noon
+    // sky over the forest was the biggest "space game" tell on the ground.
+    vAlpha = tw * (1.0 - uDaylight * 0.97);
 
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * mvPosition;
@@ -128,6 +131,7 @@ export class Starfield {
       uniforms: {
         uTime: { value: 0 },
         uPixelRatio: { value: 1 },
+        uDaylight: { value: 0 },
       },
       transparent: true,
       depthWrite: false,
@@ -149,5 +153,6 @@ export class Starfield {
     this.points.position.copy(this.game.engine.camera.position);
     this.material.uniforms.uTime.value = elapsed;
     this.material.uniforms.uPixelRatio.value = this.game.engine.renderer.getPixelRatio();
+    this.material.uniforms.uDaylight.value = this.game.sun?.daylight ?? 0;
   }
 }

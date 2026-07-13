@@ -1,14 +1,14 @@
 # Starfall Frontier — Complete Developer Handoff
 
 _The **single, current** handoff for everything built so far. **Current build:
-BUILD 33.** Development branch `claude/handoff-md-verify-uxi68e`;
+BUILD 34.** Development branch `claude/handoff-md-verify-uxi68e`;
 every published build is also pushed to the default branch
 `claude/3d-space-exploration-game-ogrezx`, whose workflow publishes to
 `gh-pages`. This file has three parts:_
 
 - **PART A — The complete game**: everything that exists right now, by topic,
   with current numbers. Read this to understand the game.
-- **PART B — Build-by-build history** (base game → BUILD 33): the full
+- **PART B — Build-by-build history** (base game → BUILD 34): the full
   changelog with per-build rationale and the playtest quotes that drove it.
 - **PART C — Deep architecture reference**: the code-level documentation
   (ship system, services, save schema, event catalogue…). Written around
@@ -379,6 +379,7 @@ E mine/recover/board.
 | 31 | **grounded forests**: slope gate + slope-proportional sinking (no floaters) · far-ring LOD burial · slope-aware hero · density up again |
 | 32 | **living forests**: planetary daylight ambience (fixes blue-black foliage) · correlated leaf tints · jacaranda de-purpled · unlit day-scaled impostors · 3× grass, +80% trees · mobile detail tier |
 | 33 | **grounded shade**: instanced contact-shadow discs under every tree (the shadow map only covers ±90 m) · deep-forest soil floor · deadwood weights trimmed |
+| 34 | **true colors**: stars/nebulas fade out in daylight · impostor haze instancing bug fixed (sprites fogged as if at the planet CENTER — the washed-out pale ring) |
 
 Full details for every build: PART B below.
 
@@ -1015,6 +1016,18 @@ hold frame rate; rings are per-instance fields now, not consts.
   reads as earth.
 - Deadwood (quiver/snag/log) mix weights trimmed toward living broadleafs —
   the shore band read as a wall of dead tan trees.
+
+### BUILD 34 — true colors
+- **Stars out by day**: the starfield shader gains a `uDaylight` uniform
+  (from `Sun.daylight`, the same planetary-ambience factor) — stars and
+  nebulas fade to nothing inside a daylit atmosphere. A starry noon sky
+  was the biggest "space game" tell on the ground.
+- **Impostor haze bug**: the sprite material had the haze hook WITHOUT the
+  instancing fix, so `vHazeWorldPos` for every instanced quad resolved to
+  the planet-group origin — the planet CENTER, kilometres away → ~40% haze
+  wash + garbage dayFactor. That was the pale washed-out impostor ring that
+  survived every earlier tint change. One vertex-shader patch fixed the
+  whole horizon.
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally
