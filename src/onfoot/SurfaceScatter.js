@@ -19,15 +19,10 @@ import { getForestAssets, SPECIES } from '../world/forest/ForestAssets.js';
 
 const SCATTER_RADIUS = 420; // how far props spread around the landing point
 const ROCK_COUNT = 60;
-const TREE_GRID = 7; // deterministic tree lattice pitch (m) — one slot per cell
-const RING0 = 62; // full-detail photogrammetry within this range of the center
-const RING1 = 140; // simplified LOD to here; baked impostors beyond
-const FLIGHT_RING1 = 120; // flight-grade patches: LOD1 to here, no LOD0 at all
+const TREE_GRID = 6; // deterministic tree lattice pitch (m) — one slot per cell
 const HERO_LOD_DIST = 150; // the 877k-tri hero swaps to its LOD past this
-// Walking this far from the patch center re-centers the detail rings. Must
-// stay under RING0 so the player never reaches simplified trees before the
-// rebuild fires.
-const REBUILD_STRAY = 55;
+// Detail-ring radii (LOD0 / LOD1 / stray-recenter) are per-instance fields —
+// mobile gets smaller rings so the denser BUILD 32 forest stays playable.
 
 /**
  * Per-archetype forest recipes. Cell spawn probability =
@@ -38,28 +33,28 @@ const REBUILD_STRAY = 55;
  */
 const FOREST_PLANS = {
   terran: {
-    pFloor: 0.16, pMask: 0.84, hero: true, undergrowth: true,
+    pFloor: 0.29, pMask: 0.71, hero: true, undergrowth: true,
     mix: [
       { id: 'fir', w: 24, minH01: 0.15 },
-      { id: 'island1', w: 26, maxH01: 0.36 },
-      { id: 'island2', w: 19, maxH01: 0.32 },
+      { id: 'island1', w: 30, maxH01: 0.36 },
+      { id: 'island2', w: 23, maxH01: 0.32 },
       { id: 'jacaranda', w: 9, maxH01: 0.28 },
-      { id: 'quiver', w: 7, shoreOnly: true },
-      { id: 'snag', w: 6 },
-      { id: 'log', w: 7 },
+      { id: 'quiver', w: 4, shoreOnly: true },
+      { id: 'snag', w: 4 },
+      { id: 'log', w: 4 },
       { id: 'stump', w: 2 },
     ],
   },
   ocean: {
-    pFloor: 0.14, pMask: 0.76, hero: true, undergrowth: true,
+    pFloor: 0.25, pMask: 0.70, hero: true, undergrowth: true,
     mix: [
       { id: 'fir', w: 16, minH01: 0.18 },
-      { id: 'island1', w: 28, maxH01: 0.36 },
-      { id: 'island2', w: 22, maxH01: 0.32 },
+      { id: 'island1', w: 32, maxH01: 0.36 },
+      { id: 'island2', w: 26, maxH01: 0.32 },
       { id: 'jacaranda', w: 8, maxH01: 0.28 },
-      { id: 'quiver', w: 12, shoreOnly: true },
-      { id: 'snag', w: 5 },
-      { id: 'log', w: 7 },
+      { id: 'quiver', w: 6, shoreOnly: true },
+      { id: 'snag', w: 4 },
+      { id: 'log', w: 4 },
       { id: 'stump', w: 2 },
     ],
   },
@@ -124,6 +119,15 @@ export class SurfaceScatter {
     this.planet = planet;
     this._mode = mode;
     this.center = planet.group.position; // render-space planet center
+
+    // Detail-ring radii: the player must always stand among LOD0 scans, so
+    // the stray-recenter distance stays under RING0. Mobile shrinks every
+    // ring — the dense forest is otherwise desktop-sized.
+    const mob = game.engine.isMobile;
+    this._ring0 = mob ? 36 : 50;
+    this._ring1 = mob ? 95 : 130;
+    this._flightRing1 = mob ? 80 : 120;
+    this._stray = this._ring0 - 10;
 
     /** @type {Array<{mesh: THREE.Mesh, rarity: import('../economy/Rarity.js').Rarity, localPos: THREE.Vector3}>} */
     this.rocks = [];
@@ -372,8 +376,8 @@ export class SurfaceScatter {
 
         surfLocal.copy(dir).multiplyScalar(R + h);
         const ring = this._mode === 'flight'
-          ? (rr <= FLIGHT_RING1 ? 1 : 2)
-          : (rr <= RING0 ? 0 : (rr <= RING1 ? 1 : 2));
+          ? (rr <= this._flightRing1 ? 1 : 2)
+          : (rr <= this._ring0 ? 0 : (rr <= this._ring1 ? 1 : 2));
         if (ring === 2 && !sp.impostor) continue; // no sprite → not worth a far slot
         this._placeTree(pick.id, surfLocal, dir, ring, rand, buckets, barkBase, leafBase, slope, 0);
       }
@@ -384,14 +388,16 @@ export class SurfaceScatter {
     // terrain — clumps share one terrain sample per cell so the ~30k tufts
     // stay affordable to place.
     if (plan.undergrowth && this._mode === 'full') {
-      this._buildUndergrowth('bush', 6, 130, 55, 0.28, 0.30, planetSeed + 303,
+      const mob = this.game.engine.isMobile;
+      this._buildUndergrowth('bush', 5.2, 130, this._ring0, 0.30, 0.38, planetSeed + 303,
         t1, t2, biomeNoise, buckets, barkBase, leafBase);
-      this._buildUndergrowth('fern', 9, 130, 45, 0.55, 0.14, planetSeed + 101,
+      this._buildUndergrowth('fern', 8, 130, 45, 0.55, 0.20, planetSeed + 101,
         t1, t2, biomeNoise, buckets, barkBase, leafBase);
       // Grass climbs well past the treeline band (hi 0.6→0.85) — bare
       // crests above the woods still read as alpine meadow, not bald green.
-      this._buildUndergrowth('grass', 3.2, 200, 200, 0.05, 0.95, planetSeed + 202,
-        t1, t2, biomeNoise, buckets, barkBase, leafBase, 30, 2.4, 0.6, 0.85);
+      this._buildUndergrowth('grass', 3.0, mob ? 130 : 200, 200, 0.03, 0.97,
+        planetSeed + 202, t1, t2, biomeNoise, buckets, barkBase, leafBase,
+        mob ? 20 : 48, 2.6, 0.6, 0.85);
     }
 
     // One HERO tree per landing site: the full 877k-triangle photogrammetry
@@ -519,18 +525,26 @@ export class SurfaceScatter {
     // LOD mesh that can sit below the analytic height trees are placed on).
     const footR = Math.min(2, Math.max(0.4, targetH * 0.1));
     let sink = (spec.sink ?? 0.06 * Math.sqrt(targetH))
-      + slope * (footR + offDist)
+      + slope * (footR + offDist * 0.6)
       + (ring === 1 ? 0.3 : ring === 2 ? 0.9 : 0);
+    // Ground cover must never bury itself: on slopes the offset term could
+    // exceed a grass tuft's own height and delete it into the hillside.
+    if (spec.sink !== undefined) sink = Math.min(sink, targetH * 0.5);
     const seated = surfLocal.clone().addScaledVector(up, -sink);
     const mat4 = new THREE.Matrix4().compose(seated, q, scaleV);
 
-    // Natural per-instance variation: brightness on bark, hue on foliage.
+    // Natural per-instance variation: brightness on bark; on foliage a
+    // CORRELATED luminance + warm (yellow-green) lean. Independent RGB
+    // jitter used to roll occasional blue-shifted canopies (playtest:
+    // "the trees are blue") — blue is never boosted now.
     const bv = 0.88 + rand() * 0.17;
     const barkTint = new THREE.Color(barkBase[0] * bv, barkBase[1] * bv, barkBase[2] * bv);
+    const lum = 0.8 + rand() * 0.35;
+    const warm = rand() * 0.14;
     const leafTint = new THREE.Color(
-      leafBase[0] * (0.82 + rand() * 0.28),
-      leafBase[1] * (0.88 + rand() * 0.24),
-      leafBase[2] * (0.8 + rand() * 0.25),
+      leafBase[0] * lum * (0.94 + warm),
+      leafBase[1] * lum * (1.0 + warm * 0.5),
+      leafBase[2] * lum * (0.86 - warm * 0.3),
     );
 
     let bucket = buckets.get(id);
@@ -698,7 +712,7 @@ export class SurfaceScatter {
     // the avatar (deterministic lattice: same trees, upgraded detail).
     if (avatarWorld && this._centerLocal) {
       this._tmp.copy(avatarWorld).sub(this.center);
-      if (this._tmp.distanceTo(this._centerLocal) > REBUILD_STRAY) {
+      if (this._tmp.distanceTo(this._centerLocal) > this._stray) {
         this._recenterForest(avatarWorld);
       }
     }

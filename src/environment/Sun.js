@@ -42,9 +42,17 @@ export class Sun {
     game.engine.scene.add(this.light);
     game.engine.scene.add(this.light.target);
 
-    // Faint cool fill so unlit sides read as starlit, not void-black.
+    // Ambient fill: faint cool starlight in space, blended toward bright
+    // SKYLIGHT near an atmosphere world's day side (update()) — without it,
+    // every shadowed leaf and trunk renders blue-black (playtest: "the
+    // trees are blue and black").
     this.fill = new THREE.HemisphereLight(0x21293c, 0x0a0c12, 0.55);
     game.engine.scene.add(this.fill);
+    this._spaceSky = new THREE.Color(0x21293c);
+    this._spaceGround = new THREE.Color(0x0a0c12);
+    this._daySky = new THREE.Color(0xa8bdd6);
+    this._dayGround = new THREE.Color(0x5c5a40);
+    this._upTmp = new THREE.Vector3();
 
     // The disc: HDR emissive so tone mapping + bloom render a convincing star.
     this.disc = new THREE.Mesh(
@@ -151,5 +159,20 @@ export class Sun {
 
     this.light.position.copy(player.position).addScaledVector(this._sunDir, -180);
     this.light.target.position.copy(player.position);
+
+    // Planetary daylight ambience: inside an atmosphere on the day side the
+    // sky itself is a strong light source. Fades with altitude and across
+    // the terminator, so space and night keep the dim starlight fill.
+    let ambience = 0;
+    const ctx = this.game.universe?.playerContext;
+    if (nearPlanet?.descriptor.hasAtmosphere && ctx) {
+      const inAtmo = Math.max(0, 1 - ctx.altitude / (nearPlanet.descriptor.atmosphereHeight * 1.2));
+      this._upTmp.copy(player.position).sub(nearPlanet.group.position).normalize();
+      const day = Math.max(0, Math.min(1, this._upTmp.dot(nearPlanet.sunDir) * 1.5 + 0.35));
+      ambience = Math.min(1, inAtmo) * day;
+    }
+    this.fill.color.copy(this._spaceSky).lerp(this._daySky, ambience);
+    this.fill.groundColor.copy(this._spaceGround).lerp(this._dayGround, ambience);
+    this.fill.intensity = 0.55 + ambience * 0.85;
   }
 }

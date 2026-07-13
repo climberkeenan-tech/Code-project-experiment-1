@@ -1,14 +1,14 @@
 # Starfall Frontier — Complete Developer Handoff
 
 _The **single, current** handoff for everything built so far. **Current build:
-BUILD 31.** Development branch `claude/handoff-md-verify-uxi68e`;
+BUILD 32.** Development branch `claude/handoff-md-verify-uxi68e`;
 every published build is also pushed to the default branch
 `claude/3d-space-exploration-game-ogrezx`, whose workflow publishes to
 `gh-pages`. This file has three parts:_
 
 - **PART A — The complete game**: everything that exists right now, by topic,
   with current numbers. Read this to understand the game.
-- **PART B — Build-by-build history** (base game → BUILD 31): the full
+- **PART B — Build-by-build history** (base game → BUILD 32): the full
   changelog with per-build rationale and the playtest quotes that drove it.
 - **PART C — Deep architecture reference**: the code-level documentation
   (ship system, services, save schema, event catalogue…). Written around
@@ -377,6 +377,7 @@ E mine/recover/board.
 | 29 | **photoreal forests**: World Editor + sculpting REMOVED · Poly Haven photogrammetry trees (CC0) · deterministic lattice + LOD rings + impostors · wind shader · hero 877k-tri tree |
 | 30 | **dense forests**: ~120k-tuft grass carpet (no bare ground) · bush layer · thicker tree lattice · leaf-alpha recovery (solid-card fix) · foliage translucency · flight/full patch grades |
 | 31 | **grounded forests**: slope gate + slope-proportional sinking (no floaters) · far-ring LOD burial · slope-aware hero · density up again |
+| 32 | **living forests**: planetary daylight ambience (fixes blue-black foliage) · correlated leaf tints · jacaranda de-purpled · unlit day-scaled impostors · 3× grass, +80% trees · mobile detail tier |
 
 Full details for every build: PART B below.
 
@@ -971,6 +972,36 @@ Three float sources, three fixes (all in `SurfaceScatter`):
    far rings sink extra (+0.3 m LOD1, +0.9 m impostors).
 The hero picks flat ground (slope ≤ 0.3) and beds its root flare in.
 Density up again per playtest: terran in-mask 0.84, bushes pFloor 0.30.
+
+### BUILD 32 — living forests (playtest: "the trees are blue and black")
+Root causes of the blue-black look, all fixed:
+1. **Deep-space ambient on a daylit surface**: the only fill light was the
+   starlight hemisphere (0x21293c — dark BLUE) — every shadowed leaf and
+   trunk rendered blue-black. `Sun.update` now blends the hemisphere toward
+   bright SKYLIGHT (sky 0xa8bdd6 / ground 0x5c5a40, intensity up to 1.4)
+   when the player is inside an atmosphere on the day side; fades with
+   altitude and across the terminator, so space and night keep the old dim
+   fill. This one change transformed the forest.
+2. **Blue-rolled tint jitter**: per-instance leaf tints used independent RGB
+   randoms — a low-R/high-B roll made a whole canopy blue. Tints are now a
+   correlated luminance + warm (yellow-green) lean; blue is never boosted.
+3. **Jacaranda blooms purple** (it's a real jacaranda) — blossom layer
+   multiplied toward green (0.72, 0.95, 0.58).
+4. **Impostors**: Lambert sprites facing away from the sun took only the
+   (blue) sky ambient — the horizon ring went blue-grey. Now UNLIT with a
+   dayFactor brightness hook (`× (0.22 + 0.85·day)` before the haze mix),
+   baked at 512² with a dark-green lean (0x5c6b54) and loose bake cutoff so
+   fir needles survive; runtime cutoff 0.24.
+Also: foliage translucency 0.38 → 0.5.
+
+**Density** (playtest: "+200% grass, +80% trees, grass covers everything"):
+tree lattice 7 m → 6 m with meadow floor 0.29 (in-mask ≈ 1.0); grass grid
+3.0 m × 48 tufts/clump × width 1.9–2.6 → ~160k instances to 200 m (sink now
+capped at half tuft height — the slope sink was burying hillside grass);
+bushes grid 5.2 / floor 0.38; deadwood weights trimmed toward living
+broadleafs. **Mobile tier**: `engine.isMobile` shrinks the detail rings
+(LOD0 36 m / LOD1 95 m) and the grass carpet (20/clump, 130 m) so phones
+hold frame rate; rings are per-instance fields now, not consts.
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally

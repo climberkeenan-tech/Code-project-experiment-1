@@ -79,7 +79,7 @@ export const SPECIES = {
   },
   grass: {
     url: 'models-glb/trees/grass.glb', heights: [0.65, 1.2], trunkR: 0,
-    wind: { sway: 0, flutter: 0.09 }, sink: 0.3, wide: [1.5, 2.1],
+    wind: { sway: 0, flutter: 0.09 }, sink: 0.3, wide: [1.9, 2.6],
   },
 };
 
@@ -176,6 +176,11 @@ class ForestAssets {
         material.envMapIntensity = 0.3;
         // ez-tree's grass sprite is grayscale, authored to be tinted.
         if (id === 'grass') material.color.setHex(0x55803a);
+        // Jacaranda blooms purple — striking, but it reads as "blue trees"
+        // (playtest). Shift the blossom layer toward green foliage.
+        if (leaf && (material.name || '').includes('jacaranda')) {
+          material.color.setRGB(0.72, 0.95, 0.58);
+        }
         if (material.transparent) { // any BLEND stragglers → alpha test
           material.transparent = false;
           material.alphaTest = Math.max(material.alphaTest, 0.4);
@@ -248,7 +253,7 @@ class ForestAssets {
         // dayFactor (fades to zero across the terminator — no night glow).
         shader.fragmentShader = shader.fragmentShader.replace(
           'vec3 sunsetTint = vec3(0.9, 0.45, 0.22);',
-          `gl_FragColor.rgb += diffuseColor.rgb * (0.38 * dayFactor);
+          `gl_FragColor.rgb += diffuseColor.rgb * (0.5 * dayFactor);
           vec3 sunsetTint = vec3(0.9, 0.45, 0.22);`,
         );
       }
@@ -289,10 +294,13 @@ class ForestAssets {
       for (const part of sp.parts0) {
         const bm = new THREE.MeshBasicMaterial({
           map: part.material.map ?? null,
-          // Strong dim ≈ the self-shadowing/AO a lit canopy shows; without
-          // it the flat sprite reads far paler than the real trees beside it.
-          color: 0x6e6e6e,
-          alphaTest: Math.max(part.material.alphaTest, 0.35),
+          // Dim + green lean ≈ the self-shadowed dark-green mass a distant
+          // tree actually presents; unmodified, bright trunk albedo turns
+          // the sprite ring into pale poles on the horizon.
+          color: 0x5c6b54,
+          // Loose cutoff: thin needles must survive the bake or the sprite
+          // degrades to a pale bare trunk at range.
+          alphaTest: 0.12,
           side: THREE.DoubleSide,
         });
         bakeMats.push(bm);
@@ -312,23 +320,34 @@ class ForestAssets {
       camera.lookAt(0, 0, 0);
       camera.updateProjectionMatrix();
 
-      const rt = new THREE.WebGLRenderTarget(256, 256, { depthBuffer: true });
+      const rt = new THREE.WebGLRenderTarget(512, 512, { depthBuffer: true });
       rt.texture.generateMipmaps = true;
       rt.texture.minFilter = THREE.LinearMipmapLinearFilter;
       renderer.setRenderTarget(rt);
       renderer.clear();
       renderer.render(scene, camera);
 
-      const mat = new THREE.MeshLambertMaterial({
+      // UNLIT + day-factor brightness: a lit quad facing away from the sun
+      // takes only the pale-blue sky ambient and the whole horizon ring
+      // turns blue-grey. Baked albedo × dayFactor keeps sprites a stable
+      // sunlit green by day and fades them across the terminator at night.
+      const mat = new THREE.MeshBasicMaterial({
         map: rt.texture,
-        // A face-on quad catches full sun where a real canopy self-occludes;
-        // dim the response so the sprite ring matches the LOD ring beside it.
-        color: 0x9a9a9a,
-        alphaTest: 0.3,
+        color: 0xbcc2b4,
+        alphaTest: 0.24,
         side: THREE.DoubleSide,
       });
       applyAtmosphericHaze(mat, this.hazeUniforms);
-      mat.customProgramCacheKey = () => 'impostor-haze';
+      const hazeHook = mat.onBeforeCompile;
+      mat.onBeforeCompile = (shader) => {
+        hazeHook(shader);
+        shader.fragmentShader = shader.fragmentShader.replace(
+          'vec3 sunsetTint = vec3(0.9, 0.45, 0.22);',
+          `gl_FragColor.rgb *= (0.22 + 0.85 * dayFactor);
+          vec3 sunsetTint = vec3(0.9, 0.45, 0.22);`,
+        );
+      };
+      mat.customProgramCacheKey = () => 'impostor-day-haze';
       sp.impostor = { material: mat, aspect: w / size.y };
 
       scene.remove(group);
