@@ -37,16 +37,16 @@ export const SPECIES = {
     wind: { sway: 0.35, flutter: 0.10 },
   },
   island1: {
-    url: 'models-glb/trees/island1.glb', heights: [5.5, 10], trunkR: 0.28,
+    url: 'models-glb/trees/island1.glb', heights: [6.5, 11], trunkR: 0.28,
     wind: { sway: 0.28, flutter: 0.08 },
   },
   island2: {
-    url: 'models-glb/trees/island2.glb', heights: [4, 7.5], trunkR: 0.25,
+    url: 'models-glb/trees/island2.glb', heights: [5, 8.5], trunkR: 0.25,
     wind: { sway: 0.24, flutter: 0.08 },
   },
   // The island2 scan again at shrub size — the understory bush layer.
   bush: {
-    url: 'models-glb/trees/island2.glb', heights: [1.2, 2.4], trunkR: 0,
+    url: 'models-glb/trees/island2.glb', heights: [1.4, 2.8], trunkR: 0,
     wind: { sway: 0.05, flutter: 0.08 }, sink: 0.12, wide: [1.0, 1.3],
   },
   jacaranda: {

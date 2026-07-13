@@ -1,14 +1,14 @@
 # Starfall Frontier — Complete Developer Handoff
 
 _The **single, current** handoff for everything built so far. **Current build:
-BUILD 34.** Development branch `claude/handoff-md-verify-uxi68e`;
+BUILD 35.** Development branch `claude/handoff-md-verify-uxi68e`;
 every published build is also pushed to the default branch
 `claude/3d-space-exploration-game-ogrezx`, whose workflow publishes to
 `gh-pages`. This file has three parts:_
 
 - **PART A — The complete game**: everything that exists right now, by topic,
   with current numbers. Read this to understand the game.
-- **PART B — Build-by-build history** (base game → BUILD 34): the full
+- **PART B — Build-by-build history** (base game → BUILD 35): the full
   changelog with per-build rationale and the playtest quotes that drove it.
 - **PART C — Deep architecture reference**: the code-level documentation
   (ship system, services, save schema, event catalogue…). Written around
@@ -380,6 +380,7 @@ E mine/recover/board.
 | 32 | **living forests**: planetary daylight ambience (fixes blue-black foliage) · correlated leaf tints · jacaranda de-purpled · unlit day-scaled impostors · 3× grass, +80% trees · mobile detail tier |
 | 33 | **grounded shade**: instanced contact-shadow discs under every tree (the shadow map only covers ±90 m) · deep-forest soil floor · deadwood weights trimmed |
 | 34 | **true colors**: stars/nebulas fade out in daylight · impostor haze instancing bug fixed (sprites fogged as if at the planet CENTER — the washed-out pale ring) |
+| 35 | **photo grade**: post-tonemap color grade (saturation 1.14 + gentle S-curve — kills the pastel wash) · taller broadleafs/bushes for overlapping canopies |
 
 Full details for every build: PART B below.
 
@@ -1028,6 +1029,13 @@ hold frame rate; rings are per-instance fields now, not consts.
   wash + garbage dayFactor. That was the pale washed-out impostor ring that
   survived every earlier tint change. One vertex-shader patch fixed the
   whole horizon.
+
+### BUILD 35 — photo grade
+- **Color grade pass** (`Engine.js` ColorGradeShader, after the OutputPass
+  so it works in LDR sRGB): saturation 1.14 + a 22% smoothstep S-curve.
+  ACES alone read slightly pastel/washed — "game", not "photo".
+- Broadleafs + bushes grown ~15% so canopies overlap into a continuous
+  mid-story (island1 6.5–11 m, island2 5–8.5 m, bush 1.4–2.8 m).
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally

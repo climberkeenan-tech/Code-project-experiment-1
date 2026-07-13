@@ -3,6 +3,40 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+
+/**
+ * Subtle photographic grade applied after tone mapping (LDR sRGB space):
+ * a touch of saturation and a gentle smoothstep S-curve. Without it the
+ * ACES output reads slightly pastel/washed — "game", not "photo".
+ */
+const ColorGradeShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uSaturation: { value: 1.14 },
+    uCurve: { value: 0.22 },
+  },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform float uSaturation;
+    uniform float uCurve;
+    varying vec2 vUv;
+    void main() {
+      vec4 c = texture2D(tDiffuse, vUv);
+      float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+      vec3 x = clamp(mix(vec3(l), c.rgb, uSaturation), 0.0, 1.0);
+      vec3 curved = x * x * (3.0 - 2.0 * x);
+      gl_FragColor = vec4(mix(x, curved, uCurve), c.a);
+    }
+  `,
+};
 
 /**
  * Rendering engine and frame loop.
@@ -59,9 +93,11 @@ export class Engine {
       0.85, // threshold — only genuinely bright pixels bloom
     );
     this.outputPass = new OutputPass();
+    this.gradePass = new ShaderPass(ColorGradeShader);
     this.composer.addPass(this.renderPass);
     this.composer.addPass(this.bloomPass);
     this.composer.addPass(this.outputPass);
+    this.composer.addPass(this.gradePass);
 
     /**
      * Dynamic resolution: effective pixel ratio = min(devicePixelRatio, cap)

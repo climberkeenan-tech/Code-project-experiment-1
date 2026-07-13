@@ -50,7 +50,7 @@ export class Screens {
         <span class="ml-bar"><span class="ml-fill"></span></span>
       </div>
       <div class="reset-save">Reset progress</div>
-      <div class="build-tag">BUILD 34 — true colors: daytime sky, fixed distant trees, grounded shade</div>
+      <div class="build-tag">BUILD 35 — photo grade: filmic color, fuller canopies</div>
     `;
     this.root.appendChild(el);
 
