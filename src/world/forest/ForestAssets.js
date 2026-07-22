@@ -53,9 +53,11 @@ export const SPECIES = {
     url: 'models-glb/trees/jacaranda.glb', heights: [14, 20], trunkR: 0.7,
     wind: { sway: 0.45, flutter: 0.10 },
   },
+  // The showpiece scan — heaviest asset, so it is OPTIONAL: it streams
+  // fire-and-forget and never gates (or can zero out) the forest.
   hero: {
     url: 'models-glb/trees/hero.glb', heights: [7.2, 8.4], trunkR: 0.42,
-    wind: { sway: 0.16, flutter: 0.05 },
+    wind: { sway: 0.16, flutter: 0.05 }, optional: true,
   },
   quiver: {
     url: 'models-glb/trees/quiver.glb', heights: [3.2, 5.5], trunkR: 0.12,
@@ -85,6 +87,23 @@ export const SPECIES = {
 
 const LEAF_HINTS = ['leaves', 'twig', 'fern', 'grass'];
 
+/** Resolve after `ms`. */
+const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Reject `p` if it does not settle within `ms`. A GLTFLoader download can't
+ * be aborted, but the reject lets the caller stop WAITING on a stalled file
+ * (the abandoned fetch just completes unused) — the difference between one
+ * skipped tree and a forest that never renders.
+ */
+function withTimeout(p, ms) {
+  let timer;
+  const guard = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`timeout after ${ms}ms`)), ms);
+  });
+  return Promise.race([p, guard]).finally(() => clearTimeout(timer));
+}
+
 class ForestAssets {
   constructor() {
     this.ready = false;
@@ -113,19 +132,76 @@ class ForestAssets {
     this.species = {};
   }
 
-  /** Idempotent async load of every species GLB. */
+  /**
+   * Idempotent async load of every species GLB — FAULT-TOLERANT by design.
+   *
+   * Hard lesson (a fresh MacBook rendered NO trees): the old code gated the
+   * whole forest behind `Promise.all` over every file, so a single asset
+   * that STALLED on the real CDN (the 15 MB hero on a slow link) left
+   * `ready` false forever → the forest never built, even though the other
+   * 11 species had loaded. Reproduced in the harness: stalled hero → 0 tree
+   * meshes; every other file fine.
+   *
+   * Now: each file loads with a bounded TIMEOUT + RETRY (a stalled or failed
+   * download can never hang the group), the OPTIONAL hero streams
+   * fire-and-forget so it is never on the critical path, and `ready` flips
+   * once the essential species have settled. One bad asset costs at most
+   * that one species, never the whole forest.
+   */
   load() {
     if (this._promise) return this._promise;
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);
-    this._promise = Promise.all(Object.entries(SPECIES).map(async ([id, spec]) => {
-      try {
-        const gltf = await loader.loadAsync(spec.url);
-        this.species[id] = this._prepare(id, spec, gltf.scene);
-      } catch (err) {
-        console.warn(`[forest] ${id} failed to load — species skipped`, err);
+
+    const entries = Object.entries(SPECIES);
+    const essential = entries.filter(([, s]) => !s.optional);
+    const optional = entries.filter(([, s]) => s.optional);
+
+    // The forest may build as soon as a QUORUM of species is available; the
+    // rest (and the optional hero) stream in and appear on the next patch
+    // rebuild (every disembark / 55 m walked). This is the guarantee that no
+    // single slow or stalled file can delay the trees: the other species
+    // reach quorum without it. Verified in the harness — stalling any one
+    // file still renders a full forest.
+    const quorum = Math.min(6, essential.length);
+    let loaded = 0;
+    let flipped = false;
+    let resolveReady;
+    const readyPromise = new Promise((res) => { resolveReady = res; });
+    const flip = () => {
+      if (flipped) return;
+      flipped = true;
+      this._makeAoDisc();
+      this.ready = true;
+      resolveReady();
+    };
+
+    const loadOne = async (id, spec, counts) => {
+      const timeout = spec.optional ? 25000 : 10000;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const gltf = await withTimeout(loader.loadAsync(spec.url), timeout);
+          this.species[id] = this._prepare(id, spec, gltf.scene);
+          if (counts && ++loaded >= quorum) flip();
+          return;
+        } catch (err) {
+          // A timeout means the file is too slow right now — don't burn
+          // another full timeout retrying it; skip and let quorum carry.
+          const isTimeout = /timeout/.test(err?.message || '');
+          if (isTimeout || attempt === 2) {
+            if (!isTimeout) console.warn(`[forest] ${id} failed after retries — skipped`, err);
+            return;
+          }
+          await delay(500 * (attempt + 1)); // 0.5s, 1s backoff on real errors
+        }
       }
-    })).then(() => { this._makeAoDisc(); this.ready = true; });
+    };
+
+    for (const [id, spec] of optional) loadOne(id, spec, false);
+    // Flip on WHICHEVER happens first: quorum reached (common case, ~instant)
+    // or every essential settled (covers too-few-species / many-failed).
+    Promise.allSettled(essential.map(([id, spec]) => loadOne(id, spec, true))).then(flip);
+    this._promise = readyPromise;
     return this._promise;
   }
 

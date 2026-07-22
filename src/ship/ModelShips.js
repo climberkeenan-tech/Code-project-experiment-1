@@ -196,36 +196,64 @@ export function getEnemyModelProto(id) {
   return clone;
 }
 
-/** Kick off (or join) loading of all registered models. */
+/** Load one GLB with a timeout guard (a stalled fetch rejects, never hangs). */
+function loadGLBOnce(loader, url, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      reject(new Error(`timeout after ${timeoutMs}ms`));
+    }, timeoutMs);
+    loader.load(
+      url,
+      (gltf) => { if (!done) { done = true; clearTimeout(timer); resolve(gltf); } },
+      undefined,
+      (err) => { if (!done) { done = true; clearTimeout(timer); reject(err); } },
+    );
+  });
+}
+
+/**
+ * Kick off (or join) loading of all registered models — FAULT-TOLERANT.
+ *
+ * Each hull loads with a per-file timeout + retry, so a transient CDN
+ * failure (the "new ship designs missing on a fresh machine" bug — a hull
+ * that failed once and fell straight back to the procedural stand-in with
+ * no retry) recovers instead of shipping a stand-in. A hull that still
+ * fails after retries keeps its procedural fallback, and the start-screen
+ * gate proceeds either way (a stalled download times out rather than
+ * blocking launch forever).
+ */
 export function loadModelShips() {
   if (loadPromise) return loadPromise;
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
-  loadPromise = Promise.all(Object.entries(MODELS).map(([id, spec]) =>
-    new Promise((resolve) => {
-      loader.load(
-        spec.url,
-        (gltf) => {
-          try {
-            protos[id] = normalize(gltf.scene, spec);
-            if (NOZZLES[id]) protos[id].userData.nozzles = NOZZLES[id];
-            // Authored per-thruster anchors (proto space, measured from the
-            // real geometry) — supports hulls with any number of nozzles.
-            if (spec.anchors) protos[id].userData.nozzleAnchors = spec.anchors;
-            for (const cb of loadListeners) cb(id);
-          } catch (err) {
-            console.warn(`[models] ${id} normalize failed:`, err);
-          }
-          resolve();
-        },
-        undefined,
-        (err) => {
-          console.warn(`[models] ${id} load failed (procedural fallback stays):`, err);
-          resolve();
-        },
-      );
-    }),
-  )).then(() => protos);
+
+  const loadOne = async (id, spec) => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const gltf = await loadGLBOnce(loader, spec.url, 15000);
+        protos[id] = normalize(gltf.scene, spec);
+        if (NOZZLES[id]) protos[id].userData.nozzles = NOZZLES[id];
+        // Authored per-thruster anchors (proto space, measured from the
+        // real geometry) — supports hulls with any number of nozzles.
+        if (spec.anchors) protos[id].userData.nozzleAnchors = spec.anchors;
+        for (const cb of loadListeners) cb(id);
+        return;
+      } catch (err) {
+        if (attempt === 2) {
+          console.warn(`[models] ${id} failed after 3 tries (procedural fallback stays):`, err);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+      }
+    }
+  };
+
+  loadPromise = Promise.allSettled(
+    Object.entries(MODELS).map(([id, spec]) => loadOne(id, spec)),
+  ).then(() => protos);
   return loadPromise;
 }
 

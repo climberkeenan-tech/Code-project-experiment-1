@@ -1,14 +1,14 @@
 # Starfall Frontier — Complete Developer Handoff
 
 _The **single, current** handoff for everything built so far. **Current build:
-BUILD 37.** Development branch `claude/handoff-md-verify-uxi68e`;
+BUILD 38.** Development branch `claude/handoff-md-verify-uxi68e`;
 every published build is also pushed to the default branch
 `claude/3d-space-exploration-game-ogrezx`, whose workflow publishes to
 `gh-pages`. This file has three parts:_
 
 - **PART A — The complete game**: everything that exists right now, by topic,
   with current numbers. Read this to understand the game.
-- **PART B — Build-by-build history** (base game → BUILD 37): the full
+- **PART B — Build-by-build history** (base game → BUILD 38): the full
   changelog with per-build rationale and the playtest quotes that drove it.
 - **PART C — Deep architecture reference**: the code-level documentation
   (ship system, services, save schema, event catalogue…). Written around
@@ -383,6 +383,7 @@ E mine/recover/board.
 | 35 | **photo grade**: post-tonemap color grade (saturation 1.14 + gentle S-curve — kills the pastel wash) · taller broadleafs/bushes for overlapping canopies |
 | 36 | **living ground**: mottle frequencies fixed (×61 ≈ 330 m period — invisible in one view; now two octaves at ~30 m/~7 m) |
 | 37 | **phone forests**: mobile tier exercised end-to-end in the harness (force `engine.isMobile` before disembark) · mobile grass 20→34/clump (~115k tufts — the phone view is the judged view) |
+| 38 | **reliable assets**: fault-tolerant loaders — quorum-ready forest + per-file timeout/retry (one stalled file no longer renders ZERO trees) · ship-load retry (no more procedural "missing new designs") · 15.3 MB hero.glb → 4.1 MB, optional |
 
 Full details for every build: PART B below.
 
@@ -1055,6 +1056,40 @@ verified clean (no errors, rings/counts correct). The mobile grass carpet
 at 20/clump left visible bare ground (exactly the playtest complaint), so
 mobile is now 34/clump (~115k tufts; grass is 6 tris/tuft — even phones
 afford a real carpet, and the QualityManager still owns resolution).
+
+### BUILD 38 — reliable assets (playtest: "new MacBook — no trees, some ship designs missing")
+A fresh machine on a real network exposed a loader fragility that localhost
+never hits. REPRODUCED in the harness (tools/repro-hero.mjs — route a GLB to
+STALL): with hero.glb hung, the old code rendered **0 tree meshes / 0 tree
+colliders**; every other species had loaded fine.
+
+- **Root cause (trees)**: `ForestAssets.load()` flipped `ready` only inside a
+  single `Promise.all` over ALL 12 tree GLBs. A REJECT was caught (graceful
+  skip), but a STALL — the 15.3 MB hero.glb on a slow link — left one element
+  pending forever, so `ready` never flipped and the forest never built.
+  `SurfaceScatter._buildForest` re-awaited the same dead promise, so it never
+  recovered.
+- **Root cause (ships)**: `loadModelShips()` treated a per-hull GLB failure as
+  terminal (error callback → resolve, NO retry) — a transient CDN blip left
+  that hull on its procedural stand-in permanently = "new designs missing".
+- **Fixes**:
+  1. Forest load is now QUORUM-based: `ready` flips as soon as ~6 species load
+     (or all settle), so no single slow/stalled file can delay the trees. Each
+     file has a per-file TIMEOUT (10 s essential / 25 s optional) + RETRY (on
+     real errors, not timeouts). Verified: stalling hero OR an essential (fir)
+     still renders a full forest.
+  2. The heavy hero is now `optional: true` — it streams fire-and-forget and is
+     never on the critical path (and was pointlessly gating even ice/desert
+     worlds that never place it).
+  3. `loadModelShips()` gained per-file timeout + 3× retry with backoff, so a
+     transient failure recovers instead of shipping a stand-in. Verified with
+     tools/repro-ship.mjs (fail a hull once → retry loads it).
+  4. **hero.glb 15.3 MB → 4.1 MB**: LOD0 decimated to ~9% (~79k tris) + 1K
+     textures (build-trees.mjs `lod0` field). Every tree asset is now ≤ 4.1 MB,
+     under the CDN's large-file ceiling. Total tree payload 24 MB → 13 MB.
+- Both loaders import the meshopt decoder from different specifiers
+  (three/addons vs three/examples/jsm) — three's package exports alias them to
+  the SAME file, Vite dedupes; harmless (a red-herring ruled out).
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally

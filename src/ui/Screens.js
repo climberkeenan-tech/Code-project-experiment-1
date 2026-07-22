@@ -50,7 +50,7 @@ export class Screens {
         <span class="ml-bar"><span class="ml-fill"></span></span>
       </div>
       <div class="reset-save">Reset progress</div>
-      <div class="build-tag">BUILD 37 — phone forests: dense mobile grass, verified mobile tier</div>
+      <div class="build-tag">BUILD 38 — reliable assets: forests + ships load even on slow/flaky networks</div>
     `;
     this.root.appendChild(el);
 
