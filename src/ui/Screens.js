@@ -50,7 +50,7 @@ export class Screens {
         <span class="ml-bar"><span class="ml-fill"></span></span>
       </div>
       <div class="reset-save">Reset progress</div>
-      <div class="build-tag">BUILD 39 — level up: every ship unlocks by player level, one per 10 levels</div>
+      <div class="build-tag">BUILD 40 — paced progression: XP is sqrt-scaled, level 10 unlocks the SF-20 only</div>
     `;
     this.root.appendChild(el);
 

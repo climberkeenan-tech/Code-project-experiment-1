@@ -1,14 +1,14 @@
 # Starfall Frontier — Complete Developer Handoff
 
 _The **single, current** handoff for everything built so far. **Current build:
-BUILD 39.** Development branch `claude/handoff-md-verify-uxi68e`;
+BUILD 40.** Development branch `claude/handoff-md-verify-uxi68e`;
 every published build is also pushed to the default branch
 `claude/3d-space-exploration-game-ogrezx`, whose workflow publishes to
 `gh-pages`. This file has three parts:_
 
 - **PART A — The complete game**: everything that exists right now, by topic,
   with current numbers. Read this to understand the game.
-- **PART B — Build-by-build history** (base game → BUILD 39): the full
+- **PART B — Build-by-build history** (base game → BUILD 40): the full
   changelog with per-build rationale and the playtest quotes that drove it.
 - **PART C — Deep architecture reference**: the code-level documentation
   (ship system, services, save schema, event catalogue…). Written around
@@ -61,25 +61,33 @@ GLB (~0.5–1.2 MB each, `public/models-glb/`). Registry: `MODELS` in
 authors the nose along −X, measured per-thruster `anchors`). Catalog:
 `PLAYER_SHIPS` in `src/ship/ShipFactory.js`.
 
-| id | name | Lv | cost | hull | shield | weapon | model | special |
-|----|------|---:|-----:|-----:|-------:|-------:|-------|---------|
-| `starter` | SF-10 Sentinel | 10 | 0 | 1 | 1 | 1 | starter | — |
-| `explorer` | SF-20 Nebula Gunship | 20 | 320 | 1.25 | 1.2 | 1 | gunship | — |
-| `interceptor` | SF-30 Kestrel | 30 | 800 | 1.5 | 1.45 | 1 | gunship ×1.18 | — |
-| `nighthawk` | SF-45 Night Hawk | 45 | 1,400 | 2.0 | 1.9 | 1.4 | nighthawk | **mission-10 reward**; G = call 1–40 allied reinforcements |
-| `frigate` | SF-50 Aegis Gunner | 50 | 2,080 | 2.2 | 2.1 | 1.5 | aegis | gunner line |
-| `wedge` | SF-55 Void Wedge | 50 | 2,500 | 2.3 | 2.2 | 1.45 | wedge | **mission-50 reward** |
-| `falcon` | SF-60 Falcon | 55 | 5,000 | 2.6 | 2.5 | 1.5 | falcon | **mission-40 reward** |
-| `battlecruiser` | SF-70 Bastion Gunner | 70 | 6,400 | 3.4 | 3.1 | 2.0 | bastion | gunner line |
-| `battleship` | SF-85 Obsidian Dreadnought | 85 | 12,800 | 7 | 5.5 | 1 | dreadnought | capital; turrets 4, hangar 4 (belly launch) |
-| `stardestroyer` | SF-150 Star Destroyer | 90 | 30,000 | 9 | 7 | 2.0 | stardestroyer | **mission-25 reward**; G = **fleet call** (A7); turrets 3; noLanding |
-| `sovereign` | SF-100 Sovereign | 100 | 20,800 | 5.2 | 4.6 | 1 | procedural | reserved for a future model |
-| `carrier` | SF-110 Vanguard | 110 | 40,000 | 11 | 8 | 1 | flagship | capital; turrets 2, **hangar 15** (flank launch); noLanding |
-| `aethelred` | SF-200 Aethelred | 75* | 90,000 | 16 | 12 | 2.5 | aethelred | **mission-75 reward**; hangar 15 + gunnerHangar 5 (lower-side launch); turrets 4; noLanding |
+Since BUILD 39 every hull unlocks by **player level** (`unlockLevel`, one new
+hull per 10 levels, playtest-chosen order — mission ship-grants are gone).
+XP comes from playing, sqrt-scaled so paydays can't skip rungs (BUILD 40):
+kills 8·√credits, missions 6·√reward, ore sales 2·√value; cumulative XP to
+reach level L = 28·(L−1)^1.8 (level 10 ≈ 1.5k XP — a solid first session;
+level 120 ≈ 152k — a campaign). `core/Progression.js`; level shows as "LV n"
+on the HUD; creative ignores locks. Level gates AVAILABILITY only — credits
+still buy the hull.
 
-_*Aethelred was deliberately moved to level 75 ("it just seems overpowered")
-and is the final mission prize. Mission-reward hulls show 🔒 + a progress bar
-in the shop until their mission is complete — the first copy is then FREE._
+| id | name | unlock Lv | cost | hull | shield | weapon | model | special |
+|----|------|---------:|-----:|-----:|-------:|-------:|-------|---------|
+| `starter` | SF-10 Sentinel | 1 (free) | 0 | 1 | 1 | 1 | starter | — |
+| `explorer` | SF-20 Nebula Gunship | 10 | 320 | 1.25 | 1.2 | 1 | gunship | — |
+| `interceptor` | SF-30 Kestrel | 20 | 800 | 1.5 | 1.45 | 1 | gunship ×1.18 | — |
+| `frigate` | SF-50 Aegis Gunner | 30 | 2,080 | 2.2 | 2.1 | 1.5 | aegis | gunner line |
+| `battlecruiser` | SF-70 Bastion Gunner | 40 | 6,400 | 3.4 | 3.1 | 2.0 | bastion | gunner line |
+| `sovereign` | SF-100 Sovereign | 50 | 20,800 | 5.2 | 4.6 | 1 | procedural | reserved for a future model |
+| `battleship` | SF-85 Obsidian Dreadnought | 60 | 12,800 | 7 | 5.5 | 1 | dreadnought | capital; turrets 4, hangar 4 (belly launch) |
+| `carrier` | SF-110 Vanguard | 70 | 40,000 | 11 | 8 | 1 | flagship | capital; turrets 2, **hangar 15** (flank launch); noLanding |
+| `aethelred` | SF-200 Aethelred | 80 | 90,000 | 16 | 12 | 2.5 | aethelred | hangar 15 + gunnerHangar 5 (lower-side launch); turrets 4; noLanding |
+| `nighthawk` | SF-45 Night Hawk | 90 | 1,400 | 2.0 | 1.9 | 1.4 | nighthawk | G = call 1–40 allied reinforcements |
+| `wedge` | SF-55 Void Wedge | 100 | 2,500 | 2.3 | 2.2 | 1.45 | wedge | — |
+| `falcon` | SF-60 Falcon | 110 | 5,000 | 2.6 | 2.5 | 1.5 | falcon | — |
+| `stardestroyer` | SF-150 Star Destroyer | 120 | 30,000 | 9 | 7 | 2.0 | stardestroyer | G = **fleet call** (A7); turrets 3; noLanding |
+
+_Locked hulls show 🔒 "unlocks at level N" + a level progress bar in the shop
+(sorted by unlock level). Catalog `level` mirrors `unlockLevel`._
 
 Non-player hulls: `leviathan` (the enemy fortress, targetLength 2600) and the
 enemy fleet flies the same 12 hulls natural-coloured via `ENEMY_MODEL_MAP`
@@ -186,10 +194,9 @@ are handcrafted (including a "fly the SF-10" contract); 11–75 generate
 deterministically with waves of 2–6 that grow with depth plus escorts on most
 rungs (rung 75 is an 11-ship raid). Missions are **private fights**: no
 ambient spawns, no reinforcements, and any gate-crasher that wasn't there at
-start is swept when the contract ends. Milestones grant ships FREE on
-completion (`unlockAt`): **10 → Night Hawk, 25 → Star Destroyer, 40 → Falcon,
-50 → Void Wedge, 75 → Aethelred** (banner + shop unlock). `missionIndex`
-persists in the save.
+start is swept when the contract ends. Missions pay **credits only** since
+BUILD 39 (ship-grants removed — hulls unlock by player level, see A3);
+rewards feed XP at 6·√reward. `missionIndex` persists in the save.
 
 ## A9. The universe
 
@@ -385,6 +392,7 @@ E mine/recover/board.
 | 37 | **phone forests**: mobile tier exercised end-to-end in the harness (force `engine.isMobile` before disembark) · mobile grass 20→34/clump (~115k tufts — the phone view is the judged view) |
 | 38 | **reliable assets**: fault-tolerant loaders — quorum-ready forest + per-file timeout/retry (one stalled file no longer renders ZERO trees) · ship-load retry (no more procedural "missing new designs") · 15.3 MB hero.glb → 4.1 MB, optional |
 | 39 | **level up**: player XP/level system (`core/Progression.js`) — every ship unlocks by LEVEL, one per 10 levels in playtest order (SF-10 free → SF-150 at 120); mission ship-grants removed; save v4 (`xp`) |
+| 40 | **paced progression**: XP sqrt-scaled (kills 8·√cr, missions 6·√reward, ore 2·√value) + steeper curve 28·(L−1)^1.8 — level 10 unlocks the SF-20 ONLY (one apex bounty used to jump ~50 levels); save v5 discards v4's credit-inflated xp |
 
 Full details for every build: PART B below.
 
@@ -1113,6 +1121,24 @@ colliders**; every other species had loaded fine.
   lv10 → SF-20 unlock+purchase, lv120+ → 0 locked, save v4 roundtrip
   (flush → wipe → load → xp/level restored).
 
+### BUILD 40 — paced progression (playtest: "i was able to reach levle ten
+### and get most of the ships. i wnt to be at levle ten an get the sf20 only")
+- BUILD 39's XP **equaled credits** — a single 25k apex bounty was ~level 50
+  on the 10·(L−1)² curve, so one good fight unlocked most of the catalog.
+- **`core/Progression.js` retuned**: XP is now **sqrt-scaled** off credit
+  value — kills 8·√credits (scout ≈ 36 XP, apex ≈ 1.3k, Leviathan ≈ 3.1k),
+  missions 6·√reward, ore sales 2·√value. Curve steepened to
+  **28·(L−1)^1.8**: level 10 = 1,461 XP, level 50 ≈ 31k, level 120 ≈ 152k.
+  From a FRESH save the apex bounty alone is level 9; the Leviathan's 150k
+  is level 14 — big paydays are a chunk of a ladder, never the ladder.
+- **Save v5** (`SaveGame.js`): `xp` is only honoured from v5+ saves — v4
+  totals were credit-inflated and would defeat the retune, so existing
+  testers restart at level 1 (credits/ships/upgrades untouched).
+- Verified in-harness (12 checks): lv1 locks + deny-buy, 1,461 XP → exactly
+  lv10 → SF-20 purchasable while the SF-30 still DENIES with 9.9M credits,
+  200k more XP → lv139 → 0 locked, save v5 roundtrip, fake v4 blob with
+  999,999 xp → discarded (level 1), v5 blob with 1,461 xp → level 10.
+
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally
 (`npm start`) with no deploy, incl. iPhone-over-Wi-Fi testing. On a locked-down
@@ -1138,9 +1164,10 @@ deploy once via Netlify (browser-only) and play the resulting URL in any browser
 >   flyables carry measured `anchors` (so §1.8's "no per-model anchor
 >   metadata" is obsolete — bounds formulas are only the fallback).
 > - **Catalog**: `PLAYER_SHIPS` has **13** entries, not 9 — see PART A A3 for
->   the current table (nighthawk/wedge/falcon/stardestroyer added; aethelred
->   is level **75** with `unlockAt: 75`; `unlockAt`, `reinforce`, `fleetCall`
->   are new catalog fields).
+>   the current table (nighthawk/wedge/falcon/stardestroyer added;
+>   `unlockLevel`, `reinforce`, `fleetCall` are new catalog fields — the
+>   mission-reward `unlockAt` field existed BUILD 18–38 and was replaced by
+>   the level ladder in BUILD 39).
 > - **Enemy stats** (§ enemy tables): `ENEMY_TYPES` are buffed at module load
 >   (hull/shield/damage ×1.25, accuracy +0.08 cap 0.97, fireInterval ×0.9,
 >   detectRange ×1.3) and the AI hunts a **victim** (player OR allied ship),

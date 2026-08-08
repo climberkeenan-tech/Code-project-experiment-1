@@ -16,7 +16,7 @@ import { PLAYER_SHIP_BY_ID } from '../ship/ShipFactory.js';
  */
 
 const KEY = 'starfall-frontier-save-v1';
-const SCHEMA_VERSION = 4; // v4: player xp (level-unlock ladder); v3: per-ship upgrades
+const SCHEMA_VERSION = 5; // v5: sqrt-scaled xp (v4 xp was credit-inflated and is discarded on load); v3: per-ship upgrades
 
 /** Default adapter: browser localStorage, no-op if blocked (private mode). */
 class LocalStorageAdapter {
@@ -119,7 +119,9 @@ export class SaveGame {
       player.upgrades = player.upgradesFor(player.ships.active);
     }
 
-    if (typeof data.xp === 'number' && this.game.progression) {
+    // v4 stored credit-equal XP (a single apex bounty ≈ 50 levels) — those
+    // totals would defeat the new pacing, so only v5+ XP is honoured.
+    if ((data.version ?? 0) >= 5 && typeof data.xp === 'number' && this.game.progression) {
       this.game.progression.setXp(data.xp);
     }
 
