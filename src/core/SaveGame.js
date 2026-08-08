@@ -16,7 +16,7 @@ import { PLAYER_SHIP_BY_ID } from '../ship/ShipFactory.js';
  */
 
 const KEY = 'starfall-frontier-save-v1';
-const SCHEMA_VERSION = 3; // v3: per-ship upgrades
+const SCHEMA_VERSION = 4; // v4: player xp (level-unlock ladder); v3: per-ship upgrades
 
 /** Default adapter: browser localStorage, no-op if blocked (private mode). */
 class LocalStorageAdapter {
@@ -119,6 +119,10 @@ export class SaveGame {
       player.upgrades = player.upgradesFor(player.ships.active);
     }
 
+    if (typeof data.xp === 'number' && this.game.progression) {
+      this.game.progression.setXp(data.xp);
+    }
+
     if (typeof data.missionIndex === 'number' && this.game.missions) {
       this.game.missions.index = Math.max(0, Math.floor(data.missionIndex));
     }
@@ -145,6 +149,7 @@ export class SaveGame {
         : [],
       ships: { owned: [...player.ships.owned], active: player.ships.active },
       hangarStock: { ...player.hangarStock },
+      xp: this.game.progression?.xp ?? 0,
       missionIndex: this.game.missions?.index ?? 0,
       discoveredSites: this.game.poi
         ? this.game.poi.sites.filter((s) => s.discovered).map((s) => s.id)

@@ -155,28 +155,29 @@ export class Shop {
     if (s.reinforce) parts.push('SPECIAL: press G to call 1-40 allied reinforcements');
     if (s.noLanding) parts.push('too large to land');
     if (s.fleetCall) parts.push('SPECIAL: press G to summon a hand-picked fleet (up to 50 ships)');
-    if (s.unlockAt) parts.push(`mission ${s.unlockAt} reward — first one free`);
+    if (s.unlockLevel > 1) parts.push(`unlocks at level ${s.unlockLevel}`);
     return parts.join(' · ');
   }
 
   _renderShips() {
     const player = this.game.player;
-    const missions = this.game.missions;
-    return PLAYER_SHIPS.map((s) => {
+    const level = this.game.progression?.level ?? 1;
+    // The ladder order IS the display order: one new hull every 10 levels.
+    const ladder = [...PLAYER_SHIPS].sort((a, b) => a.unlockLevel - b.unlockLevel);
+    return ladder.map((s) => {
       const owned = player.ships.owned.includes(s.id);
       const active = player.ships.active === s.id;
       const afford = this._afford(s.cost);
-      // Mission-locked hulls show a progress bar toward their unlock rung.
+      // Level-locked hulls show progress toward their unlock level.
       // Creative mode ignores locks entirely (sandbox: fly everything).
-      if (s.unlockAt && !owned && !this.game.creative
-        && missions && missions.index < s.unlockAt) {
-        const pct = Math.round((missions.index / s.unlockAt) * 100);
+      if (s.unlockLevel > level && !owned && !this.game.creative) {
+        const pct = Math.round((level / s.unlockLevel) * 100);
         return `
       <div class="shop-row locked" title="${this._shipFeatures(s)}">
         <span class="shop-row-name">🔒 ${s.name}</span>
-        <span class="shop-row-meta">complete mission ${s.unlockAt} to unlock — first one FREE
+        <span class="shop-row-meta">unlocks at level ${s.unlockLevel}
           <span class="ship-progress"><span class="ship-progress-fill" style="width:${pct}%"></span></span>
-          ${missions.index}/${s.unlockAt} missions
+          you are level ${level}
         </span>
         <button class="shop-btn disabled">Locked</button>
       </div>`;
@@ -397,9 +398,9 @@ export class Shop {
     const player = this.game.player;
     const variant = PLAYER_SHIPS.find((s) => s.id === id);
     if (!variant || player.ships.owned.includes(id)) return;
-    // Mission-locked hulls can't be bought early (creative is exempt).
-    if (variant.unlockAt && !this.game.creative
-      && (this.game.missions?.index ?? 0) < variant.unlockAt) { this._deny(); return; }
+    // Level-locked hulls can't be bought early (creative is exempt).
+    if (variant.unlockLevel > (this.game.progression?.level ?? 1)
+      && !this.game.creative) { this._deny(); return; }
     if (!this._afford(variant.cost)) { this._deny(); return; }
     this._spend(variant.cost);
     player.ships.owned.push(id);
@@ -441,9 +442,11 @@ export class Shop {
     const player = this.game.player;
     const count = player.inventory[rarityId] || 0;
     if (count <= 0) return;
-    player.credits += count * rarityValue(rarityId);
+    const gained = count * rarityValue(rarityId);
+    player.credits += gained;
     player.inventory[rarityId] = 0;
     this._chime();
+    this.game.events.emit('ore:sold', { credits: gained });
     this.game.events.emit('shop:purchase');
   }
 
@@ -458,6 +461,7 @@ export class Shop {
     if (gained <= 0) return;
     player.credits += gained;
     this._chime();
+    this.game.events.emit('ore:sold', { credits: gained });
     this.game.events.emit('shop:purchase');
   }
 

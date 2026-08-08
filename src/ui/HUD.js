@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { PLAYER_SHIPS } from '../ship/ShipFactory.js';
 
 /**
  * Heads-up display.
@@ -35,6 +36,7 @@ export class HUD {
         <div class="place" data-el="place">Deep Space</div>
         <div class="sub" data-el="placeSub"></div>
         <div class="credits">&#9672; <span data-el="credits">0</span> cr</div>
+        <div class="credits">&#9650; LV <span data-el="level">1</span></div>
         <div class="resources">&#9671; <span data-el="resources">0</span></div>
         <div class="cargo" data-el="cargo"></div>
         <div class="fleet" data-el="fleet"></div>
@@ -230,10 +232,16 @@ export class HUD {
       closeReinforce();
     });
     game.events.on('mission:allcomplete', () => {
-      this.showBanner('★ ALL 75 MISSIONS COMPLETE ★', 'the entire reward hangar is yours', 6);
+      this.showBanner('★ ALL 75 MISSIONS COMPLETE ★', 'a legend of the frontier', 6);
     });
-    game.events.on('mission:shipunlock', ({ name }) => {
-      this.showBanner(`★ ${name.toUpperCase()} UNLOCKED ★`, 'your free ship is waiting in the Ships tab', 6);
+    game.events.on('level:up', ({ level }) => {
+      const unlocked = PLAYER_SHIPS.find((s) => s.unlockLevel === level);
+      if (unlocked) {
+        this.showBanner(`★ LEVEL ${level} — ${unlocked.name.toUpperCase()} UNLOCKED ★`,
+          'now available in the Ships tab', 6);
+      } else {
+        this.showBanner(`LEVEL ${level}`, 'combat, missions and ore sales earn XP', 2.5);
+      }
     });
     game.events.on('mission:progress', ({ left, total }) => {
       this.showBanner('Mission Progress', `${total - left}/${total} targets destroyed`, 1.6);
@@ -362,6 +370,7 @@ export class HUD {
     this._setText('shieldText', String(Math.ceil(player.shield)));
     this._setText('resources', String(player.resources));
     this._setText('credits', this.game.creative ? '∞' : String(player.credits));
+    this._setText('level', String(this.game.progression?.level ?? 1));
     // Cargo (mined rocks) — only shown while there's something to carry.
     const onfoot = this.game.mode === 'onfoot';
     const cargo = this.game.onfoot ? this.game.onfoot.carrying : 0;

@@ -33,6 +33,7 @@ import { ApproachScatter } from './world/ApproachScatter.js';
 import { Settlements } from './world/Settlements.js';
 import { POISystem } from './exploration/POISystem.js';
 import { SaveGame } from './core/SaveGame.js';
+import { Progression } from './core/Progression.js';
 import { ShipSounds } from './audio/ShipSounds.js';
 import { Music } from './audio/Music.js';
 import { HUD } from './ui/HUD.js';
@@ -75,6 +76,9 @@ const universe = new Universe(game);
 game.universe = universe;
 generateUniverse(game, universe);
 game.addSystem('universe', universe);
+
+// --- Player level: XP from kills/missions/ore → ship unlocks every 10 ---
+game.addSystem('progression', new Progression(game));
 
 // --- On-foot: disembark, walk a planet surface in first person, mine ---
 game.addSystem('onfoot', new OnFootController(game));

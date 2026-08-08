@@ -1,14 +1,14 @@
 # Starfall Frontier — Complete Developer Handoff
 
 _The **single, current** handoff for everything built so far. **Current build:
-BUILD 38.** Development branch `claude/handoff-md-verify-uxi68e`;
+BUILD 39.** Development branch `claude/handoff-md-verify-uxi68e`;
 every published build is also pushed to the default branch
 `claude/3d-space-exploration-game-ogrezx`, whose workflow publishes to
 `gh-pages`. This file has three parts:_
 
 - **PART A — The complete game**: everything that exists right now, by topic,
   with current numbers. Read this to understand the game.
-- **PART B — Build-by-build history** (base game → BUILD 38): the full
+- **PART B — Build-by-build history** (base game → BUILD 39): the full
   changelog with per-build rationale and the playtest quotes that drove it.
 - **PART C — Deep architecture reference**: the code-level documentation
   (ship system, services, save schema, event catalogue…). Written around
@@ -384,6 +384,7 @@ E mine/recover/board.
 | 36 | **living ground**: mottle frequencies fixed (×61 ≈ 330 m period — invisible in one view; now two octaves at ~30 m/~7 m) |
 | 37 | **phone forests**: mobile tier exercised end-to-end in the harness (force `engine.isMobile` before disembark) · mobile grass 20→34/clump (~115k tufts — the phone view is the judged view) |
 | 38 | **reliable assets**: fault-tolerant loaders — quorum-ready forest + per-file timeout/retry (one stalled file no longer renders ZERO trees) · ship-load retry (no more procedural "missing new designs") · 15.3 MB hero.glb → 4.1 MB, optional |
+| 39 | **level up**: player XP/level system (`core/Progression.js`) — every ship unlocks by LEVEL, one per 10 levels in playtest order (SF-10 free → SF-150 at 120); mission ship-grants removed; save v4 (`xp`) |
 
 Full details for every build: PART B below.
 
@@ -1090,6 +1091,27 @@ colliders**; every other species had loaded fine.
 - Both loaders import the meshopt decoder from different specifiers
   (three/addons vs three/examples/jsm) — three's package exports alias them to
   the SAME file, Vite dedupes; harmless (a red-herring ruled out).
+
+### BUILD 39 — level up (playtest: "all ships unlockable by level… every
+### ten levels we unlock a new ship")
+- **`core/Progression.js`** — player XP/level. XP = kill credit rewards +
+  mission rewards + half of ore-sale value (`ore:sold`, new Shop event).
+  Cumulative XP to reach level L = 10·(L−1)² (level 10 ≈ 810 XP, level 120
+  ≈ 142k). Level DERIVED from xp — only `xp` persists (save v4), so the
+  curve can be retuned without migrations. Emits `level:up` per level.
+- **The ladder** (`unlockLevel` in PLAYER_SHIPS, playtest-chosen order):
+  SF-10 lv1 free · SF-20 lv10 · SF-30 lv20 · SF-50 lv30 · SF-70 lv40 ·
+  SF-100 lv50 · SF-85 lv60 · SF-110 lv70 · SF-200 lv80 · SF-45 lv90 ·
+  SF-55 lv100 · SF-60 lv110 · SF-150 lv120. Prices unchanged — level gates
+  AVAILABILITY, credits still buy the hull. Catalog `level` = unlockLevel.
+- **Missions** no longer grant ships (`unlockAt` removed everywhere); they
+  pay credits which feed XP. The Ships tab lists the ladder in unlock order
+  with 🔒 "unlocks at level N" + a level progress bar; `_buyShip` gates on
+  `progression.level`; creative bypasses locks as always. HUD: "LV n" under
+  credits + level-up banners (special banner when the level unlocks a hull).
+- Verified in-harness: 12 locked at lv1, deny-buy when locked, 810 XP →
+  lv10 → SF-20 unlock+purchase, lv120+ → 0 locked, save v4 roundtrip
+  (flush → wipe → load → xp/level restored).
 
 ### Local dev + browser-only play
 **`LOCAL_DEV.md`** + a **`run.command`** launcher let a Mac run the game locally

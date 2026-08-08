@@ -200,64 +200,65 @@ function buildMaterials({ hullColor, accentColor, glowColor }) {
 }
 
 /**
- * Player ship catalog — the bible's ship-progression ladder (levels 10→100).
- * Owned ships form a collection; the active one is lost on destruction while
- * stored ones survive. Stat multipliers scale hull/shield/engine off the
- * baseline; `crew` is the roster capacity; visuals escalate via scale, an
- * extra engine pair, twin fins, and a per-tier livery.
+ * Player ship catalog — the LEVEL-UNLOCK ladder: a new hull every 10 player
+ * levels, in playtest-chosen order (SF-10 free at level 1 … SF-150 at 120).
+ * `unlockLevel` gates purchase (Shop checks game.progression.level; creative
+ * ignores locks); `level` is the same number, kept for display. Owned ships
+ * form a collection; the active one is lost on destruction while stored
+ * ones survive. Stat multipliers scale hull/shield/engine off the baseline;
+ * `crew` is the roster capacity.
  */
 export const PLAYER_SHIPS = [
   // Design 1 of 4: the hand-modeled "Nebula Sentinel" (player-supplied
   // Meshy asset, /models/starter.fbx — procedural fallback until loaded).
-  { id: 'starter', name: 'SF-10 Sentinel', level: 10, cost: 0,
+  { id: 'starter', name: 'SF-10 Sentinel', level: 1, unlockLevel: 1, cost: 0,
     hull: 1, shield: 1, engine: 1, crew: 2, model: 'starter',
     scale: 1, hullColor: 0xb9c6d6, accentColor: 0x24303f, glow: [0.9, 2.6, 5.2] },
   // The second ship: a hand-modeled gunship (player-supplied Meshy asset,
   // loaded async from /models/gunship.fbx — procedural fallback until ready).
-  { id: 'explorer', name: 'SF-20 Nebula Gunship', level: 20, cost: 320,
+  { id: 'explorer', name: 'SF-20 Nebula Gunship', level: 10, unlockLevel: 10, cost: 320,
     hull: 1.25, shield: 1.2, engine: 1.08, crew: 3, model: 'gunship',
     scale: 1.08, hullColor: 0xc9d4c8, accentColor: 0x2e4034, glow: [0.8, 3.2, 3.4] },
   // Design 2 covers the 20–40 band: the Kestrel is an up-armored gunship.
-  { id: 'interceptor', name: 'SF-30 Kestrel', level: 30, cost: 800,
+  { id: 'interceptor', name: 'SF-30 Kestrel', level: 20, unlockLevel: 20, cost: 800,
     hull: 1.5, shield: 1.45, engine: 1.18, crew: 3, model: 'gunship', modelScale: 1.18,
     scale: 1.14, hullColor: 0xd6c9b9, accentColor: 0x4a3524, glow: [3.6, 2.2, 0.7] },
-  // The Night Hawk: mission-reward interceptor. LOCKED until every mission
-  // is complete (first one is granted FREE); replacements cost 1400 cr.
-  // Special power: press G to CALL REINFORCEMENTS — a chosen number of
-  // allied ships (1-40) warp in and fight for you.
-  { id: 'nighthawk', name: 'SF-45 Night Hawk', level: 45, cost: 1400,
+  // The Night Hawk (level-90 unlock). Special power: press G to CALL
+  // REINFORCEMENTS — a chosen number of allied ships (1-40) warp in and
+  // fight for you.
+  { id: 'nighthawk', name: 'SF-45 Night Hawk', level: 90, unlockLevel: 90, cost: 1400,
     hull: 2.0, shield: 1.9, engine: 1.42, crew: 3, weapon: 1.4,
-    model: 'nighthawk', reinforce: true, unlockAt: 10,
+    model: 'nighthawk', reinforce: true,
     scale: 1.2, hullColor: 0x2a3242, accentColor: 0x101722, glow: [2.4, 1.1, 5.8] },
-  // Mission-50 reward: the "Wedge of the Void" strike ship.
-  { id: 'wedge', name: 'SF-55 Void Wedge', level: 50, cost: 2500,
+  // Level-100 unlock: the "Wedge of the Void" strike ship.
+  { id: 'wedge', name: 'SF-55 Void Wedge', level: 100, unlockLevel: 100, cost: 2500,
     hull: 2.3, shield: 2.2, engine: 1.4, crew: 3, weapon: 1.45,
-    model: 'wedge', unlockAt: 50,
+    model: 'wedge',
     scale: 1.25, hullColor: 0x3a2f4a, accentColor: 0x191024, glow: [3.5, 1.5, 5.5] },
-  // Mission-40 reward: the "Millennium Falcon" fast freighter.
-  { id: 'falcon', name: 'SF-60 Falcon', level: 55, cost: 5000,
+  // Level-110 unlock: the "Millennium Falcon" fast freighter.
+  { id: 'falcon', name: 'SF-60 Falcon', level: 110, unlockLevel: 110, cost: 5000,
     hull: 2.6, shield: 2.5, engine: 1.65, crew: 4, weapon: 1.5,
-    model: 'falcon', unlockAt: 40,
+    model: 'falcon',
     scale: 1.3, hullColor: 0xb8bcc4, accentColor: 0x3a4048, glow: [2.0, 2.4, 5.0] },
-  // Mission-25 reward: the Imperial Star Destroyer with the FLEET CALL —
-  // G opens a popup to summon a hand-picked allied fleet (up to 50 ships).
-  { id: 'stardestroyer', name: 'SF-150 Star Destroyer', level: 90, cost: 30000,
+  // The level-120 capstone: the Imperial Star Destroyer with the FLEET CALL
+  // — G opens a popup to summon a hand-picked allied fleet (up to 50 ships).
+  { id: 'stardestroyer', name: 'SF-150 Star Destroyer', level: 120, unlockLevel: 120, cost: 30000,
     hull: 9, shield: 7, engine: 0.9, crew: 8, turrets: 3, weapon: 2.0,
-    model: 'stardestroyer', fleetCall: true, unlockAt: 25, noLanding: true,
+    model: 'stardestroyer', fleetCall: true, noLanding: true,
     scale: 1, hullColor: 0x9aa2b0, accentColor: 0x2c3442, glow: [1.0, 2.6, 5.0] },
   // SF-50 / SF-70: the "gunner ship" line, each on its own player-authored
   // hull, with a heavier gun (catalog `weapon` — a multiplier on the player's
   // bolt damage). SF-50 = 1.5x, SF-70 = 2x.
-  { id: 'frigate', name: 'SF-50 Aegis Gunner', level: 50, cost: 2080,
+  { id: 'frigate', name: 'SF-50 Aegis Gunner', level: 30, unlockLevel: 30, cost: 2080,
     hull: 2.2, shield: 2.1, engine: 1.28, crew: 4, weapon: 1.5,
     model: 'aegis', twinFin: true,
     scale: 1.26, hullColor: 0xaebfd4, accentColor: 0x22344d, glow: [1.2, 2.2, 5.4] },
-  { id: 'battlecruiser', name: 'SF-70 Bastion Gunner', level: 70, cost: 6400,
+  { id: 'battlecruiser', name: 'SF-70 Bastion Gunner', level: 40, unlockLevel: 40, cost: 6400,
     hull: 3.4, shield: 3.1, engine: 1.38, crew: 5, weapon: 2.0,
     model: 'bastion', twinFin: true, quadEngines: true,
     scale: 1.42, hullColor: 0x9aa8bd, accentColor: 0x40274d, glow: [3.2, 1.2, 5.2] },
   // Flies a scaled-up Crimson Dreadnought until its own model is authored.
-  { id: 'sovereign', name: 'SF-100 Sovereign', level: 100, cost: 20800,
+  { id: 'sovereign', name: 'SF-100 Sovereign', level: 50, unlockLevel: 50, cost: 20800,
     hull: 5.2, shield: 4.6, engine: 1.5, crew: 7, twinFin: true, quadEngines: true,
     model: 'bastion', modelScale: 1.5,
     scale: 1.62, hullColor: 0xd8dde6, accentColor: 0x9a7b2e, glow: [4.6, 3.4, 1.0] },
@@ -267,14 +268,14 @@ export const PLAYER_SHIPS = [
   // Design 3: the hand-modeled "Obsidian Dreadnought" — the mid capital
   // that bridges the 50→100 gap. Launches a small wing (3) alongside its
   // gunner turrets; big, but visibly a class below the flagship.
-  { id: 'battleship', name: 'SF-85 Obsidian Dreadnought', level: 85, cost: 12800,
+  { id: 'battleship', name: 'SF-85 Obsidian Dreadnought', level: 60, unlockLevel: 60, cost: 12800,
     hull: 7, shield: 5.5, engine: 1.05, crew: 6, turrets: 4, hangar: 4, capital: 'battleship',
     model: 'dreadnought',
     scale: 1, hullColor: 0x8d97a8, accentColor: 0x33475f, glow: [1.0, 2.0, 5.0] },
   // The flagship: a hand-modeled star-destroyer-class carrier. VASTLY larger
   // than everything else (it stores whole ships in its side hangars) — and
   // far too large to land: switch to a smaller ship for planetfall.
-  { id: 'carrier', name: 'SF-110 Vanguard', level: 110, cost: 40000,
+  { id: 'carrier', name: 'SF-110 Vanguard', level: 70, unlockLevel: 70, cost: 40000,
     hull: 11, shield: 8, engine: 0.85, crew: 8, turrets: 2, hangar: 15, capital: 'carrier',
     model: 'flagship', noLanding: true,
     scale: 1, hullColor: 0xaab4c6, accentColor: 0x2a5246, glow: [0.8, 3.0, 4.6] },
@@ -282,11 +283,11 @@ export const PLAYER_SHIPS = [
   // the fleet, ~3x the carrier's length (targetLength 300 vs 100), too vast to
   // land. Deploys a MIXED wing out of its lower-side bays: 15 light fighters
   // (hangar) + 5 gunner ships (gunnerHangar). Heaviest gun of any hull.
-  // Mission-75 reward (playtest: "it seems overpowered" — so it's earned).
-  { id: 'aethelred', name: 'SF-200 Aethelred', level: 75, cost: 90000,
+  // Level-80 unlock (playtest: "it seems overpowered" — so it's earned).
+  { id: 'aethelred', name: 'SF-200 Aethelred', level: 80, unlockLevel: 80, cost: 90000,
     hull: 16, shield: 12, engine: 0.8, crew: 12, turrets: 4,
     hangar: 15, gunnerHangar: 5, capital: 'carrier', launchPort: 'lowerside',
-    model: 'aethelred', noLanding: true, weapon: 2.5, unlockAt: 75,
+    model: 'aethelred', noLanding: true, weapon: 2.5,
     scale: 1, hullColor: 0x9fb0c4, accentColor: 0x2a4a5a, glow: [0.9, 2.4, 4.8] },
 ];
 

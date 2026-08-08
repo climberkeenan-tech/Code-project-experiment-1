@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { PLAYER_SHIPS } from '../ship/ShipFactory.js';
 
 /**
  * Bounty missions: a ladder of "destroy one marked hostile" contracts,
@@ -23,8 +22,8 @@ const LADDER = [
 ];
 
 // Rungs 11-75: a generated, ever-escalating campaign. Deterministic (no RNG)
-// so every player sees the same ladder. Milestone rewards (ships with
-// `unlockAt`) land at 10 / 25 / 40 / 50 / 75.
+// so every player sees the same ladder. Rewards are credits — which also
+// feed XP toward the level-unlock ship ladder (core/Progression.js).
 const GEN_TYPES = ['scout', 'fighter', 'heavy', 'cruiser', 'warship', 'redcarrier', 'destroyer'];
 const GEN_NAMES = {
   scout: 'Scout', fighter: 'Fighter', heavy: 'Heavy Assault', cruiser: 'Gunner Ship',
@@ -143,15 +142,8 @@ export class MissionSystem {
     game.player.credits += def.reward;
     game.events.emit('mission:completed', { reward: def.reward, label: def.label });
     game.audio?.playTone?.({ type: 'triangle', freq: 660, freqEnd: 1180, duration: 0.4, gain: 0.22 });
-    // Milestone rewards: any catalog ship with `unlockAt === index just
-    // reached` joins the collection FREE (replacements cost credits).
-    const owned = game.player.ships.owned;
-    for (const s of PLAYER_SHIPS) {
-      if (s.unlockAt === this.index && !owned.includes(s.id)) {
-        owned.push(s.id);
-        game.events.emit('mission:shipunlock', { id: s.id, name: s.name });
-      }
-    }
+    // Ships unlock by PLAYER LEVEL now (see core/Progression.js) — missions
+    // pay credits, which also feed XP toward those unlocks.
     if (this.completedAll) game.events.emit('mission:allcomplete');
   }
 }

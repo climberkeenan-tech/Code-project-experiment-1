@@ -50,7 +50,7 @@ export class Screens {
         <span class="ml-bar"><span class="ml-fill"></span></span>
       </div>
       <div class="reset-save">Reset progress</div>
-      <div class="build-tag">BUILD 38 — reliable assets: forests + ships load even on slow/flaky networks</div>
+      <div class="build-tag">BUILD 39 — level up: every ship unlocks by player level, one per 10 levels</div>
     `;
     this.root.appendChild(el);
 
